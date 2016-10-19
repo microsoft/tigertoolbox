@@ -12,6 +12,7 @@ Here's the detail on what these steps do:
   - Changes the model data and log files to autogrow 100MB (generalization better than the default).
   - Removes AUTO_CLOSE and AUTO_SHRINK database options from all databases.
   - Changes whatever page verify setting to CHECKSUM.
+  - Sets proper MaxDOP setting for server in scope.
 
 - **1_DatabaseMail_Config** (only run if you want to have email based alerts, and Database Mail is not already configured).
   - Just edit the script and enter the proper account information in the configuration variables near the top and run it. Replace with the information for your account.
