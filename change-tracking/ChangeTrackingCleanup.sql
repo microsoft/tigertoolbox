@@ -1,3 +1,4 @@
+
 -- Loop to invoke manual cleanup procedure for cleaning up change tracking tables in a database
 
 -- Fetch the tables enabled for Change Tracking
@@ -15,3 +16,4 @@ begin
 	-- Increment the counter
 	set @start = @start + 1
 end
+drop table #CT_Tables
