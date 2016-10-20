@@ -1,4 +1,4 @@
-More information at http://aka.ms/MaintenancePlans
+More information at http://aka.ms/MaintenanceSolution
 
 Good maintenance (or lack thereof) may be the difference between good and bad performance. 
 Following up on that train of though, over the years I've used this solution to automate maintenance tasks in SQL Server (except for backup, which is usually handled using dedicated backup solutions/agents). 
