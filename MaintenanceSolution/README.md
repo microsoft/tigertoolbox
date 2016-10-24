@@ -37,7 +37,7 @@ Here's the detail on what these steps do:
   - The weekly actions aim to execute on Fridays for MEA and Sundays for the rest of the world.
   - Job will:
     - Weekly DBCC CHECKDB on all online, read-write user databases below 1TB.
-    - Daily combination of DBCC CHECKALLOC, DBCC CHECKCATALOG, DBCC CHECKTABLE (depensing on VLDB setting) on all online, read-write user databases over 1TB.
+    - Daily combination of DBCC CHECKALLOC, DBCC CHECKCATALOG, DBCC CHECKTABLE (depending on VLDB setting) on all online, read-write user databases over 1TB.
     - Weekly execution of DBCC UPDATEUSAGE on all online, read-write databases up to 4GB.
     - Weekly execution of sp_createstats with indexonly.
     - Weekly purge of all MSDB job history over 30d.
