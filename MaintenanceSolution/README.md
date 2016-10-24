@@ -13,11 +13,12 @@ Here's the detail on what these steps do:
   - Removes AUTO_CLOSE and AUTO_SHRINK database options from all databases.
   - Changes whatever page verify setting to CHECKSUM.
   - Sets proper MaxDOP setting for server in scope.
+  - Sets proper Max Server Memory setting for **one standalone** instance in current server. Comment out if not your scenario.
 
 - **1_DatabaseMail_Config** (only run if you want to have email based alerts, and Database Mail is not already configured).
   - Just edit the script and enter the proper account information in the configuration variables near the top and run it. Replace with the information for your account.
   - Creates a Database Mail profile. Usually there is a distribution list for the DBAs, so I‘m keen on using that address.
-  - Creates an operator using that Database **Mail profile.
+  - Creates an operator using that Database Mail profile.
 
 - **AdaptiveIndexDefrag** deployed from http://aka.ms/AdaptiveIndexDefrag
 
