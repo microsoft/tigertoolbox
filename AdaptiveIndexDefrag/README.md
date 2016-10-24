@@ -10,7 +10,7 @@ This procedure can be used from SQL Server 2005 SP2 onwards, because of the DMVs
 Starting with v1.3.7, on any database context you choose to create the usp_AdaptiveIndexDefrag and its supporting objects, open the attached script, and either keep the @deploymode variable at the top to upgrade mode (preserving all historic data), or change for new deployments or overwrite old versions and objects (disregarding historic data).
 
 **How to use it?**
-After executing the attached script in a user database of your choice, either run the procedure usp_AdaptiveIndexDefrag with no parameters, since all are optional (If not specified, the defaults for each parameter are used), or customize its use with parameters.
+After executing the attached script in a user database of your choice, either run the procedure usp_AdaptiveIndexDefrag with no parameters, since all are optional (If not specified, the defaults for each parameter are used), or customize its use with parameters. Check all available parameters in the OPTIONS.md file.
 
 **What objects are created when running the attached script?**
 
