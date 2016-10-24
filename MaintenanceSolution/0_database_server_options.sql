@@ -59,6 +59,47 @@ FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
 EXECUTE sp_executesql @sqlcmd;
 GO
 
+-- SET proper server memory (below calculations are for one instance only)
+DECLARE @maxservermem bigint, @minservermem bigint, @systemmem bigint, @mwthreads_count int, @sqlmajorver int, @numa int, @numa_nodes_afinned tinyint, @arch NVARCHAR(10), @sqlcmd NVARCHAR(255)
+-- Change below to 1 to set a max server memory config that is aligned with current affinied NUMA nodes.
+DECLARE @numa_affined_config bit = 0
+
+SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
+SELECT @arch = CASE WHEN @@VERSION LIKE '%<X64>%' THEN 64 WHEN @@VERSION LIKE '%<IA64>%' THEN 128 ELSE 32 END FROM sys.dm_os_windows_info WITH (NOLOCK);
+SELECT @systemmem = total_physical_memory_kb/1024 FROM sys.dm_os_sys_memory;
+SELECT @numa = COUNT(DISTINCT parent_node_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64;
+SELECT @numa_nodes_afinned = COUNT (DISTINCT parent_node_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64 AND is_online = 1;
+SELECT @minservermem = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE [Name] = 'min server memory (MB)';
+SELECT @maxservermem = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE [Name] = 'max server memory (MB)';
+SELECT @mwthreads_count = max_workers_count FROM sys.dm_os_sys_info;
+
+IF (@maxservermem = 2147483647 OR @maxservermem > @systemmem) AND @numa_affined_config = 0
+BEGIN
+	SELECT @sqlcmd = 'sp_configure ''max server memory (MB)'', '+ CONVERT(NVARCHAR(20), 
+		CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+			WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+			WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+			WHEN @systemmem BETWEEN 8193 AND 12288 THEN @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+			WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+			WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+			WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+		END);
+	EXECUTE sp_executesql @sqlcmd;
+ELSE IF (@maxservermem = 2147483647 OR @maxservermem > @systemmem) AND @numa_affined_config = 1
+BEGIN
+	SELECT @sqlcmd = 'sp_configure ''max server memory (MB)'', '+ CONVERT(NVARCHAR(20), 
+		CASE WHEN @systemmem <= 2048 THEN ((@systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)))/@numa) * @numa_nodes_afinned
+			WHEN @systemmem BETWEEN 2049 AND 4096 THEN ((@systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)))/@numa) * @numa_nodes_afinned
+			WHEN @systemmem BETWEEN 4097 AND 8192 THEN ((@systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)))/@numa) * @numa_nodes_afinned
+			WHEN @systemmem BETWEEN 8193 AND 12288 THEN ((@systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)))/@numa) * @numa_nodes_afinned
+			WHEN @systemmem BETWEEN 12289 AND 24576 THEN ((@systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)))/@numa) * @numa_nodes_afinned
+			WHEN @systemmem BETWEEN 24577 AND 32768 THEN ((@systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)))/@numa) * @numa_nodes_afinned
+			WHEN @systemmem > 32768 THEN ((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)))/@numa) * @numa_nodes_afinned
+		END);
+	EXECUTE sp_executesql @sqlcmd;
+END;
+GO
+
 EXEC sys.sp_configure N'show advanced options', N'0'
 RECONFIGURE WITH OVERRIDE
 GO
