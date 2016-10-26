@@ -537,15 +537,15 @@ BEGIN
 	
 	SET @params = '@msdbpid_in int'
 
-	SELECT @pid = principal_id, @pname=name FROM master.sys.server_principals WITH (NOLOCK) WHERE sid = SUSER_SID()
+	SELECT @pid = principal_id, @pname=name FROM master.sys.server_principals (NOLOCK) WHERE sid = SUSER_SID()
 
-	SELECT @masterpid = principal_id FROM master.sys.database_principals WITH (NOLOCK) WHERE sid = SUSER_SID()
+	SELECT @masterpid = principal_id FROM master.sys.database_principals (NOLOCK) WHERE sid = SUSER_SID()
 
-	SELECT @msdbpid = principal_id FROM msdb.sys.database_principals WITH (NOLOCK) WHERE sid = SUSER_SID()
+	SELECT @msdbpid = principal_id FROM msdb.sys.database_principals (NOLOCK) WHERE sid = SUSER_SID()
 
 	-- Perms 1
 	IF (ISNULL(IS_SRVROLEMEMBER(N'serveradmin'), 0) <> 1) AND ((SELECT COUNT(l.name)
-		FROM master.sys.server_permissions p WITH (NOLOCK) INNER JOIN master.sys.server_principals l WITH (NOLOCK)
+		FROM master.sys.server_permissions p (NOLOCK) INNER JOIN master.sys.server_principals l (NOLOCK)
 		ON p.grantee_principal_id = l.principal_id
 			AND p.class = 100 -- Server
 			AND p.state IN ('G', 'W') -- Granted or Granted with Grant
@@ -557,7 +557,7 @@ BEGIN
 		RETURN
 	END
 	ELSE IF (ISNULL(IS_SRVROLEMEMBER(N'serveradmin'), 0) <> 1) AND ((SELECT COUNT(l.name)
-		FROM master.sys.server_permissions p WITH (NOLOCK) INNER JOIN sys.server_principals l WITH (NOLOCK)
+		FROM master.sys.server_permissions p (NOLOCK) INNER JOIN sys.server_principals l (NOLOCK)
 		ON p.grantee_principal_id = l.principal_id
 			AND p.class = 100 -- Server
 			AND p.state IN ('G', 'W') -- Granted or Granted with Grant
@@ -572,23 +572,23 @@ BEGIN
 	-- Perms 2
 	INSERT INTO @permstbl
 	SELECT a.name
-	FROM master.sys.all_objects a WITH (NOLOCK) INNER JOIN master.sys.database_permissions b WITH (NOLOCK) ON a.[OBJECT_ID] = b.major_id
+	FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[OBJECT_ID] = b.major_id
 	WHERE a.type IN ('P', 'X') AND b.grantee_principal_id <>0 
 	AND b.grantee_principal_id <>2
 	AND b.grantee_principal_id = @masterpid;
 
 	INSERT INTO @permstbl_msdb ([perm])
 	EXECUTE sp_executesql N'USE msdb; SELECT COUNT([name]) 
-FROM msdb.sys.sysusers WITH (NOLOCK) WHERE [uid] IN (SELECT [groupuid] 
-	FROM msdb.sys.sysmembers WITH (NOLOCK) WHERE [memberuid] = @msdbpid_in) 
+FROM msdb.sys.sysusers (NOLOCK) WHERE [uid] IN (SELECT [groupuid] 
+	FROM msdb.sys.sysmembers (NOLOCK) WHERE [memberuid] = @msdbpid_in) 
 AND [name] = ''SQLAgentOperatorRole''', @params, @msdbpid_in = @msdbpid;
 
 	INSERT INTO @permstbl_msdb ([perm])
 	EXECUTE sp_executesql N'USE msdb; SELECT COUNT(dp.grantee_principal_id)
-FROM msdb.sys.tables AS tbl WITH (NOLOCK)
-INNER JOIN msdb.sys.database_permissions AS dp WITH (NOLOCK) ON dp.major_id=tbl.object_id AND dp.class=1
-INNER JOIN msdb.sys.database_principals AS grantor_principal WITH (NOLOCK) ON grantor_principal.principal_id = dp.grantor_principal_id
-INNER JOIN msdb.sys.database_principals AS grantee_principal WITH (NOLOCK) ON grantee_principal.principal_id = dp.grantee_principal_id
+FROM msdb.sys.tables AS tbl (NOLOCK)
+INNER JOIN msdb.sys.database_permissions AS dp (NOLOCK) ON dp.major_id=tbl.object_id AND dp.class=1
+INNER JOIN msdb.sys.database_principals AS grantor_principal (NOLOCK) ON grantor_principal.principal_id = dp.grantor_principal_id
+INNER JOIN msdb.sys.database_principals AS grantee_principal (NOLOCK) ON grantee_principal.principal_id = dp.grantee_principal_id
 WHERE dp.state = ''G''
 	AND dp.grantee_principal_id = @msdbpid_in
 	AND dp.type = ''SL''', @params, @msdbpid_in = @msdbpid;
@@ -675,9 +675,9 @@ BEGIN
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
-		SELECT @ole = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
+		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
+		SELECT @ole = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
 
 		RAISERROR ('|-Configuration options set for Powershell enablement verification', 10, 1) WITH NOWAIT
 		IF @sao = 0
@@ -763,11 +763,11 @@ RAISERROR (N'Starting Information section', 10, 1) WITH NOWAIT
 RAISERROR (N'|-Starting Uptime', 10, 1) WITH NOWAIT
 IF @sqlmajorver < 10
 BEGIN
-	SET @sqlcmd = N'SELECT @UpTimeOUT = DATEDIFF(mi, login_time, GETDATE()), @StartDateOUT = login_time FROM master..sysprocesses WITH (NOLOCK) WHERE spid = 1';
+	SET @sqlcmd = N'SELECT @UpTimeOUT = DATEDIFF(mi, login_time, GETDATE()), @StartDateOUT = login_time FROM master..sysprocesses (NOLOCK) WHERE spid = 1';
 END
 ELSE
 BEGIN
-	SET @sqlcmd = N'SELECT @UpTimeOUT = DATEDIFF(mi,sqlserver_start_time,GETDATE()), @StartDateOUT = sqlserver_start_time FROM sys.dm_os_sys_info WITH (NOLOCK)';
+	SET @sqlcmd = N'SELECT @UpTimeOUT = DATEDIFF(mi,sqlserver_start_time,GETDATE()), @StartDateOUT = sqlserver_start_time FROM sys.dm_os_sys_info (NOLOCK)';
 END
 
 SET @params = N'@UpTimeOUT VARCHAR(12) OUTPUT, @StartDateOUT DATETIME OUTPUT';
@@ -782,7 +782,7 @@ SELECT 'Information' AS [Category], 'Uptime' AS [Information], GETDATE() AS [Cur
 RAISERROR (N'|-Starting Windows Version and Architecture', 10, 1) WITH NOWAIT
 IF @sqlmajorver >= 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
-	SET @sqlcmd = N'SELECT @winverOUT = CASE WHEN windows_release IN (''6.3'',''10.0'') AND (@@VERSION LIKE ''%Build 10586%'' OR @@VERSION LIKE ''%Build 14393%'')THEN ''10.0'' ELSE windows_release END, @winspOUT = windows_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 WHEN @@VERSION LIKE ''%<IA64>%'' THEN 128 ELSE 32 END FROM sys.dm_os_windows_info WITH (NOLOCK)';
+	SET @sqlcmd = N'SELECT @winverOUT = CASE WHEN windows_release IN (''6.3'',''10.0'') AND (@@VERSION LIKE ''%Build 10586%'' OR @@VERSION LIKE ''%Build 14393%'')THEN ''10.0'' ELSE windows_release END, @winspOUT = windows_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 WHEN @@VERSION LIKE ''%<IA64>%'' THEN 128 ELSE 32 END FROM sys.dm_os_windows_info (NOLOCK)';
 	SET @params = N'@winverOUT VARCHAR(5) OUTPUT, @winspOUT VARCHAR(25) OUTPUT, @archOUT smallint OUTPUT';
 	EXECUTE sp_executesql @sqlcmd, @params, @winverOUT=@winver OUTPUT, @winspOUT=@winsp OUTPUT, @archOUT=@arch OUTPUT;
 END
@@ -839,8 +839,6 @@ EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\Centr
 
 SELECT @SystemManufacturer = [Data] FROM @machineinfo WHERE [Value] = 'SystemManufacturer';
 
-CREATE TABLE Info_
-
 SELECT 'Information' AS [Category], 'Machine' AS [Information], 
 	CASE @winver WHEN '5.2' THEN 'XP/WS2003'
 		WHEN '6.0' THEN 'Vista/WS2008'
@@ -880,13 +878,13 @@ IF @clustered = 1
 BEGIN
 	IF @sqlmajorver < 11
 		BEGIN
-			EXEC ('SELECT ''Information'' AS [Category], ''Cluster'' AS [Information], NodeName AS node_name FROM sys.dm_os_cluster_nodes WITH (NOLOCK)')
+			EXEC ('SELECT ''Information'' AS [Category], ''Cluster'' AS [Information], NodeName AS node_name FROM sys.dm_os_cluster_nodes (NOLOCK)')
 		END
 	ELSE
 		BEGIN
-			EXEC ('SELECT ''Information'' AS [Category], ''Cluster'' AS [Information], NodeName AS node_name, status_description, is_current_owner FROM sys.dm_os_cluster_nodes WITH (NOLOCK)')
+			EXEC ('SELECT ''Information'' AS [Category], ''Cluster'' AS [Information], NodeName AS node_name, status_description, is_current_owner FROM sys.dm_os_cluster_nodes (NOLOCK)')
 		END
-	SELECT 'Information' AS [Category], 'Cluster' AS [Information], DriveName AS cluster_shared_drives FROM sys.dm_io_cluster_shared_drives WITH (NOLOCK)
+	SELECT 'Information' AS [Category], 'Cluster' AS [Information], DriveName AS cluster_shared_drives FROM sys.dm_io_cluster_shared_drives (NOLOCK)
 END
 ELSE
 BEGIN
@@ -942,7 +940,7 @@ END;
 -- Linked servers info subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Linked servers info', 10, 1) WITH NOWAIT
-IF (SELECT COUNT(*) FROM sys.servers AS s INNER JOIN sys.linked_logins AS l WITH (NOLOCK) ON s.server_id = l.server_id INNER JOIN sys.server_principals AS p WITH (NOLOCK) ON p.principal_id = l.local_principal_id WHERE s.is_linked = 1) > 0
+IF (SELECT COUNT(*) FROM sys.servers AS s INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id WHERE s.is_linked = 1) > 0
 BEGIN
 	IF @sqlmajorver > 9
 	BEGIN
@@ -955,9 +953,9 @@ BEGIN
 	s.modify_date, CASE WHEN l.local_principal_id = 0 THEN ''local or wildcard'' ELSE p.name END AS [local_principal], 
 	CASE WHEN l.uses_self_credential = 0 THEN ''use own credentials'' ELSE ''use supplied username and pwd'' END AS uses_self_credential, 
 	l.remote_name, l.modify_date AS [linked_login_modify_date]
-FROM sys.servers AS s WITH (NOLOCK)
-INNER JOIN sys.linked_logins AS l WITH (NOLOCK) ON s.server_id = l.server_id
-INNER JOIN sys.server_principals AS p WITH (NOLOCK) ON p.principal_id = l.local_principal_id
+FROM sys.servers AS s (NOLOCK)
+INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id
+INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
 WHERE s.is_linked = 1')
 	END
 	ELSE 
@@ -970,9 +968,9 @@ WHERE s.is_linked = 1')
 	s.is_nonsql_subscriber, s.modify_date, CASE WHEN l.local_principal_id = 0 THEN ''local or wildcard'' ELSE p.name END AS [local_principal], 
 	CASE WHEN l.uses_self_credential = 0 THEN ''use own credentials'' ELSE ''use supplied username and pwd'' END AS uses_self_credential, 
 	l.remote_name, l.modify_date AS [linked_login_modify_date]
-FROM sys.servers AS s WITH (NOLOCK)
-INNER JOIN sys.linked_logins AS l WITH (NOLOCK) ON s.server_id = l.server_id
-INNER JOIN sys.server_principals AS p WITH (NOLOCK) ON p.principal_id = l.local_principal_id
+FROM sys.servers AS s (NOLOCK)
+INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id
+INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
 WHERE s.is_linked = 1')
 	END
 END
@@ -1063,7 +1061,7 @@ SELECT @cpuaffin = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
 		FROM bits CROSS JOIN bytes
 		ORDER BY M, N DESC
 		FOR XML PATH('')), @cpucount) END
-FROM sys.configurations WITH (NOLOCK)
+FROM sys.configurations (NOLOCK)
 WHERE name = 'affinity mask';
 
 SET @cpuaffin_fixed = @cpuaffin
@@ -1214,27 +1212,27 @@ RAISERROR (N'|-Starting Database Information', 10, 1) WITH NOWAIT
 RAISERROR (N'  |-Building DB list', 10, 1) WITH NOWAIT
 DECLARE @curdbname VARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary_role_allow_connections tinyint, @state tinyint
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
 DROP TABLE #tmpdbs0;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
 CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [compatibility_level] int, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 DROP TABLE #tmpdbfiledetail;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 CREATE TABLE #tmpdbfiledetail([database_id] [int] NOT NULL, [file_id] int, [type_desc] NVARCHAR(60), [data_space_id] int,[name] sysname, [physical_name] NVARCHAR(260), [state_desc] NVARCHAR(60), [size] int, [max_size] int, [is_percent_growth] bit, [growth] int, [is_media_read_only] bit, [is_read_only] bit, [is_sparse] bit, [is_name_reserved] bit)
 
 IF @sqlmajorver < 11
 BEGIN
 	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], [isdone])
-	SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0 FROM master.sys.databases WITH (NOLOCK)
+	SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0 FROM master.sys.databases (NOLOCK)
 END;
 
 IF @sqlmajorver > 10
 BEGIN
 	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, [isdone])
 	SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, 0 
-	FROM master.sys.databases sd WITH (NOLOCK) 
+	FROM master.sys.databases sd (NOLOCK) 
 		LEFT JOIN sys.dm_hadr_database_replica_states d ON sd.database_id = d.database_id
 		LEFT JOIN sys.availability_replicas ar ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
 		LEFT JOIN sys.dm_hadr_availability_replica_states ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
@@ -1269,9 +1267,9 @@ BEGIN
 	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
 	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, ''NA'' AS [is_indirect_checkpoint_on], 
 	db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db WITH (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu WITH (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls WITH (NOLOCK) ON db.name = ls.instance_name
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
 WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
 	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
@@ -1293,9 +1291,9 @@ BEGIN
 	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
 	db.target_recovery_time_in_seconds, 
 	db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db WITH (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu WITH (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls WITH (NOLOCK) ON db.name = ls.instance_name
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
 WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
 	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
@@ -1316,9 +1314,9 @@ BEGIN
 	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on,
 	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
 	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db WITH (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu WITH (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls WITH (NOLOCK) ON db.name = ls.instance_name
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
 WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
 	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
@@ -1340,9 +1338,9 @@ BEGIN
 	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
 	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced, 
 	db.is_memory_optimized_elevate_to_snapshot_on, db.is_remote_data_archive_enabled, db.is_mixed_page_allocation_on
-FROM master.sys.databases AS db WITH (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu WITH (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls WITH (NOLOCK) ON db.name = ls.instance_name
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
 WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
 	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
@@ -1358,13 +1356,13 @@ BEGIN
 	IF (@currole = 2 AND @cursecondary_role_allow_connections = 0) OR @state <> 0
 	BEGIN
 		SET @sqlcmd = 'SELECT [database_id], [file_id], type_desc, data_space_id, name, physical_name, state_desc, size, max_size, is_percent_growth,growth, is_media_read_only, is_read_only, is_sparse, is_name_reserved
-FROM sys.master_files WITH (NOLOCK) WHERE [database_id] = ' + CONVERT(VARCHAR(10), @curdbid)
+FROM sys.master_files (NOLOCK) WHERE [database_id] = ' + CONVERT(VARCHAR(10), @curdbid)
 	END
 	ELSE
 	BEGIN
 		SET @sqlcmd = 'USE ' + QUOTENAME(@curdbname) + ';
 SELECT ' + CONVERT(VARCHAR(10), @curdbid) + ' AS [database_id], [file_id], type_desc, data_space_id, name, physical_name, state_desc, size, max_size, is_percent_growth,growth, is_media_read_only, is_read_only, is_sparse, is_name_reserved
-FROM sys.database_files WITH (NOLOCK)'
+FROM sys.database_files (NOLOCK)'
 	END
 
 	BEGIN TRY
@@ -1393,9 +1391,9 @@ IF @sqlmajorver >= 12
 BEGIN
 	/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblInMemDBs'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblInMemDBs'))
 	DROP TABLE #tblInMemDBs;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblInMemDBs'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblInMemDBs'))
 	CREATE TABLE #tblInMemDBs ([DBName] sysname, [Has_MemoryOptimizedObjects] bit, [MemoryAllocated_MemoryOptimizedObjects_KB] DECIMAL(18,2), [MemoryUsed_MemoryOptimizedObjects_KB] DECIMAL(18,2));
 	
 	UPDATE #tmpdbs0
@@ -1500,9 +1498,9 @@ BEGIN
 	RAISERROR (N'  |-Starting database triggers', 10, 1) WITH NOWAIT
 	/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTriggers'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTriggers'))
 	DROP TABLE #tblTriggers;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTriggers'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTriggers'))
 	CREATE TABLE #tblTriggers ([DBName] sysname, [triggerName] sysname, [schemaName] sysname, [tableName] sysname, [type_desc] NVARCHAR(60), [parent_class_desc] NVARCHAR(60), [create_date] DATETIME, [modify_date] DATETIME, [is_disabled] bit, [is_instead_of_trigger] bit, [is_not_for_replication] bit);
 	
 	UPDATE #tmpdbs0
@@ -1572,9 +1570,9 @@ BEGIN
 	RAISERROR (N'|-Starting Enterprise features usage', 10, 1) WITH NOWAIT
 	/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
 	DROP TABLE #tblPerSku;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
 	CREATE TABLE #tblPerSku ([DBName] sysname NULL, [Feature_Name] VARCHAR(100));
 	
 	UPDATE #tmpdbs0
@@ -1595,7 +1593,7 @@ BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sku_features WITH (NOLOCK);'
+SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sku_features (NOLOCK);'
 
 			BEGIN TRY
 				INSERT INTO #tblPerSku
@@ -1619,10 +1617,10 @@ SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sk
 		SELECT NULL, 'Always_On' AS feature_name
 	END;
 	
-	IF (SELECT COUNT(DISTINCT d.name) FROM master.sys.databases d WITH (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL) > 0 -- Snapshot
+	IF (SELECT COUNT(DISTINCT d.name) FROM master.sys.databases d (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL) > 0 -- Snapshot
 	BEGIN
 		INSERT INTO #tblPerSku
-		SELECT DISTINCT d.name, 'DB_Snapshot' AS feature_name FROM master.sys.databases d WITH (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL
+		SELECT DISTINCT d.name, 'DB_Snapshot' AS feature_name FROM master.sys.databases d (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL
 	END;
 	
 	IF (SELECT COUNT([Feature_Name]) FROM #tblPerSku) > 0
@@ -1659,9 +1657,9 @@ CONVERT(decimal(20,2),compressed_backup_size/1024.00/1024.00) AS [compressed_bac
 [recovery_model], [user_name],
 database_backup_lsn AS [full_base_lsn], [differential_base_lsn], [expiration_date], 
 [is_password_protected], [has_backup_checksums], [is_readonly], is_copy_only, [has_incomplete_metadata] AS [Tail_log]
-FROM msdb.dbo.backupset bck1 WITH (NOLOCK)
+FROM msdb.dbo.backupset bck1 (NOLOCK)
 WHERE is_copy_only = 0 -- No COPY_ONLY backups
-AND backup_start_date >= (SELECT MAX(backup_start_date) FROM msdb.dbo.backupset bck2 WITH (NOLOCK) WHERE bck2.type IN (''D'',''F'',''P'') AND is_copy_only = 0 AND bck1.database_name = bck2.database_name)
+AND backup_start_date >= (SELECT MAX(backup_start_date) FROM msdb.dbo.backupset bck2 (NOLOCK) WHERE bck2.type IN (''D'',''F'',''P'') AND is_copy_only = 0 AND bck1.database_name = bck2.database_name)
 ORDER BY database_name, backup_start_date DESC'
 END
 ELSE 
@@ -1681,9 +1679,9 @@ CONVERT(decimal(20,2),backup_size/1024.00/1024.00) AS [backup_size_MB],
 [recovery_model], [user_name],
 database_backup_lsn AS [full_base_lsn], [differential_base_lsn], [expiration_date], 
 [is_password_protected], [has_backup_checksums], [is_readonly], is_copy_only, [has_incomplete_metadata] AS [Tail_log]
-FROM msdb.dbo.backupset bck1 WITH (NOLOCK)
+FROM msdb.dbo.backupset bck1 (NOLOCK)
 WHERE is_copy_only = 0 -- No COPY_ONLY backups
-AND backup_start_date >= (SELECT MAX(backup_start_date) FROM msdb.dbo.backupset bck2 WITH (NOLOCK) WHERE bck2.type IN (''D'',''F'',''P'') AND is_copy_only = 0 AND bck1.database_name = bck2.database_name)
+AND backup_start_date >= (SELECT MAX(backup_start_date) FROM msdb.dbo.backupset bck2 (NOLOCK) WHERE bck2.type IN (''D'',''F'',''P'') AND is_copy_only = 0 AND bck1.database_name = bck2.database_name)
 ORDER BY database_name, backup_start_date DESC'
 END;
 
@@ -1703,7 +1701,7 @@ SELECT 'Information' AS [Category], 'All_System_Configurations' AS [Information]
 	value AS [ConfigValue],
 	value_in_use AS [RunValue],
 	description AS [Description]
-FROM sys.configurations WITH (NOLOCK)
+FROM sys.configurations (NOLOCK)
 ORDER BY name OPTION (RECOMPILE);
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -1712,16 +1710,16 @@ ORDER BY name OPTION (RECOMPILE);
 RAISERROR (N'Starting Pre-Checks - Building DB list excluding MS shipped', 10, 1) WITH NOWAIT
 DECLARE @MSdb int
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
 DROP TABLE #tmpdbs1;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
 CREATE TABLE #tmpdbs1 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [role] tinyint, [secondary_role_allow_connections] tinyint, isdone bit)
 
 RAISERROR (N'|-Excluding MS shipped by standard names and databases belonging to non-readable AG secondary replicas (if available)', 10, 1) WITH NOWAIT
 -- Ignore MS shipped databases and databases belonging to non-readable AG secondary replicas
 INSERT INTO #tmpdbs1 ([dbid], [dbname], [role], [secondary_role_allow_connections], [isdone])
 SELECT [dbid], [dbname], [role], [secondary_role_allow_connections], 0 
-FROM #tmpdbs0 WITH (NOLOCK) 
+FROM #tmpdbs0 (NOLOCK) 
 WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)
 	AND lower([dbname]) NOT IN ('virtualmanagerdb', --Virtual Machine Manager
@@ -1772,7 +1770,7 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	AND [dbname] NOT LIKE 'search[_]service[_]application[_]analyticsrepANDtingstANDedb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]linksstANDedb[_]%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' 
 	AND [dbname] NOT LIKE 'settingsservicedb%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' AND [dbname] NOT LIKE 'translationservice[_]%' AND [dbname] NOT LIKE 'sharepoint translation services[_]%' AND [dbname] NOT LIKE 'sessionstateservice%' 
 
-IF EXISTS (SELECT name FROM msdb.sys.objects WITH (NOLOCK) WHERE name='MSdistributiondbs' AND is_ms_shipped = 1) 
+IF EXISTS (SELECT name FROM msdb.sys.objects (NOLOCK) WHERE name='MSdistributiondbs' AND is_ms_shipped = 1) 
 BEGIN 
 	DELETE FROM #tmpdbs1 WHERE [dbid] IN (SELECT DB_ID(name) FROM msdb.dbo.MSdistributiondbs)
 END;
@@ -1823,7 +1821,7 @@ OR (OBJECT_ID(''dbo.Notification'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.System
 	AND (OBJECT_ID(''dbo.p_GetCrmUserId'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.p_GetPrivilegesInRole'',''P'') IS NOT NULL)
 	OR (OBJECT_ID(''dbo.p_AccountOVRollup'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.p_GetDbSize'',''P'') IS NOT NULL))
 -- End Dynamics CRM
-OR (OBJECT_ID(''dbo.User Personalization'',''U'') IS NOT NULL AND EXISTS(SELECT 1 FROM sys.all_objects WITH (NOLOCK) WHERE type=''U'' AND (name like ''%$G[_]L Entry'' OR name LIKE ''%$Item Ledger Entry'')))
+OR (OBJECT_ID(''dbo.User Personalization'',''U'') IS NOT NULL AND EXISTS(SELECT 1 FROM sys.all_objects (NOLOCK) WHERE type=''U'' AND (name like ''%$G[_]L Entry'' OR name LIKE ''%$Item Ledger Entry'')))
 -- End Dynamics NAV
 OR (OBJECT_ID(''dbo.DBVERSION'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.PATH'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.SY_SQL_Options'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.zDP_ActivitySD'',''P'') IS NOT NULL)
 -- End Dynamics GP
@@ -1846,7 +1844,7 @@ OR (OBJECT_ID(''dbo.Event_00'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.MT_Databas
 OR (OBJECT_ID(''dbo.AemApplication'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.EventLoggingComputer'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.HealthState'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.p_MOMManagementGroupInfoSelect'',''P'') IS NOT NULL)
 OR (OBJECT_ID(''dbo.dtMachine'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.dtPartition'',''U'') IS NOT NULL AND SCHEMA_ID(''AdtServer'') IS NOT NULL)
 -- End SCOM
-OR (OBJECT_ID(''dbo.version'',''U'') IS NOT NULL AND EXISTS(SELECT 1 FROM sys.internal_tables WITH (NOLOCK) WHERE name LIKE ''language[_]model[_]%''))
+OR (OBJECT_ID(''dbo.version'',''U'') IS NOT NULL AND EXISTS(SELECT 1 FROM sys.internal_tables (NOLOCK) WHERE name LIKE ''language[_]model[_]%''))
 -- End Semantic Search
 OR (OBJECT_ID(''dbo.tbComputerTarget'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.tbTarget'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.tbUpdate'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.spGetUpdateByID'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.spSearchUpdates'',''P'') IS NOT NULL)
 -- End WSUS
@@ -1899,15 +1897,15 @@ SET isdone = 0;
 
 RAISERROR (N'|-Applying 2nd layer of specific database scope, if any', 10, 1) WITH NOWAIT
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
 DROP TABLE #tmpdbs_userchoice;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
 CREATE TABLE #tmpdbs_userchoice ([dbid] int PRIMARY KEY, [dbname] VARCHAR(1000))
 	
 IF @dbScope IS NOT NULL
 BEGIN
 	SELECT @sqlcmd = 'SELECT [dbid], [dbname] 
-FROM #tmpdbs0 WITH (NOLOCK) 
+FROM #tmpdbs0 (NOLOCK) 
 WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)
 	AND [dbid] IN (' + REPLACE(@dbScope,' ','') + ')'
@@ -1953,7 +1951,7 @@ SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
 		WHEN @numa > 1 AND (@cpucount/@numa) >= 8 AND ([value] = 0 OR [value] > 8 OR [value] > (@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
 		ELSE '[OK]'
 	END AS [Deviation]
-FROM sys.configurations WITH (NOLOCK) WHERE name = 'max degree of parallelism';
+FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
 
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information], 
 	CASE WHEN [value] > @affined_cpus THEN @affined_cpus
@@ -1965,7 +1963,7 @@ SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information],
 	[value] AS [Current_MaxDOP], @cpucount AS [Available_Processors], @affined_cpus AS [Affined_Processors], 
 	-- Processor Affinity is shown highest to lowest CPU ID
 	@cpuaffin_fixed AS Affinity_Mask_Bitmask
-FROM sys.configurations WITH (NOLOCK) WHERE name = 'max degree of parallelism';
+FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Processor Affinity in NUMA architecture subsection
@@ -1979,20 +1977,20 @@ BEGIN
 		CASE WHEN (SELECT COUNT(*) FROM ncpuCTE) > 0 THEN '[WARNING: Current NUMA configuration is not recommended. At least one node has a single assigned CPU]' 
 			WHEN (SELECT COUNT(DISTINCT(node)) FROM cpuCTE WHERE afin = 0 AND node NOT IN (SELECT DISTINCT(node) FROM cpuCTE WHERE afin = 1)) > 0 THEN '[WARNING: Current NUMA configuration is not recommended. At least one node does not have assigned CPUs]' 
 			ELSE '[OK]' END AS [Deviation]
-	FROM sys.dm_os_sys_info WITH (NOLOCK) 
+	FROM sys.dm_os_sys_info (NOLOCK) 
 	OPTION (RECOMPILE);
 	
 	SELECT 'Processor_checks' AS [Category], 'Affinity_NUMA' AS [Information], cpu_count AS [Logical_CPU_Count], 
 		(SELECT COUNT(DISTINCT parent_node_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64) AS [NUMA_Nodes],
 		-- Processor Affinity is shown highest to lowest CPU ID
 		@cpuaffin_fixed AS Affinity_Mask_Bitmask
-	FROM sys.dm_os_sys_info WITH (NOLOCK) 
+	FROM sys.dm_os_sys_info (NOLOCK) 
 	OPTION (RECOMPILE);
 END
 ELSE
 BEGIN
 	SELECT 'Processor_checks' AS [Category], 'Affinity_NUMA' AS [Check], '[Not_NUMA]' AS [Deviation]
-	FROM sys.dm_os_sys_info WITH (NOLOCK)
+	FROM sys.dm_os_sys_info (NOLOCK)
 	OPTION (RECOMPILE);
 END;
 
@@ -2008,7 +2006,7 @@ SELECT 'Processor_checks' AS [Category], 'Processor_Summary' AS [Information], c
 	@affined_cpus AS [Affined_Processors], 
 	-- Processor Affinity is shown highest to lowest Processor ID
 	@cpuaffin_fixed AS Affinity_Mask_Bitmask
-FROM sys.dm_os_sys_info WITH (NOLOCK)
+FROM sys.dm_os_sys_info (NOLOCK)
 OPTION (RECOMPILE);
 
 IF @ptochecks = 1
@@ -2017,14 +2015,14 @@ BEGIN
 	-- Processor utilization rate in the last 2 hours
 	DECLARE @ts_now bigint
 	DECLARE @tblAggCPU TABLE (SQLProc tinyint, SysIdle tinyint, OtherProc tinyint, Minutes tinyint)
-	SELECT @ts_now = ms_ticks FROM sys.dm_os_sys_info WITH (NOLOCK);
+	SELECT @ts_now = ms_ticks FROM sys.dm_os_sys_info (NOLOCK);
 
 	WITH cteCPU (record_id, SystemIdle, SQLProcessUtilization, [timestamp]) AS (SELECT 
 			record.value('(./Record/@id)[1]', 'int') AS record_id,
 			record.value('(./Record/SchedulerMonitorEvent/SystemHealth/SystemIdle)[1]', 'int') AS SystemIdle,
 			record.value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]', 'int') AS SQLProcessUtilization,
 			[TIMESTAMP] FROM (SELECT [TIMESTAMP], CONVERT(xml, record) AS record 
-				FROM sys.dm_os_ring_buffers WITH (NOLOCK)
+				FROM sys.dm_os_ring_buffers (NOLOCK)
 				WHERE ring_buffer_type = N'RING_BUFFER_SCHEDULER_MONITOR'
 				AND record LIKE '%<SystemHealth>%') AS x
 		)
@@ -2121,7 +2119,7 @@ BEGIN
 	SET @sqlcmd = N'SELECT @systemmemOUT = t1.record.value(''(./Record/MemoryRecord/TotalPhysicalMemory)[1]'', ''bigint'')/1024, 
 	@systemfreememOUT = t1.record.value(''(./Record/MemoryRecord/AvailablePhysicalMemory)[1]'', ''bigint'')/1024
 FROM (SELECT MAX([TIMESTAMP]) AS [TIMESTAMP], CONVERT(xml, record) AS record 
-	FROM sys.dm_os_ring_buffers WITH (NOLOCK)
+	FROM sys.dm_os_ring_buffers (NOLOCK)
 	WHERE ring_buffer_type = N''RING_BUFFER_RESOURCE_MONITOR''
 		AND record LIKE ''%RESOURCE_MEMPHYSICAL%''
 	GROUP BY record) AS t1';
@@ -2137,19 +2135,19 @@ EXECUTE sp_executesql @sqlcmd, @params, @systemmemOUT=@systemmem OUTPUT, @system
 
 IF @sqlmajorver >= 9 AND @sqlmajorver < 11
 BEGIN
-	SET @sqlcmd = N'SELECT @commit_targetOUT=bpool_commit_target*8, @committedOUT=bpool_committed*8 FROM sys.dm_os_sys_info WITH (NOLOCK)'
+	SET @sqlcmd = N'SELECT @commit_targetOUT=bpool_commit_target*8, @committedOUT=bpool_committed*8 FROM sys.dm_os_sys_info (NOLOCK)'
 END
 ELSE IF @sqlmajorver >= 11
 BEGIN
-	SET @sqlcmd = N'SELECT @commit_targetOUT=committed_target_kb, @committedOUT=committed_kb FROM sys.dm_os_sys_info WITH (NOLOCK)'
+	SET @sqlcmd = N'SELECT @commit_targetOUT=committed_target_kb, @committedOUT=committed_kb FROM sys.dm_os_sys_info (NOLOCK)'
 END
 
 SET @params = N'@commit_targetOUT bigint OUTPUT, @committedOUT bigint OUTPUT';
 
 EXECUTE sp_executesql @sqlcmd, @params, @commit_targetOUT=@commit_target OUTPUT, @committedOUT=@committed OUTPUT;
 
-SELECT @minservermem = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE [Name] = 'min server memory (MB)';
-SELECT @maxservermem = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE [Name] = 'max server memory (MB)';
+SELECT @minservermem = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE [Name] = 'min server memory (MB)';
+SELECT @maxservermem = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE [Name] = 'max server memory (MB)';
 SELECT @mwthreads_count = max_workers_count FROM sys.dm_os_sys_info;
 SELECT @numa_nodes_afinned = COUNT (DISTINCT parent_node_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64 AND is_online = 1
 
@@ -2276,7 +2274,7 @@ BEGIN
 	memory_utilization_percentage AS sql_memory_utilization_percentage, 
 	process_physical_memory_low AS sql_process_physical_memory_low, 
 	process_virtual_memory_low AS sql_process_virtual_memory_low	
-FROM sys.dm_os_process_memory WITH (NOLOCK)'
+FROM sys.dm_os_process_memory (NOLOCK)'
 	SET @params = N'@maxservermemIN bigint, @minservermemIN bigint, @systemmemIN bigint, @systemfreememIN bigint, @commit_targetIN bigint, @committedIN bigint';
 	EXECUTE sp_executesql @sqlcmd, @params, @maxservermemIN=@maxservermem, @minservermemIN=@minservermem,@systemmemIN=@systemmem, @systemfreememIN=@systemfreemem, @commit_targetIN=@commit_target, @committedIN=@committed
 END;
@@ -2307,16 +2305,16 @@ BEGIN
 		record.value('(./Record/MemoryRecord/TotalPageFile)[1]', 'bigint')/1024 AS [Total_Pagefile_MB],
 		record.value('(./Record/MemoryRecord/AvailablePageFile)[1]', 'bigint')/1024 AS [Avail_Pagefile_MB]
 	FROM (SELECT [TIMESTAMP], CONVERT(xml, record) AS record 
-				FROM sys.dm_os_ring_buffers WITH (NOLOCK)
+				FROM sys.dm_os_ring_buffers (NOLOCK)
 				WHERE ring_buffer_type = N'RING_BUFFER_RESOURCE_MONITOR') AS x
-	CROSS JOIN sys.dm_os_sys_info si WITH (NOLOCK)
+	CROSS JOIN sys.dm_os_sys_info si (NOLOCK)
 	--WHERE CASE WHEN x.[timestamp] BETWEEN -2147483648 AND 2147483648 THEN DATEADD(ms, x.[timestamp] - si.ms_ticks, GETDATE()) 
 	--	ELSE DATEADD(s, (x.[timestamp]/1000) - (si.ms_ticks/1000), GETDATE()) END >= DATEADD(hh, -12, GETDATE())
 	ORDER BY 2 DESC;
 
 	RAISERROR (N'  |-Starting Hand Movements from Cache Clock Hands', 10, 1) WITH NOWAIT
 
-	IF (SELECT COUNT(rounds_count) FROM sys.dm_os_memory_cache_clock_hands WITH (NOLOCK) WHERE rounds_count > 0) > 0
+	IF (SELECT COUNT(rounds_count) FROM sys.dm_os_memory_cache_clock_hands (NOLOCK) WHERE rounds_count > 0) > 0
 	BEGIN
 		IF @sqlmajorver >= 11
 		BEGIN
@@ -2332,9 +2330,9 @@ BEGIN
 	CASE WHEN mcch.last_tick_time BETWEEN -2147483648 AND 2147483647 AND si.ms_ticks BETWEEN -2147483648 AND 2147483647 THEN DATEADD(ms, mcch.last_tick_time - si.ms_ticks, GETDATE()) 
 		WHEN mcch.last_tick_time/1000 BETWEEN -2147483648 AND 2147483647 AND si.ms_ticks/1000 BETWEEN -2147483648 AND 2147483647 THEN DATEADD(s, (mcch.last_tick_time/1000) - (si.ms_ticks/1000), GETDATE()) 
 		ELSE NULL END AS last_clock_hand_move
-FROM sys.dm_os_memory_cache_counters mcc WITH (NOLOCK)
-INNER JOIN sys.dm_os_memory_cache_clock_hands mcch WITH (NOLOCK) ON mcc.cache_address = mcch.cache_address
-CROSS JOIN sys.dm_os_sys_info si WITH (NOLOCK)
+FROM sys.dm_os_memory_cache_counters mcc (NOLOCK)
+INNER JOIN sys.dm_os_memory_cache_clock_hands mcch (NOLOCK) ON mcc.cache_address = mcch.cache_address
+CROSS JOIN sys.dm_os_sys_info si (NOLOCK)
 WHERE mcch.rounds_count > 0
 GROUP BY mcch.name, mcch.[type], mcch.clock_hand, mcch.clock_status, mcc.pages_kb, mcc.pages_in_use_kb, mcch.last_tick_time, si.ms_ticks, mcc.entries_count, mcc.entries_in_use_count
 ORDER BY SUM(mcch.removed_all_rounds_count) DESC, mcch.[type];'
@@ -2355,9 +2353,9 @@ ORDER BY SUM(mcch.removed_all_rounds_count) DESC, mcch.[type];'
 	CASE WHEN mcch.last_tick_time BETWEEN -2147483648 AND 2147483647 AND si.ms_ticks BETWEEN -2147483648 AND 2147483647 THEN DATEADD(ms, mcch.last_tick_time - si.ms_ticks, GETDATE()) 
 		WHEN mcch.last_tick_time/1000 BETWEEN -2147483648 AND 2147483647 AND si.ms_ticks/1000 BETWEEN -2147483648 AND 2147483647 THEN DATEADD(s, (mcch.last_tick_time/1000) - (si.ms_ticks/1000), GETDATE()) 
 		ELSE NULL END AS last_clock_hand_move
-FROM sys.dm_os_memory_cache_counters mcc WITH (NOLOCK)
-INNER JOIN sys.dm_os_memory_cache_clock_hands mcch WITH (NOLOCK) ON mcc.cache_address = mcch.cache_address
-CROSS JOIN sys.dm_os_sys_info si WITH (NOLOCK)
+FROM sys.dm_os_memory_cache_counters mcc (NOLOCK)
+INNER JOIN sys.dm_os_memory_cache_clock_hands mcch (NOLOCK) ON mcc.cache_address = mcch.cache_address
+CROSS JOIN sys.dm_os_sys_info si (NOLOCK)
 WHERE mcch.rounds_count > 0
 GROUP BY mcch.name, mcch.[type], mcch.clock_hand, mcch.clock_status, mcc.single_pages_kb, mcc.multi_pages_kb, mcc.single_pages_in_use_kb, mcc.multi_pages_in_use_kb, mcch.last_tick_time, si.ms_ticks, mcc.entries_count, mcc.entries_in_use_count
 ORDER BY SUM(mcch.removed_all_rounds_count) DESC, mcch.[type];'
@@ -2443,7 +2441,7 @@ END;
 
 RAISERROR (N'  |-Starting OOM', 10, 1) WITH NOWAIT
 
-IF (SELECT COUNT([TIMESTAMP]) FROM sys.dm_os_ring_buffers WITH (NOLOCK) WHERE ring_buffer_type = N'RING_BUFFER_OOM') > 0
+IF (SELECT COUNT([TIMESTAMP]) FROM sys.dm_os_ring_buffers (NOLOCK) WHERE ring_buffer_type = N'RING_BUFFER_OOM') > 0
 BEGIN		
 	SELECT 'Memory_checks' AS [Category], 'OOM_Notifications' AS [Information], 
 	CASE WHEN x.[TIMESTAMP] BETWEEN -2147483648 AND 2147483647 AND si.ms_ticks BETWEEN -2147483648 AND 2147483647 THEN DATEADD(ms, x.[TIMESTAMP] - si.ms_ticks, GETDATE()) 
@@ -2460,10 +2458,10 @@ BEGIN
 		record.value('(./Record/MemoryRecord/TotalPageFile)[1]', 'bigint')/1024 AS [Total_Pagefile_MB],
 		record.value('(./Record/MemoryRecord/AvailablePageFile)[1]', 'bigint')/1024 AS [Avail_Pagefile_MB]
 	FROM (SELECT [TIMESTAMP], CONVERT(xml, record) AS record 
-				FROM sys.dm_os_ring_buffers WITH (NOLOCK)
+				FROM sys.dm_os_ring_buffers (NOLOCK)
 				WHERE ring_buffer_type = N'RING_BUFFER_OOM') AS x
-	CROSS JOIN sys.dm_os_sys_info si WITH (NOLOCK)
-	LEFT JOIN sys.resource_governor_resource_pools rgrp WITH (NOLOCK) ON rgrp.pool_id = record.value('(./Record/OOM/Pool)[1]', 'int')
+	CROSS JOIN sys.dm_os_sys_info si (NOLOCK)
+	LEFT JOIN sys.resource_governor_resource_pools rgrp (NOLOCK) ON rgrp.pool_id = record.value('(./Record/OOM/Pool)[1]', 'int')
 	--WHERE CASE WHEN x.[timestamp] BETWEEN -2147483648 AND 2147483648 THEN DATEADD(ms, x.[timestamp] - si.ms_ticks, GETDATE()) 
 	--	ELSE DATEADD(s, (x.[timestamp]/1000) - (si.ms_ticks/1000), GETDATE()) END >= DATEADD(hh, -12, GETDATE())
 	ORDER BY 2 DESC;
@@ -2480,7 +2478,7 @@ RAISERROR (N'  |-Starting LPIM', 10, 1) WITH NOWAIT
 DECLARE @lpim bit, @lognumber int, @logcount int
 IF @sqlmajorver > 9
 BEGIN
-	SET @sqlcmd = N'SELECT @lpimOUT = CASE WHEN locked_page_allocations_kb > 0 THEN 1 ELSE 0 END FROM sys.dm_os_process_memory WITH (NOLOCK)'
+	SET @sqlcmd = N'SELECT @lpimOUT = CASE WHEN locked_page_allocations_kb > 0 THEN 1 ELSE 0 END FROM sys.dm_os_process_memory (NOLOCK)'
 	SET @params = N'@lpimOUT bit OUTPUT';
 	EXECUTE sp_executesql @sqlcmd, @params, @lpimOUT=@lpim OUTPUT
 END
@@ -2492,14 +2490,14 @@ BEGIN
 			AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_readerrorlog') > 0
 			AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_enumerrorlogs') > 0)
 	BEGIN
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimdbcc'))
+		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimdbcc'))
 		DROP TABLE #lpimdbcc;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimdbcc'))
+		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimdbcc'))
 		CREATE TABLE #lpimdbcc (logdate DATETIME, spid VARCHAR(50), logmsg VARCHAR(4000))
 
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimavail_logs'))
+		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimavail_logs'))
 		DROP TABLE #lpimavail_logs;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimavail_logs'))
+		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#lpimavail_logs'))
 		CREATE TABLE #lpimavail_logs (lognum int, logdate DATETIME, logsize int) 
 
 		-- Get the number of available logs 
@@ -2589,7 +2587,7 @@ BEGIN
 	@freepagefileOUT = (t1.record.value(''(./Record/MemoryRecord/AvailablePageFile)[1]'', ''bigint'')-t1.record.value(''(./Record/MemoryRecord/AvailablePhysicalMemory)[1]'', ''bigint''))/1024,
 	@pagedOUT = ((t1.record.value(''(./Record/MemoryRecord/TotalPageFile)[1]'', ''bigint'')-t1.record.value(''(./Record/MemoryRecord/AvailablePageFile)[1]'', ''bigint''))/t1.record.value(''(./Record/MemoryRecord/TotalPageFile)[1]'', ''bigint''))/1024
 FROM (SELECT MAX([TIMESTAMP]) AS [TIMESTAMP], CONVERT(xml, record) AS record 
-	FROM sys.dm_os_ring_buffers WITH (NOLOCK)
+	FROM sys.dm_os_ring_buffers (NOLOCK)
 	WHERE ring_buffer_type = N''RING_BUFFER_RESOURCE_MONITOR''
 		AND record LIKE ''%RESOURCE_MEMPHYSICAL%''
 	GROUP BY record) AS t1';
@@ -2599,7 +2597,7 @@ BEGIN
 	SET @sqlcmd = N'SELECT @pagefileOUT = (total_page_file_kb-total_physical_memory_kb)/1024, 
 	@freepagefileOUT = (available_page_file_kb-available_physical_memory_kb)/1024, 
 	@pagedOUT = ((total_page_file_kb-available_page_file_kb)/total_page_file_kb) 
-FROM sys.dm_os_sys_memory WITH (NOLOCK)';
+FROM sys.dm_os_sys_memory (NOLOCK)';
 END
 
 SET @params = N'@pagefileOUT bigint OUTPUT, @freepagefileOUT bigint OUTPUT, @pagedOUT bigint OUTPUT';
@@ -2673,17 +2671,17 @@ BEGIN
 
 	DECLARE @mincol DATETIME, @maxcol DATETIME
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))
 	DROP TABLE #tmp_dm_io_virtual_file_stats;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))	
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))	
 	CREATE TABLE [dbo].[#tmp_dm_io_virtual_file_stats]([retrieval_time] [datetime],database_id int, [file_id] int, [DBName] sysname, [logical_file_name] NVARCHAR(255), [type_desc] NVARCHAR(60), 
 		[physical_location] NVARCHAR(260),[sample_ms] int,[num_of_reads] bigint,[num_of_bytes_read] bigint,[io_stall_read_ms] bigint,[num_of_writes] bigint,
 		[num_of_bytes_written] bigint,[io_stall_write_ms] bigint,[io_stall] bigint,[size_on_disk_bytes] bigint,
 		CONSTRAINT PK_dm_io_virtual_file_stats PRIMARY KEY CLUSTERED(database_id, [file_id], [retrieval_time]));
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIOStall'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIOStall'))
 	DROP TABLE #tblIOStall;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIOStall'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIOStall'))
 	CREATE TABLE #tblIOStall (database_id int, [file_id] int, [DBName] sysname, [logical_file_name] NVARCHAR(255), [type_desc] NVARCHAR(60),
 		[physical_location] NVARCHAR(260), size_on_disk_Mbytes int, num_of_reads bigint, num_of_writes bigint, num_of_KBytes_read bigint, num_of_KBytes_written bigint,
 		io_stall_ms int, io_stall_read_ms int, io_stall_write_ms int, avg_read_latency_ms int, avg_write_latency_ms int, avg_io_stall_read_pct int, cumulative_io_stall_read_pct int, 
@@ -2799,14 +2797,14 @@ IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Pending disk I/O Requests subsection (wait for a max of 5s)', 10, 1) WITH NOWAIT
 	DECLARE @IOCnt tinyint
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIOReq'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIOReq'))
 	DROP TABLE #tblPendingIOReq;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIOReq'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIOReq'))
 	CREATE TABLE #tblPendingIOReq (io_completion_request_address varbinary(8), io_handle varbinary(8), io_type VARCHAR(7), io_pending bigint, io_pending_ms_ticks bigint, scheduler_address varbinary(8));
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIO'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIO'))
 	DROP TABLE #tblPendingIO;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIO'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIO'))
 	CREATE TABLE #tblPendingIO (database_id int, [file_id] int, [DBName] sysname, [logical_file_name] NVARCHAR(255), [type_desc] NVARCHAR(60),
 		[physical_location] NVARCHAR(260), io_stall_min int, io_stall_read_min int, io_stall_write_min int, avg_read_latency_ms int,
 		avg_write_latency_ms int, io_stall_read_pct int, io_stall_write_pct int, sampled_HH int, 
@@ -2946,9 +2944,9 @@ BEGIN
 	BEGIN
 		DECLARE @diskpart int
 
-		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
-		SELECT @ole = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
+		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
+		SELECT @ole = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
 
 		RAISERROR ('    |-Configuration options set for Disk partition alignment offset check', 10, 1) WITH NOWAIT
 		IF @sao = 0
@@ -3174,9 +3172,9 @@ BEGIN
 	BEGIN
 		DECLARE @ntfs int
 
-		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
-		SELECT @ole = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
+		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
+		SELECT @ole = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
 
 		RAISERROR ('    |-Configuration options set for NTFS Block size check', 10, 1) WITH NOWAIT
 		IF @sao = 0
@@ -3346,7 +3344,7 @@ Write-Output $drive
 			SELECT 'Server_checks' AS [Category], 'NTFS_Block_Size' AS [Check], '[WARNING: Some volumes that hold database files are not formatted using the recommended NTFS block size of 64KB]' AS [Deviation]
 			SELECT 'Server_checks' AS [Category], 'NTFS_Block_Size' AS [Information], t1.HD_Volume, (t1.[NTFS_Block]/1024) AS [NTFS_Block_Size_KB]
 			FROM (SELECT DISTINCT(LEFT(physical_name, LEN(t2.HD_Volume))) AS [HD_Volume], [NTFS_Block]
-				FROM sys.master_files t1 WITH (NOLOCK) INNER JOIN @output_hw_format_ntfs t2
+				FROM sys.master_files t1 (NOLOCK) INNER JOIN @output_hw_format_ntfs t2
 					ON LEFT(physical_name, LEN(t2.HD_Volume)) = t2.HD_Volume
 					WHERE [database_id] <> 32767 AND (t2.[NTFS_Block] IS NOT NULL OR LEN(t2.[NTFS_Block]) > 0)) t1
 			ORDER BY t1.HD_Volume OPTION (RECOMPILE);
@@ -3404,9 +3402,9 @@ BEGIN
 		BEGIN
 			DECLARE @frag int
 		
-			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
-			SELECT @ole = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
+			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
+			SELECT @ole = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
 
 			RAISERROR ('    |-Configuration options set for Disk Fragmentation Analysis', 10, 1) WITH NOWAIT
 
@@ -3660,8 +3658,8 @@ BEGIN
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
 				AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') > 0))
 		BEGIN
-			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
+			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
 
 			RAISERROR ('    |-Configuration options set for Cluster Quorum Model check', 10, 1) WITH NOWAIT
 			IF @sao = 0
@@ -3675,14 +3673,14 @@ BEGIN
 			
 			DECLARE /*@CMD NVARCHAR(4000), @line int, @linemax int, */ @CntNodes tinyint, @CntVotes tinyint
 				
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
 			DROP TABLE #xp_cmdshell_CluNodesOutput;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
 			CREATE TABLE #xp_cmdshell_CluNodesOutput (line int IDENTITY(1,1) PRIMARY KEY, [Output] VARCHAR(50));
 				
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
 			DROP TABLE #xp_cmdshell_CluOutput;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
 			CREATE TABLE #xp_cmdshell_CluOutput (line int IDENTITY(1,1) PRIMARY KEY, [Output] VARCHAR(50));
 
 			IF @winver <> '5.2'
@@ -3698,7 +3696,7 @@ BEGIN
 				
 			IF (SELECT COUNT([Output]) FROM #xp_cmdshell_CluNodesOutput WHERE [Output] = '') > 0
 			BEGIN				
-				SELECT @CntNodes = COUNT(NodeName) FROM sys.dm_os_cluster_nodes WITH (NOLOCK)
+				SELECT @CntNodes = COUNT(NodeName) FROM sys.dm_os_cluster_nodes (NOLOCK)
 				
 				SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 
 					CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @winver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
@@ -3764,8 +3762,8 @@ END;
 IF @IsHadrEnabled = 1
 BEGIN
 	SET @sqlcmd	= N'DECLARE @winver VARCHAR(5), @CntNodes tinyint
-SELECT @winver = windows_release FROM sys.dm_os_windows_info WITH (NOLOCK)	
-SELECT @CntNodes = SUM(number_of_quorum_votes) FROM sys.dm_hadr_cluster_members WITH (NOLOCK)
+SELECT @winver = windows_release FROM sys.dm_os_windows_info (NOLOCK)	
+SELECT @CntNodes = SUM(number_of_quorum_votes) FROM sys.dm_hadr_cluster_members (NOLOCK)
 
 SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Cluster_Quorum'' AS [Check], cluster_name,
 	CASE WHEN quorum_type = 3 AND @winver <> ''5.2'' THEN ''[WARNING: The current quorum model is not recommended since WS2003]''
@@ -3810,9 +3808,9 @@ BEGIN
 		BEGIN
 			DECLARE @clunic int, @maxnic int
 
-			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
-			SELECT @ole = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
+			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
+			SELECT @ole = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
 
 			RAISERROR ('    |-Configuration options set for Cluster NIC Binding Order check', 10, 1) WITH NOWAIT
 			IF @sao = 0
@@ -4020,8 +4018,8 @@ BEGIN
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
 				AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') > 0))
 		BEGIN
-			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
+			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
 
 			RAISERROR ('    |-Configuration options set for QFE node equality check', 10, 1) WITH NOWAIT
 			IF @sao = 0
@@ -4035,23 +4033,23 @@ BEGIN
 			
 			DECLARE /* @CMD NVARCHAR(4000), @line int, @linemax int, */ @Node VARCHAR(50)
 				
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_Nodes'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_Nodes'))
 			DROP TABLE #xp_cmdshell_Nodes;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_Nodes'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_Nodes'))
 			CREATE TABLE #xp_cmdshell_Nodes (NodeName VARCHAR(50), isdone bit NOT NULL);
 				
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEOutput'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEOutput'))
 			DROP TABLE #xp_cmdshell_QFEOutput;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEOutput'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEOutput'))
 			CREATE TABLE #xp_cmdshell_QFEOutput (line int IDENTITY(1,1) PRIMARY KEY, [Output] VARCHAR(150));
 				
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEFinal'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEFinal'))
 			DROP TABLE #xp_cmdshell_QFEFinal;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEFinal'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEFinal'))
 			CREATE TABLE #xp_cmdshell_QFEFinal (NodeName VARCHAR(50), [QFE] VARCHAR(150));
 				
 			INSERT INTO #xp_cmdshell_Nodes
-			SELECT NodeName, 0 FROM sys.dm_os_cluster_nodes WITH (NOLOCK);
+			SELECT NodeName, 0 FROM sys.dm_os_cluster_nodes (NOLOCK);
 				
 			WHILE (SELECT COUNT(NodeName) FROM #xp_cmdshell_Nodes WHERE isdone = 0) > 0
 			BEGIN
@@ -4212,9 +4210,9 @@ BEGIN
 	SELECT @regkeybrowservice = N'SYSTEM\CurrentControlSet\Services\' + @browservice
 	
 	-- Service status
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#RegResult'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#RegResult'))
 	CREATE TABLE #RegResult (ResultValue bit)
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ServiceStatus'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ServiceStatus'))
 	CREATE TABLE #ServiceStatus (ServiceStatus VARCHAR(128))
 
 	IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
@@ -4577,8 +4575,8 @@ BEGIN
 			AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') > 0))
 	BEGIN
 		RAISERROR ('    |-Configuration options set for SPN check', 10, 1) WITH NOWAIT
-		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
+		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
 		IF @sao = 0
 		BEGIN
 			EXEC sp_configure 'show advanced options', 1; RECONFIGURE WITH OVERRIDE;
@@ -4590,24 +4588,24 @@ BEGIN
 
 		BEGIN TRY
 			DECLARE /*@CMD NVARCHAR(4000),*/ @line int, @linemax int, @SPN VARCHAR(8000), @SPNMachine VARCHAR(8000)
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_AcctSPNoutput'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_AcctSPNoutput'))
 			DROP TABLE #xp_cmdshell_AcctSPNoutput;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_AcctSPNoutput'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_AcctSPNoutput'))
 			CREATE TABLE #xp_cmdshell_AcctSPNoutput (line int IDENTITY(1,1) PRIMARY KEY, [Output] VARCHAR (8000));
 			
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_DupSPNoutput'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_DupSPNoutput'))
 			DROP TABLE #xp_cmdshell_DupSPNoutput;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_DupSPNoutput'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_DupSPNoutput'))
 			CREATE TABLE #xp_cmdshell_DupSPNoutput (line int IDENTITY(1,1) PRIMARY KEY, [Output] VARCHAR (8000));
 			
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#FinalDupSPN'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#FinalDupSPN'))
 			DROP TABLE #FinalDupSPN;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#FinalDupSPN'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#FinalDupSPN'))
 			CREATE TABLE #FinalDupSPN ([SPN] VARCHAR (8000), [Accounts] VARCHAR (8000));
 			
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ScopedDupSPN'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ScopedDupSPN'))
 			DROP TABLE #ScopedDupSPN;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ScopedDupSPN'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ScopedDupSPN'))
 			CREATE TABLE #ScopedDupSPN ([SPN] VARCHAR (8000), [Accounts] VARCHAR (8000));
 
 			SELECT @CMD = N'SETSPN -P -L ' + @accntsqlservice 
@@ -4746,7 +4744,7 @@ DECLARE @nolog int, @nobck int, @nolog24h int, @neverlog int, @neverbck int
 
 -- No Full backups
 SELECT @neverbck = COUNT(DISTINCT d.name) 
-FROM master.sys.databases d WITH (NOLOCK)
+FROM master.sys.databases d (NOLOCK)
 INNER JOIN #tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
 WHERE database_id NOT IN (2,3)
 	AND source_database_id IS NULL -- no snapshots
@@ -4754,11 +4752,11 @@ WHERE database_id NOT IN (2,3)
 
 -- No Full backups in last 7 days
 ;WITH cteFullBcks (cnt) AS (SELECT DISTINCT database_name AS cnt
-FROM msdb.dbo.backupset b WITH (NOLOCK)
+FROM msdb.dbo.backupset b (NOLOCK)
 INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 WHERE b.type = 'D' -- Full backup
 	AND b.is_copy_only = 0 -- No COPY_ONLY backups
-	AND database_name IN (SELECT name FROM master.sys.databases WITH (NOLOCK)
+	AND database_name IN (SELECT name FROM master.sys.databases (NOLOCK)
 		WHERE database_id NOT IN (2,3)
 			AND source_database_id IS NULL) -- no snapshots
 GROUP BY database_name
@@ -4768,15 +4766,15 @@ FROM cteFullBcks;
 
 -- Last Log backup precedes last full or diff backup, and DB in Full or Bulk-logged RM
 ;WITH cteLogBcks (cnt) AS (SELECT DISTINCT database_name 
-FROM msdb.dbo.backupset b WITH (NOLOCK)
+FROM msdb.dbo.backupset b (NOLOCK)
 INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 WHERE b.type = 'L' -- Log backup
-	AND database_name IN (SELECT name FROM master.sys.databases WITH (NOLOCK)
+	AND database_name IN (SELECT name FROM master.sys.databases (NOLOCK)
 		WHERE database_id NOT IN (2,3)
 			AND source_database_id IS NULL -- no snapshots
 			AND recovery_model < 3) -- not SIMPLE recovery model
 GROUP BY [database_name]
-HAVING MAX(backup_finish_date) < (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset c WITH (NOLOCK) WHERE c.type IN ('D','I') -- Full or Differential backup
+HAVING MAX(backup_finish_date) < (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset c (NOLOCK) WHERE c.type IN ('D','I') -- Full or Differential backup
 								AND c.is_copy_only = 0 -- No COPY_ONLY backups
 								AND c.database_name = b.database_name))
 SELECT @nolog = COUNT(cnt)
@@ -4784,34 +4782,34 @@ FROM cteLogBcks;
 
 -- No Log backup since last full or diff backup, and DB in Full or Bulk-logged RM
 SELECT @neverlog = COUNT(DISTINCT database_name)
-FROM msdb.dbo.backupset b WITH (NOLOCK)
+FROM msdb.dbo.backupset b (NOLOCK)
 INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 WHERE database_name IN (SELECT name 
-			FROM master.sys.databases WITH (NOLOCK)
+			FROM master.sys.databases (NOLOCK)
 			WHERE database_id NOT IN (2,3)
 				AND source_database_id IS NULL -- no snapshots
 				AND recovery_model < 3) -- not SIMPLE recovery model
 	AND EXISTS (SELECT DISTINCT database_name 
-			FROM msdb.dbo.backupset c WITH (NOLOCK)
+			FROM msdb.dbo.backupset c (NOLOCK)
 			WHERE c.type IN ('D','I') -- Full or Differential backup
 			AND c.is_copy_only = 0 -- No COPY_ONLY backups
 			AND c.database_name = b.database_name) -- Log backup
 	AND NOT EXISTS (SELECT DISTINCT database_name 
-			FROM msdb.dbo.backupset c WITH (NOLOCK)
+			FROM msdb.dbo.backupset c (NOLOCK)
 			WHERE c.type = 'L' -- Log Backup
 			AND c.database_name = b.database_name);
 
 -- Log backup since last full or diff backup is older than 24h, and DB in Full ar Bulk-logged RM
 ;WITH cteLogBcks2 (cnt) AS (SELECT DISTINCT database_name 
-FROM msdb.dbo.backupset b WITH (NOLOCK)
+FROM msdb.dbo.backupset b (NOLOCK)
 INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 WHERE b.type = 'L' -- Log backup
-	AND database_name IN (SELECT name FROM master.sys.databases WITH (NOLOCK)
+	AND database_name IN (SELECT name FROM master.sys.databases (NOLOCK)
 		WHERE database_id NOT IN (2,3)
 			AND source_database_id IS NULL -- no snapshots
 			AND recovery_model < 3) -- not SIMPLE recovery model
 GROUP BY database_name
-HAVING MAX(backup_finish_date) > (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset c WITH (NOLOCK) WHERE c.type IN ('D','I') -- Full or Differential backup
+HAVING MAX(backup_finish_date) > (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset c (NOLOCK) WHERE c.type IN ('D','I') -- Full or Differential backup
 								AND c.is_copy_only = 0 -- No COPY_ONLY backups
 								AND c.database_name = b.database_name)
 	AND MAX(backup_finish_date) <= DATEADD(hh, -24, GETDATE()))
@@ -4823,11 +4821,11 @@ BEGIN
 	SELECT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Check], '[WARNING: Some databases do not have any Full backups, or the last Full backup is over 7 days]' AS [Deviation]
 	-- No full backups in last 7 days
 	SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Full_Backup
-	FROM msdb.dbo.backupset b WITH (NOLOCK)
+	FROM msdb.dbo.backupset b (NOLOCK)
 	INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 	WHERE b.type = 'D' -- Full backup
 		AND b.is_copy_only = 0 -- No COPY_ONLY backups
-		AND database_name IN (SELECT name FROM master.sys.databases WITH (NOLOCK)
+		AND database_name IN (SELECT name FROM master.sys.databases (NOLOCK)
 			WHERE database_id NOT IN (2,3)
 				AND source_database_id IS NULL) -- no snapshots
 	GROUP BY database_name
@@ -4835,7 +4833,7 @@ BEGIN
 	UNION ALL
 	-- No full backups in history
 	SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Information], d.name AS [Database_Name], NULL AS Lst_Full_Backup
-	FROM master.sys.databases d WITH (NOLOCK)
+	FROM master.sys.databases d (NOLOCK)
 	INNER JOIN #tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
 	WHERE database_id NOT IN (2,3)
 		AND source_database_id IS NULL -- no snapshots
@@ -4853,17 +4851,17 @@ IF @nolog > 0 OR @neverlog > 0
 BEGIN
 	SELECT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Check], '[WARNING: Some databases in Full or Bulk-Logged recovery model do not have any corresponding transaction Log backups since the last Full or Differential backup]' AS [Deviation]
 	;WITH Bck AS (SELECT database_name, MAX(backup_finish_date) AS backup_finish_date
-					FROM msdb.dbo.backupset WITH (NOLOCK) b
+					FROM msdb.dbo.backupset (NOLOCK) b
 					INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 					WHERE [type] IN ('D','I') -- Full or Differential backup
 					GROUP BY database_name)
 	-- Log backups since last full or diff is older than 24h
 	SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Log_Backup,
 		(SELECT backup_finish_date FROM Bck c WHERE c.database_name = b.database_name) AS Lst_FullDiff_Backup
-	FROM msdb.dbo.backupset b WITH (NOLOCK)
+	FROM msdb.dbo.backupset b (NOLOCK)
 	INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 	WHERE b.type = 'L' -- Log backup
-		AND database_name IN (SELECT name FROM master.sys.databases WITH (NOLOCK)
+		AND database_name IN (SELECT name FROM master.sys.databases (NOLOCK)
 			WHERE database_id NOT IN (2,3)
 				AND source_database_id IS NULL -- no snapshots
 				AND recovery_model < 3) -- not SIMPLE recovery model
@@ -4872,20 +4870,20 @@ BEGIN
 	UNION ALL
 	-- No log backup in history but full backup exists
 	SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Information], database_name AS [Database_Name], NULL AS Lst_Log_Backup, MAX(backup_finish_date) AS Lst_FullDiff_Backup
-	FROM msdb.dbo.backupset b WITH (NOLOCK)
+	FROM msdb.dbo.backupset b (NOLOCK)
 	INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 	WHERE database_name IN (SELECT name 
-				FROM master.sys.databases WITH (NOLOCK)
+				FROM master.sys.databases (NOLOCK)
 				WHERE database_id NOT IN (2,3)
 					AND source_database_id IS NULL -- no snapshots
 					AND recovery_model < 3) -- not SIMPLE recovery model
 		AND EXISTS (SELECT DISTINCT database_name 
-				FROM msdb.dbo.backupset c WITH (NOLOCK)
+				FROM msdb.dbo.backupset c (NOLOCK)
 				WHERE c.type IN ('D','I') -- Full or Differential backup
 				AND c.is_copy_only = 0 -- No COPY_ONLY backups
 				AND c.database_name = b.database_name) -- Log backup
 		AND NOT EXISTS (SELECT DISTINCT database_name 
-				FROM msdb.dbo.backupset c WITH (NOLOCK)
+				FROM msdb.dbo.backupset c (NOLOCK)
 				WHERE c.type = 'L' -- Log Backup
 				AND c.database_name = b.database_name)
 	GROUP BY database_name
@@ -4900,14 +4898,14 @@ IF @nolog24h > 0
 BEGIN
 	SELECT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Check], '[WARNING: Some databases in Full or Bulk-Logged recovery model have their latest log backup older than 24H]' AS [Deviation]
 	SELECT DISTINCT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Log_Backup
-	FROM msdb.dbo.backupset b WITH (NOLOCK)
+	FROM msdb.dbo.backupset b (NOLOCK)
 	INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 	WHERE b.type = 'L' -- Log backup
-		AND database_name IN (SELECT name FROM master.sys.databases WITH (NOLOCK)
+		AND database_name IN (SELECT name FROM master.sys.databases (NOLOCK)
 			WHERE database_id NOT IN (2,3)
 				AND recovery_model < 3) -- not SIMPLE recovery model
 	GROUP BY database_name
-	HAVING MAX(backup_finish_date) > (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset c WITH (NOLOCK) WHERE c.type IN ('D', 'I') -- Full or Differential backup
+	HAVING MAX(backup_finish_date) > (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset c (NOLOCK) WHERE c.type IN ('D', 'I') -- Full or Differential backup
 									AND c.is_copy_only = 0 -- No COPY_ONLY backups
 									AND c.database_name = b.database_name)
 		AND MAX(backup_finish_date) <= DATEADD(hh, -24, GETDATE())
@@ -4931,9 +4929,9 @@ IF @sqlmajorver >= 11
 BEGIN
 	DECLARE @dbname0 VARCHAR(1000), @dbid0 int, @sqlcmd0 NVARCHAR(4000), @has_colstrix int
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
 	DROP TABLE #tblColStoreIXs;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
 	CREATE TABLE #tblColStoreIXs ([DBName] VARCHAR(1000), [Schema] VARCHAR(100), [Table] VARCHAR(255), [Object] VARCHAR(255));
 
 	UPDATE #tmpdbs0
@@ -4955,10 +4953,10 @@ BEGIN
 
 			SET @sqlcmd0 = 'USE ' + QUOTENAME(@dbname0) + ';
 SELECT ''' + @dbname0 + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), i.name 
-FROM sys.indexes AS i WITH (NOLOCK)
-INNER JOIN sys.objects AS o WITH (NOLOCK) ON o.[object_id] = i.[object_id]
-INNER JOIN sys.tables AS mst WITH (NOLOCK) ON mst.[object_id] = i.[object_id]
-INNER JOIN sys.schemas AS t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+FROM sys.indexes AS i (NOLOCK)
+INNER JOIN sys.objects AS o (NOLOCK) ON o.[object_id] = i.[object_id]
+INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = i.[object_id]
+INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE i.[type] IN (5,6,7)' -- 5 = Clustered columnstore; 6 = Nonclustered columnstore; 7 = Nonclustered hash
 
 			BEGIN TRY
@@ -5626,12 +5624,12 @@ DECLARE @affin int, @affinIO int, @affin64 int, @affin64IO int, @block_threshold
 --SELECT @mwthreads_count = max_workers_count FROM sys.dm_os_sys_info;
 
 SELECT @adhocqry = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'Ad Hoc Distributed Queries';
-SELECT @affin = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE name = 'affinity mask';
-SELECT @affinIO = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE name = 'affinity I/O mask';
-SELECT @affin64 = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE name = 'affinity64 mask';
-SELECT @affin64IO = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE name = 'affinity64 I/O mask';
+SELECT @affin = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE name = 'affinity mask';
+SELECT @affinIO = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE name = 'affinity I/O mask';
+SELECT @affin64 = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE name = 'affinity64 mask';
+SELECT @affin64IO = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE name = 'affinity64 I/O mask';
 SELECT @allowupd = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'allow updates';
-SELECT @block_threshold = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE name = 'blocked process threshold (s)';
+SELECT @block_threshold = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE name = 'blocked process threshold (s)';
 SELECT @awe = CONVERT(tinyint, [value]) FROM sys.configurations WHERE [Name] = 'awe enabled';
 SELECT @autoNUMA = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'automatic soft-NUMA disabled';
 SELECT @bckcomp = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'backup compression default';
@@ -5649,7 +5647,7 @@ SELECT @recinterval = CONVERT(int, [value]) FROM sys.configurations WHERE [Name]
 SELECT @remote = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'remote admin connections';
 SELECT @qrywait = CONVERT(int, [value]) FROM sys.configurations WHERE [Name] = 'query wait (s)';
 SELECT @adhoc = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'optimize for ad hoc workloads';
-SELECT @oleauto = CONVERT(int, [value]) FROM sys.configurations WITH (NOLOCK) WHERE name = 'Ole Automation Procedures';
+SELECT @oleauto = CONVERT(int, [value]) FROM sys.configurations (NOLOCK) WHERE name = 'Ole Automation Procedures';
 SELECT @pboost = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'priority boost';
 SELECT @qtimeout = CONVERT(int, [value]) FROM sys.configurations WHERE [Name] = 'remote query timeout (s)';
 SELECT @ssp = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'scan for startup procs';
@@ -5715,7 +5713,7 @@ BEGIN
 	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Information], [Name] AS [Setting],
 		[value] AS 'Config_Value',
 		[value_in_use] AS 'Run_Value'
-	FROM master.sys.configurations WITH (NOLOCK)
+	FROM master.sys.configurations (NOLOCK)
 	WHERE [value] <> [value_in_use] AND [is_dynamic] = 0;
 END
 ELSE
@@ -5737,8 +5735,8 @@ BEGIN
 			AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') > 0))
 	BEGIN
 		RAISERROR ('    |-Configuration options set for IFI check', 10, 1) WITH NOWAIT
-		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
+		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
 		IF @sao = 0
 		BEGIN
 			EXEC sp_configure 'show advanced options', 1; RECONFIGURE WITH OVERRIDE;
@@ -5890,7 +5888,7 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Check], '[WARNING: Deprecated features are being used. These features are scheduled to be removed in a future release of SQL Server]' AS [Deviation]
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Information], instance_name, cntr_value AS [Times_used_since_startup]
-		FROM sys.dm_os_performance_counters WITH (NOLOCK)
+		FROM sys.dm_os_performance_counters (NOLOCK)
 		WHERE [object_name] LIKE '%Deprecated Features%' AND cntr_value > 0
 		ORDER BY instance_name;
 	END
@@ -5985,14 +5983,14 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting DBs with collation <> master', 10, 1) WITH NOWAIT
 DECLARE @master_collate NVARCHAR(128), @dif_collate int
-SELECT @master_collate = collation_name FROM master.sys.databases WITH (NOLOCK) WHERE database_id = 1;
-SELECT @dif_collate = COUNT(collation_name) FROM master.sys.databases WITH (NOLOCK) WHERE collation_name <> @master_collate;
+SELECT @master_collate = collation_name FROM master.sys.databases (NOLOCK) WHERE database_id = 1;
+SELECT @dif_collate = COUNT(collation_name) FROM master.sys.databases (NOLOCK) WHERE collation_name <> @master_collate;
 
 IF @dif_collate >= 1
 BEGIN
 	SELECT 'Database_checks' AS [Category], 'Collations' AS [Check], '[WARNING: Some user databases collation differ from the master Database_Collation]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Collations' AS [Information], name AS [Database_Name], collation_name AS [Database_Collation], @master_collate AS [Master_Collation]
-	FROM master.sys.databases WITH (NOLOCK)
+	FROM master.sys.databases (NOLOCK)
 	WHERE collation_name <> @master_collate;
 END
 ELSE
@@ -6005,13 +6003,13 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting DBs with skewed compatibility level', 10, 1) WITH NOWAIT
 DECLARE @dif_compat int
-SELECT @dif_compat = COUNT([compatibility_level]) FROM master.sys.databases WITH (NOLOCK) WHERE [compatibility_level] <> @sqlmajorver * 10;
+SELECT @dif_compat = COUNT([compatibility_level]) FROM master.sys.databases (NOLOCK) WHERE [compatibility_level] <> @sqlmajorver * 10;
 
 IF @dif_compat >= 1
 BEGIN
 	SELECT 'Database_checks' AS [Category], 'Compatibility_Level' AS [Check], '[WARNING: Some user databases have a non-optimal compatibility level]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Compatibility_Level' AS [Information], name AS [Database_Name], [compatibility_level] AS [Compatibility_Level]
-	FROM master.sys.databases WITH (NOLOCK)
+	FROM master.sys.databases (NOLOCK)
 	WHERE [compatibility_level] <> @sqlmajorver * 10;
 END
 ELSE
@@ -6051,7 +6049,7 @@ BEGIN
 	--0 AS is_indirect_checkpoint_on, 
 	NULL AS is_auto_create_stats_incremental_on, 
 	is_trustworthy_on, is_parameterization_forced
-FROM master.sys.databases WITH (NOLOCK)
+FROM master.sys.databases (NOLOCK)
 WHERE database_id > 4 OR name = ''model'''
 END
 ELSE
@@ -6063,7 +6061,7 @@ BEGIN
 	--CASE WHEN target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on, 
 	is_auto_create_stats_incremental_on, 
 	is_trustworthy_on, is_parameterization_forced
-FROM master.sys.databases WITH (NOLOCK)
+FROM master.sys.databases (NOLOCK)
 WHERE database_id > 4 OR name = ''model'''
 END;
 
@@ -6128,10 +6126,10 @@ BEGIN
 	SELECT 'Database_checks' AS [Category], 'Database_Options' AS [Check], '[OK]' AS [Deviation]
 END;
 
-IF (SELECT COUNT(*) FROM master.sys.databases WITH (NOLOCK) WHERE is_auto_update_stats_on = 0 AND is_auto_update_stats_async_on = 1) > 0
+IF (SELECT COUNT(*) FROM master.sys.databases (NOLOCK) WHERE is_auto_update_stats_on = 0 AND is_auto_update_stats_async_on = 1) > 0
 BEGIN
 	SELECT 'Database_checks' AS [Category], 'Database_Options_Disabled_Async_AutoUpdate' AS [Check], '[WARNING: Some databases have Auto_Update_Statistics_Asynchronously ENABLED while Auto_Update_Statistics is DISABLED. If asynch auto statistics update is intended, also enable Auto_Update_Statistics]' AS [Deviation]
-	SELECT 'Database_checks' AS [Category], 'Database_Options_Disabled_Async_AutoUpdate' AS [Check], [name] FROM master.sys.databases WITH (NOLOCK) WHERE is_auto_update_stats_on = 0 AND is_auto_update_stats_async_on = 1
+	SELECT 'Database_checks' AS [Category], 'Database_Options_Disabled_Async_AutoUpdate' AS [Check], [name] FROM master.sys.databases (NOLOCK) WHERE is_auto_update_stats_on = 0 AND is_auto_update_stats_async_on = 1
 END
 ELSE
 BEGIN
@@ -6179,7 +6177,7 @@ BEGIN
 			WHEN @ifi = 1 AND mf.type = 0 THEN 'Instant File Initialization is enabled'
 			ELSE '' END AS [Comments],
 		mf.is_read_only
-	FROM sys.master_files mf WITH (NOLOCK)
+	FROM sys.master_files mf (NOLOCK)
 	WHERE is_percent_growth = 1
 	GROUP BY database_id, mf.name, mf.size, is_percent_growth, mf.growth, mf.type_desc, mf.[type], mf.[state_desc], mf.is_read_only
 	ORDER BY DB_NAME(mf.database_id), mf.name
@@ -6193,7 +6191,7 @@ END;
 -- DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled) subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled)', 10, 1) WITH NOWAIT
-IF (SELECT COUNT(growth) FROM sys.master_files WITH (NOLOCK)
+IF (SELECT COUNT(growth) FROM sys.master_files (NOLOCK)
 	WHERE [type] >= CASE WHEN @ifi = 1 THEN 1 ELSE 0 END 
 		AND [type] < 2 
 		AND ((is_percent_growth = 1 AND ((CONVERT(bigint,size)*8)*growth)/100 > 1048576) 
@@ -6215,7 +6213,7 @@ BEGIN
 			WHEN @ifi = 1 AND mf.type = 0 THEN 'Instant File Initialization is enabled'
 			ELSE '' END AS [Comments],
 		mf.is_read_only
-	FROM sys.master_files mf WITH (NOLOCK)
+	FROM sys.master_files mf (NOLOCK)
 	WHERE mf.[type] >= CASE WHEN @ifi = 1 THEN 1 ELSE 0 END 
 		AND mf.[type] < 2
 		AND ((is_percent_growth = 1 AND ((CONVERT(bigint,mf.size)*8)*mf.growth)/100 > 1048576) 
@@ -6237,9 +6235,9 @@ BEGIN
 	DECLARE /*@dbid int,*/ @query VARCHAR(1000)/*, @dbname VARCHAR(1000)*/, @count int, @count_used int, @logsize DECIMAL(20,1), @usedlogsize DECIMAL(20,1), @avgvlfsize DECIMAL(20,1)
 	DECLARE @potsize DECIMAL(20,1), @n_iter int, @n_iter_final int, @initgrow DECIMAL(20,1), @n_init_iter int
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
 	DROP TABLE #log_info1;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
 	CREATE TABLE #log_info1 (dbname VARCHAR(100), 
 		Current_log_size_MB DECIMAL(20,1), 
 		Used_Log_size_MB DECIMAL(20,1),
@@ -6252,9 +6250,9 @@ BEGIN
 		Log_Initial_size_MB DECIMAL(20,1),
 		File_autogrow_MB DECIMAL(20,1))
 	
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
 	DROP TABLE #log_info2;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
 	CREATE TABLE #log_info2 (dbname VARCHAR(100), 
 		Current_VLFs int, 
 		VLF_size_KB DECIMAL(20,1), 
@@ -6277,9 +6275,9 @@ BEGIN
 		BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
+			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
 			DROP TABLE #log_info3;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
+			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
 			CREATE TABLE #log_info3 (recoveryunitid int NULL,
 				fileid tinyint,
 				file_size bigint,
@@ -6481,7 +6479,7 @@ BEGIN
 	OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
 		AND (SELECT COUNT(credential_id) FROM sys.credentials WHERE name = '##xp_cmdshell_proxy_account##') > 0) -- Is not sysadmin but proxy account exists
 		AND (SELECT COUNT(l.name)
-		FROM sys.server_permissions p WITH (NOLOCK) INNER JOIN sys.server_principals l WITH (NOLOCK)
+		FROM sys.server_permissions p (NOLOCK) INNER JOIN sys.server_principals l (NOLOCK)
 		ON p.grantee_principal_id = l.principal_id
 			AND p.class = 100 -- Server
 			AND p.state IN ('G', 'W') -- Granted or Granted with Grant
@@ -6511,9 +6509,9 @@ BEGIN
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'show advanced options'
-			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'xp_cmdshell'
-			SELECT @ole = CAST([value] AS smallint) FROM sys.configurations WITH (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
+			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
+			SELECT @ole = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'Ole Automation Procedures'
 
 			RAISERROR ('  |-Configuration options set for Data and Log location check', 10, 1) WITH NOWAIT
 			IF @sao = 0
@@ -6710,7 +6708,7 @@ Windows PowerShell has four different execution policies:
 			DECLARE @intertbl TABLE (physical_name nvarchar(260))
 			INSERT INTO @intertbl
 			SELECT physical_name
-			FROM sys.master_files t1 WITH (NOLOCK) 
+			FROM sys.master_files t1 (NOLOCK) 
 			INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE ([database_id] > 4 OR [database_id] = 2)
 				AND [database_id] <> 32767 AND LEN(t2.HD_Volume) > 3
@@ -6719,13 +6717,13 @@ Windows PowerShell has four different execution policies:
 			DECLARE @filetbl TABLE (database_id int, type tinyint, file_id int, physical_name nvarchar(260), volid smallint)
 			INSERT INTO @filetbl
 			SELECT database_id, type, file_id, physical_name, volid
-			FROM sys.master_files t1 WITH (NOLOCK) 
+			FROM sys.master_files t1 (NOLOCK) 
 			INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE ([database_id] > 4 OR [database_id] = 2) AND [database_id] <> 32767 AND LEN(t2.HD_Volume) > 3
 			UNION ALL
 			-- select database files not in mountpoints
 			SELECT database_id, type, file_id, physical_name, volid
-			FROM sys.master_files t1 WITH (NOLOCK) 
+			FROM sys.master_files t1 (NOLOCK) 
 			INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE ([database_id] > 4 OR [database_id] = 2) AND [database_id] <> 32767 AND physical_name NOT IN (SELECT physical_name FROM @intertbl)
 				
@@ -6739,7 +6737,7 @@ Windows PowerShell has four different execution policies:
 			BEGIN
 				SELECT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Check], '[WARNING: Some user databases have Data and Log files in the same physical volume]' AS [Deviation]
 				SELECT DISTINCT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Information], DB_NAME(mf.[database_id]) AS [Database_Name], type_desc AS [Type], mf.physical_name
-				FROM sys.master_files mf WITH (NOLOCK) INNER JOIN @filetbl t1 ON mf.database_id = t1.database_id AND mf.physical_name = t1.physical_name
+				FROM sys.master_files mf (NOLOCK) INNER JOIN @filetbl t1 ON mf.database_id = t1.database_id AND mf.physical_name = t1.physical_name
 					INNER JOIN @filetbl t2 ON t1.database_id = t2.database_id
 						AND t1.[type] <> t2.[type]
 						AND ((t1.[type] = 1 AND t2.[type] <> 1) OR (t2.[type] = 1 AND t1.[type] <> 1))
@@ -6755,7 +6753,7 @@ Windows PowerShell has four different execution policies:
 			DECLARE @interbcktbl TABLE (physical_device_name nvarchar(260))
 			INSERT INTO @interbcktbl
 			SELECT physical_device_name
-			FROM msdb.dbo.backupmediafamily t1 WITH (NOLOCK) 
+			FROM msdb.dbo.backupmediafamily t1 (NOLOCK) 
 			INNER JOIN @output_hw_format t2 ON LEFT(physical_device_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE LEN(t2.HD_Volume) > 3
 
@@ -6763,13 +6761,13 @@ Windows PowerShell has four different execution policies:
 			DECLARE @bcktbl TABLE (physical_device_name nvarchar(260), HD_Volume nvarchar(260))
 			INSERT INTO @bcktbl
 			SELECT physical_device_name, RTRIM(t2.HD_Volume)
-			FROM msdb.dbo.backupmediafamily t1 WITH (NOLOCK) 
+			FROM msdb.dbo.backupmediafamily t1 (NOLOCK) 
 			INNER JOIN @output_hw_format t2 ON LEFT(physical_device_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE LEN(t2.HD_Volume) > 3
 			-- select backups not in mountpoints
 			UNION ALL
 			SELECT physical_device_name, RTRIM(t2.HD_Volume)
-			FROM msdb.dbo.backupmediafamily t1 WITH (NOLOCK)
+			FROM msdb.dbo.backupmediafamily t1 (NOLOCK)
 			INNER JOIN @output_hw_format t2 ON LEFT(physical_device_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE physical_device_name NOT IN (SELECT physical_device_name FROM @interbcktbl);
 
@@ -6791,7 +6789,7 @@ Windows PowerShell has four different execution policies:
 			DECLARE @intertbl2 TABLE (physical_name nvarchar(260))
 			INSERT INTO @intertbl2
 			SELECT physical_name
-			FROM sys.master_files t1 WITH (NOLOCK) INNER JOIN @output_hw_format t2
+			FROM sys.master_files t1 (NOLOCK) INNER JOIN @output_hw_format t2
 			ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE [database_id] = 2 AND LEN(t2.HD_Volume) > 3 AND [type] = 0
 			
@@ -6799,7 +6797,7 @@ Windows PowerShell has four different execution policies:
 			DECLARE @intertbl3 TABLE (physical_name nvarchar(260))
 			INSERT INTO @intertbl3
 			SELECT physical_name
-			FROM sys.master_files t1 WITH (NOLOCK) INNER JOIN @output_hw_format t2
+			FROM sys.master_files t1 (NOLOCK) INNER JOIN @output_hw_format t2
 			ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE [database_id] > 4 AND [database_id] <> 32767 AND LEN(t2.HD_Volume) > 3 AND [type] = 0
 			
@@ -6807,22 +6805,22 @@ Windows PowerShell has four different execution policies:
 			DECLARE @tempDBtbl TABLE (database_id int, type tinyint, file_id int, physical_name nvarchar(260), volid smallint)
 			INSERT INTO @tempDBtbl
 			SELECT database_id, type, file_id, physical_name, volid
-			FROM sys.master_files t1 WITH (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
+			FROM sys.master_files t1 (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE [database_id] = 2 AND LEN(t2.HD_Volume) > 3 AND [type] = 0
 			UNION ALL
 			SELECT database_id, type, file_id, physical_name, volid
-			FROM sys.master_files t1 WITH (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
+			FROM sys.master_files t1 (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE [database_id] = 2 AND [type] = 0 AND physical_name NOT IN (SELECT physical_name FROM @intertbl2)
 
 			-- select user DBs files in mountpoints		
 			DECLARE @otherstbl TABLE (database_id int, type tinyint, file_id int, physical_name nvarchar(260), volid smallint)
 			INSERT INTO @otherstbl
 			SELECT database_id, type, file_id, physical_name, volid
-			FROM sys.master_files t1 WITH (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
+			FROM sys.master_files t1 (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE [database_id] > 4 AND [database_id] <> 32767 AND LEN(t2.HD_Volume) > 3 AND [type] = 0
 			UNION ALL
 			SELECT database_id, type, file_id, physical_name, volid
-			FROM sys.master_files t1 WITH (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
+			FROM sys.master_files t1 (NOLOCK) INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 			WHERE [database_id] > 4 AND [database_id] <> 32767 AND [type] = 0 AND physical_name NOT IN (SELECT physical_name FROM @intertbl3)
 
 			SELECT @ctr2 = COUNT(*) FROM @tempDBtbl WHERE LEFT(physical_name, 1) = 'C'
@@ -6845,11 +6843,11 @@ Windows PowerShell has four different execution policies:
 			IF @ctr2 > 0 OR @ctr3 > 0
 			BEGIN
 				SELECT DISTINCT 'tempDB_checks' AS [Category], 'tempDB_location' AS [Information], DB_NAME(mf.[database_id]) AS [Database_Name], type_desc AS [Type], mf.physical_name
-				FROM sys.master_files mf WITH (NOLOCK) INNER JOIN @otherstbl t1 ON mf.database_id = t1.database_id AND mf.physical_name = t1.physical_name
+				FROM sys.master_files mf (NOLOCK) INNER JOIN @otherstbl t1 ON mf.database_id = t1.database_id AND mf.physical_name = t1.physical_name
 					INNER JOIN @tempDBtbl t2 ON t1.volid = t2.volid
 				UNION ALL
 				SELECT DISTINCT 'tempDB_checks' AS [Category], 'tempDB_location' AS [Information], DB_NAME(mf.[database_id]) AS [Database_Name], type_desc AS [Type], mf.physical_name
-				FROM sys.master_files mf WITH (NOLOCK) INNER JOIN @tempDBtbl t1 ON mf.database_id = t1.database_id AND mf.physical_name = t1.physical_name
+				FROM sys.master_files mf (NOLOCK) INNER JOIN @tempDBtbl t1 ON mf.database_id = t1.database_id AND mf.physical_name = t1.physical_name
 				ORDER BY DB_NAME(mf.[database_id]) OPTION (RECOMPILE);
 			END
 		END
@@ -6877,7 +6875,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting tempDB data file configurations', 10, 1) WITH NOWAIT
 DECLARE @tdb_files int, @online_count int, @filesizes smallint
-SELECT @tdb_files = COUNT(physical_name) FROM sys.master_files WITH (NOLOCK) WHERE database_id = 2 AND [type] = 0;
+SELECT @tdb_files = COUNT(physical_name) FROM sys.master_files (NOLOCK) WHERE database_id = 2 AND [type] = 0;
 SELECT @online_count = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64;
 SELECT @filesizes = COUNT(DISTINCT size) FROM tempdb.sys.database_files WHERE [type] = 0;
 
@@ -6886,7 +6884,7 @@ IF (SELECT CASE WHEN @filesizes = 1 AND ((@tdb_files >= 4 AND @tdb_files <= 8 AN
 BEGIN
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Check], '[OK]' AS [Deviation]
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Information], physical_name AS [tempDB_Files], CAST((size*8)/1024.0 AS DECIMAL(18,2)) AS [File_Size_MB]
-	FROM tempdb.sys.database_files WITH (NOLOCK)
+	FROM tempdb.sys.database_files (NOLOCK)
 	WHERE type = 0;
 END
 ELSE 
@@ -6899,7 +6897,7 @@ BEGIN
 			WHEN @filesizes > 1 AND @tdb_files >= 4 AND @tdb_files % 4 = 0 THEN '[WARNING: Data file sizes do not match]'
 			ELSE '[OK]' END AS [Deviation];
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Information], physical_name AS [tempDB_Files], CAST((size*8)/1024.0 AS DECIMAL(18,2)) AS [File_Size_MB]
-	FROM tempdb.sys.database_files WITH (NOLOCK)
+	FROM tempdb.sys.database_files (NOLOCK)
 	WHERE type = 0;
 END;
 
@@ -6924,7 +6922,7 @@ BEGIN
 		CASE WHEN @ifi = 0 AND mf.type = 0 THEN 'Instant File Initialization is disabled'
 			WHEN @ifi = 1 AND mf.type = 0 THEN 'Instant File Initialization is enabled'
 			ELSE '' END AS [Comments]
-	FROM tempdb.sys.database_files mf WITH (NOLOCK)
+	FROM tempdb.sys.database_files mf (NOLOCK)
 	WHERE [type] = 0
 	GROUP BY mf.name, mf.[size], is_percent_growth, mf.growth, mf.type_desc, mf.[type]
 	ORDER BY 3, 4
@@ -6945,9 +6943,9 @@ BEGIN
 	SELECT @ErrorMessage = '  |-Starting Perf counters, Waits and Latches (wait for ' + CONVERT(VARCHAR(3), @duration) + 's)'
 	RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT
 	DECLARE @minctr DATETIME, @maxctr DATETIME, @durationstr NVARCHAR(24)
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount'))
 	DROP TABLE #tblPerfCount;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount'))
 	CREATE TABLE #tblPerfCount (
 		[retrieval_time] [datetime],
 		[object_name] [NVARCHAR](128),
@@ -6957,9 +6955,9 @@ BEGIN
 		[cntr_value] float NULL
 		);
 		
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblPerfThresholds'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblPerfThresholds'))
 	DROP TABLE tempdb.dbo.tblPerfThresholds;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblPerfThresholds'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblPerfThresholds'))
 	CREATE TABLE tempdb.dbo.tblPerfThresholds (
 		[counter_family] [NVARCHAR](128),
 		[counter_name] [NVARCHAR](128),
@@ -6969,7 +6967,7 @@ BEGIN
 		);
 		
 	-- Create the helper function
-	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
+	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 	EXEC ('USE tempdb; EXEC(''
 CREATE FUNCTION dbo.fn_perfctr (@ctr1Fam NVARCHAR(128), @ctr1 NVARCHAR(128))
 RETURNS float
@@ -7028,9 +7026,9 @@ BEGIN
 END'')
 	')		
 		
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWaits'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWaits'))
 	DROP TABLE #tblWaits;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWaits'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWaits'))
 	CREATE TABLE [dbo].[#tblWaits](
 		[retrieval_time] [datetime],
 		[wait_type] [nvarchar](60) NOT NULL,
@@ -7039,9 +7037,9 @@ END'')
 		[resource_wait_time_ms] bigint NULL
 		);
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalWaits'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalWaits'))
 	DROP TABLE #tblFinalWaits;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalWaits'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalWaits'))
 	CREATE TABLE [dbo].[#tblFinalWaits](
 		[wait_type] [nvarchar](60) NOT NULL,
 		[wait_time_s] [numeric](16, 6) NULL,
@@ -7053,9 +7051,9 @@ END'')
 		[resource_wait_pct] [numeric](12, 2) NULL
 		);
 		
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblLatches'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblLatches'))
 	DROP TABLE #tblLatches;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblLatches'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblLatches'))
 	CREATE TABLE [dbo].[#tblLatches](
 		[retrieval_time] [datetime],
 		[latch_class] [nvarchar](60) NOT NULL,
@@ -7063,9 +7061,9 @@ END'')
 		[waiting_requests_count] [bigint] NULL
 		);
 		
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalLatches'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalLatches'))
 	DROP TABLE #tblFinalLatches;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalLatches'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalLatches'))
 	CREATE TABLE [dbo].[#tblFinalLatches](
 		[latch_class] [nvarchar](60) NOT NULL,
 		[wait_time_s] [decimal](16, 6) NULL,
@@ -7074,9 +7072,9 @@ END'')
 		[rn] [bigint] NULL
 		);
 		
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksBefore'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksBefore'))
 	DROP TABLE #tblSpinlocksBefore;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksBefore'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksBefore'))
 	CREATE TABLE [dbo].[#tblSpinlocksBefore](
 		[name] NVARCHAR(512) NOT NULL,
 		[collisions] bigint NULL,
@@ -7086,9 +7084,9 @@ END'')
 		[backoffs] int NULL
 		);
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksAfter'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksAfter'))
 	DROP TABLE #tblSpinlocksAfter;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksAfter'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksAfter'))
 	CREATE TABLE [dbo].[#tblSpinlocksAfter](
 		[name] NVARCHAR(512) NOT NULL,
 		[collisions] bigint NULL,
@@ -7098,9 +7096,9 @@ END'')
 		[backoffs] int NULL
 		);
 			
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalSpinlocks'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalSpinlocks'))
 	DROP TABLE #tblFinalSpinlocks;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalSpinlocks'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalSpinlocks'))
 	CREATE TABLE [dbo].[#tblFinalSpinlocks](
 		[name] NVARCHAR(512) NOT NULL,
 		[collisions] bigint NULL,
@@ -7122,7 +7120,7 @@ END'')
 
 	INSERT INTO #tblPerfCount
 	SELECT @minctr, [object_name], counter_name, instance_name, cntr_type AS counter_name_type, cntr_value
-	FROM sys.dm_os_performance_counters pc0 WITH (NOLOCK)
+	FROM sys.dm_os_performance_counters pc0 (NOLOCK)
 	WHERE ([object_name] LIKE '%:Access Methods%'
 			OR [object_name] LIKE '%:Buffer Manager%'
 			OR [object_name] LIKE '%:Buffer Node%'
@@ -7210,7 +7208,7 @@ END'')
 
 	INSERT INTO #tblWaits
 	SELECT @minctr, wait_type, wait_time_ms, signal_wait_time_ms,(wait_time_ms-signal_wait_time_ms) AS resource_wait_time_ms
-	FROM sys.dm_os_wait_stats WITH (NOLOCK)
+	FROM sys.dm_os_wait_stats (NOLOCK)
 	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP',
 		'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT',
 		'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
@@ -7223,7 +7221,7 @@ END'')
 
 	INSERT INTO #tblLatches
 	SELECT @minctr, latch_class, wait_time_ms, waiting_requests_count
-	FROM sys.dm_os_latch_stats WITH (NOLOCK)
+	FROM sys.dm_os_latch_stats (NOLOCK)
 	WHERE /*latch_class NOT IN ('BUFFER')
 		AND*/ wait_time_ms > 0;
 
@@ -7255,7 +7253,7 @@ END'')
 		
 	INSERT INTO #tblPerfCount
 	SELECT @maxctr, [object_name], counter_name, instance_name, cntr_type AS counter_name_type, cntr_value
-	FROM sys.dm_os_performance_counters pc0 WITH (NOLOCK)
+	FROM sys.dm_os_performance_counters pc0 (NOLOCK)
 WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712) -- Get only counters whose delta between collection points matters
 	AND ([object_name] LIKE '%:Access Methods%'
 		OR [object_name] LIKE '%:Buffer Manager%'
@@ -7344,7 +7342,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			
 	INSERT INTO #tblWaits
 	SELECT @maxctr, wait_type, wait_time_ms, signal_wait_time_ms,(wait_time_ms-signal_wait_time_ms) AS resource_wait_time_ms
-	FROM sys.dm_os_wait_stats WITH (NOLOCK)
+	FROM sys.dm_os_wait_stats (NOLOCK)
 	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP',
 		'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT',
 		'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
@@ -7357,7 +7355,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 
 	INSERT INTO #tblLatches
 	SELECT @maxctr, latch_class, wait_time_ms, waiting_requests_count
-	FROM sys.dm_os_latch_stats WITH (NOLOCK)
+	FROM sys.dm_os_latch_stats (NOLOCK)
 	WHERE /*latch_class NOT IN ('BUFFER')
 		AND*/ wait_time_ms > 0;
 
@@ -7691,7 +7689,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			 waiting_requests_count,
 			 100.0 * wait_time_ms / SUM(wait_time_ms) OVER() AS pct,
 			 ROW_NUMBER() OVER(ORDER BY wait_time_ms DESC) AS rn
-		FROM sys.dm_os_latch_stats WITH (NOLOCK)
+		FROM sys.dm_os_latch_stats (NOLOCK)
 		WHERE latch_class NOT IN ('BUFFER')
 				AND wait_time_ms > 0
 		)
@@ -7785,9 +7783,9 @@ END;
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Blocking Chains', 10, 1) WITH NOWAIT
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBlkChains'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBlkChains'))
 	DROP TABLE #tblBlkChains;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBlkChains'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBlkChains'))
 	CREATE TABLE #tblBlkChains ([blocked_spid] [smallint], [blocked_spid_status] NVARCHAR(30), [blocked_task_status] NVARCHAR(60),
 		[blocked_spid_wait_type] NVARCHAR(60), [blocked_spid_wait_time_ms] [bigint], [blocked_spid_res_desc] NVARCHAR(1024),
 		[blocked_pageid] [int], [blocked_spid_res_type] VARCHAR(24), [blocked_batch] [xml], [blocked_statement] [xml],
@@ -7836,7 +7834,7 @@ BEGIN
 		es.last_request_start_time AS blocked_last_start,
 		LEFT (CASE COALESCE(es.transaction_isolation_level, er.transaction_isolation_level)
 			WHEN 0 THEN '0-Unspecified' 
-			WHEN 1 THEN '1-ReadUncommittedWITH (NOLOCK)' 
+			WHEN 1 THEN '1-ReadUncommitted(NOLOCK)' 
 			WHEN 2 THEN '2-ReadCommitted' 
 			WHEN 3 THEN '3-RepeatableRead' 
 			WHEN 4 THEN '4-Serializable' 
@@ -7869,7 +7867,7 @@ BEGIN
 		es2.last_request_start_time AS blocker_last_start,
 		LEFT (CASE COALESCE(er2.transaction_isolation_level, es.transaction_isolation_level)
 			WHEN 0 THEN '0-Unspecified' 
-			WHEN 1 THEN '1-ReadUncommittedWITH (NOLOCK)' 
+			WHEN 1 THEN '1-ReadUncommitted(NOLOCK)' 
 			WHEN 2 THEN '2-ReadCommitted' 
 			WHEN 3 THEN '3-RepeatableRead' 
 			WHEN 4 THEN '4-Serializable' 
@@ -7950,11 +7948,11 @@ BEGIN
 	RAISERROR (N'  |-Starting Plan use ratio', 10, 1) WITH NOWAIT
 
 	IF (SELECT SUM(CAST(size_in_bytes AS bigint))/1024/1024 AS Size_MB
-		FROM sys.dm_exec_cached_plans WITH (NOLOCK)
+		FROM sys.dm_exec_cached_plans (NOLOCK)
 		WHERE cacheobjtype LIKE '%Plan%' AND usecounts = 1) 
 		>= 
 		(SELECT SUM(CAST(size_in_bytes AS bigint))/1024/1024 AS Size_MB
-		FROM sys.dm_exec_cached_plans WITH (NOLOCK)
+		FROM sys.dm_exec_cached_plans (NOLOCK)
 		WHERE cacheobjtype LIKE '%Plan%' AND usecounts > 1)
 	BEGIN
 		SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Check], '[WARNING: Amount of single use plans in cache is high]' AS [Deviation], CASE WHEN @sqlmajorver > 9 AND @adhoc = 0 THEN '[Consider enabling the Optimize for ad hoc workloads setting on heavy OLTP ad-hoc workloads to conserve resources]' ELSE '' END AS [Comment]
@@ -7966,13 +7964,13 @@ BEGIN
 
 	--High number of cached plans with usecounts = 1.
 	SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Information], objtype, cacheobjtype, AVG(CAST(usecounts AS bigint)) AS Avg_UseCount_perPlan, SUM(refcounts) AS AllRefObjects, SUM(CAST(size_in_bytes AS bigint))/1024/1024 AS Size_MB
-	FROM sys.dm_exec_cached_plans WITH (NOLOCK)
+	FROM sys.dm_exec_cached_plans (NOLOCK)
 	WHERE cacheobjtype LIKE '%Plan%' AND usecounts = 1
 	GROUP BY objtype, cacheobjtype
 	UNION ALL
 	--High number of cached plans with usecounts > 1.
 	SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Information], objtype, cacheobjtype, AVG(CAST(usecounts AS bigint)) AS Avg_UseCount_perPlan, SUM(refcounts) AS AllRefObjects, SUM(CAST(size_in_bytes AS bigint))/1024/1024 AS Size_MB
-	FROM sys.dm_exec_cached_plans WITH (NOLOCK)
+	FROM sys.dm_exec_cached_plans (NOLOCK)
 	WHERE cacheobjtype LIKE '%Plan%' AND usecounts > 1
 	GROUP BY objtype, cacheobjtype
 	ORDER BY objtype, cacheobjtype;
@@ -7991,9 +7989,9 @@ BEGIN
 		
 		/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
 
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHints'))
+		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHints'))
 		DROP TABLE #tblHints;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHints'))
+		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHints'))
 		CREATE TABLE #tblHints ([DBName] sysname, [Schema] VARCHAR(100), [Object] VARCHAR(255), [Type] VARCHAR(100), Hint VARCHAR(30));
 
 		UPDATE #tmpdbs0
@@ -8045,20 +8043,20 @@ WHERE sm.[definition] LIKE ''%FORCE ORDER%''
 
 		SELECT 'Performance_checks' AS [Category], 'Hints_usage' AS [Check], '[WARNING: Hints are being used. These can hinder the QO ability to optimize queries]' AS [Deviation]
 		SELECT 'Performance_checks' AS [Category], 'Hints_usage' AS [Information], CASE WHEN [counter] = 'order hint' THEN '[FORCE ORDER Hint]' WHEN [counter] = 'join hint' THEN '[JOIN Hint]' END AS [Hint], occurrence
-		FROM sys.dm_exec_query_optimizer_info WITH (NOLOCK)
+		FROM sys.dm_exec_query_optimizer_info (NOLOCK)
 		WHERE ([counter] = 'order hint' OR [counter] = 'join hint') AND occurrence > 1;
 		
 		IF (SELECT COUNT(*) FROM #tblHints WHERE [DBName] IS NOT NULL) > 0
 		BEGIN
 			SELECT 'Performance_checks' AS [Category], 'Hints_usage_in_Objects' AS [Information], [DBName], [Schema], [Object], [Type], Hint, '' AS Comment
-			FROM #tblHints WITH (NOLOCK)
+			FROM #tblHints (NOLOCK)
 			ORDER BY [DBName], Hint, [Type], [Object];
 		END
 		ELSE
 		BEGIN
 			SELECT 'Performance_checks' AS [Category], 'Hints_usage_in_Objects' AS [Information], NULL AS [DBName], NULL AS [Schema], NULL AS [Object], NULL AS [Type],
 				CASE WHEN [counter] = 'order hint' THEN '[FORCE ORDER Hint]' WHEN [counter] = 'join hint' THEN '[JOIN Hint]' END AS [Hint], '[INFORMATION: Hints may be in use with ad-hoc code]' AS Comment
-			FROM sys.dm_exec_query_optimizer_info WITH (NOLOCK)
+			FROM sys.dm_exec_query_optimizer_info (NOLOCK)
 			WHERE ([counter] = 'order hint' OR [counter] = 'join hint') AND occurrence > 1;
 		END
 	END
@@ -8079,10 +8077,10 @@ BEGIN
 	--SELECT @sqlminorver = CONVERT(int, (@@microsoftversion / 0x10000) & 0xff);
 	--SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_exec_query_stats')) 
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_exec_query_stats')) 
 	DROP TABLE #tmp_dm_exec_query_stats;
 
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_exec_query_stats')) 
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_exec_query_stats')) 
 	CREATE TABLE #tmp_dm_exec_query_stats ([plan_id] [int] NOT NULL IDENTITY(1, 1),
 		[sql_handle] [varbinary](64) NOT NULL,
 		[statement_start_offset] [int] NOT NULL,
@@ -8151,10 +8149,10 @@ BEGIN
 		[Total_used_threads] bigint NULL,
 		[Grant2Used_Ratio] float NULL)
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dm_exec_query_stats')) 
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dm_exec_query_stats')) 
 	DROP TABLE #dm_exec_query_stats;
 
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dm_exec_query_stats')) 
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dm_exec_query_stats')) 
 	CREATE TABLE #dm_exec_query_stats ([plan_id] [int] NOT NULL IDENTITY(1, 1),
 		[sql_handle] [varbinary](64) NOT NULL,
 		[statement_start_offset] [int] NOT NULL,
@@ -8232,11 +8230,11 @@ BEGIN
 		--CPU 
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK) 
+		--FROM sys.dm_exec_query_stats qs (NOLOCK) 
 		--ORDER BY qs.total_worker_time DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_worker_time DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8250,11 +8248,11 @@ ORDER BY tfs.total_worker_time DESC');
 		--IO
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.total_logical_reads DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_logical_reads DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8268,11 +8266,11 @@ ORDER BY tfs.total_logical_reads DESC');
 		--Recompiles
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.plan_generation_num DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.plan_generation_num DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8289,11 +8287,11 @@ ORDER BY tfs.plan_generation_num DESC');
 		--CPU 
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.total_worker_time DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_worker_time DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8307,11 +8305,11 @@ ORDER BY tfs.total_worker_time DESC');
 		--IO
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.total_logical_reads DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_logical_reads DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8325,11 +8323,11 @@ ORDER BY tfs.total_logical_reads DESC');
 		--Recompiles
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.plan_generation_num DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.plan_generation_num DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8346,11 +8344,11 @@ ORDER BY tfs.plan_generation_num DESC');
 		--CPU 
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.total_worker_time DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_worker_time DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8364,11 +8362,11 @@ ORDER BY tfs.total_worker_time DESC');
 		--IO
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.total_logical_reads DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_logical_reads DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8382,11 +8380,11 @@ ORDER BY tfs.total_logical_reads DESC');
 		--Recompiles
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.plan_generation_num DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.plan_generation_num DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],ix.query(''.'') AS StmtSimple
 FROM TopSearch ts
@@ -8403,11 +8401,11 @@ ORDER BY tfs.plan_generation_num DESC');
 		--CPU 
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.total_worker_time DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_worker_time DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],ix.query(''.'') AS StmtSimple, Grant2Used_Ratio
 FROM TopSearch ts
@@ -8421,11 +8419,11 @@ ORDER BY tfs.total_worker_time DESC');
 		--IO
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.total_logical_reads DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.total_logical_reads DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],ix.query(''.'') AS StmtSimple, Grant2Used_Ratio
 FROM TopSearch ts
@@ -8439,11 +8437,11 @@ ORDER BY tfs.total_logical_reads DESC');
 		--Recompiles
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.plan_generation_num DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 ORDER BY qs.plan_generation_num DESC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],ix.query(''.'') AS StmtSimple, Grant2Used_Ratio
 FROM TopSearch ts
@@ -8457,11 +8455,11 @@ ORDER BY tfs.plan_generation_num DESC');
 		--Mem Grants
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
 		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-		--FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
 		--ORDER BY qs.Total_grant_kb DESC');
 		EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
-FROM sys.dm_exec_query_stats qs WITH (NOLOCK)
+FROM sys.dm_exec_query_stats qs (NOLOCK)
 WHERE [Total_used_grant_kb] > 0
 ORDER BY Total_used_grant_kb DESC, COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) ASC),
 TopFineSearch AS (SELECT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],ix.query(''.'') AS StmtSimple, Grant2Used_Ratio
@@ -8516,10 +8514,10 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 	WHERE CAST(query_plan AS NVARCHAR(MAX)) LIKE '%Query_Plan_Warnings%';
 
 	-- Aggregate results
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
 	DROP TABLE #qpwarnings;
 
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
 	CREATE TABLE #qpwarnings ([Deviation] VARCHAR(50), [Comment] VARCHAR(255), query_plan XML, [statement] XML)
 
 	-- Find issues
@@ -8745,9 +8743,9 @@ BEGIN
 	such as eliminating JOINs or even not reading any table for particular queries. 
 	For example, if a search argument is looking for when a column IS NULL, but there is a NOT NULL constraint in place, the table might not even be accessed from a data read standpoint. 
 	*/
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDRI'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDRI'))
 	DROP TABLE #tblDRI;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDRI'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDRI'))
 	CREATE TABLE #tblDRI ([databaseID] int, [database_name] sysname, [schema_id] int, [schema_name] VARCHAR(100), [object_id] int, [table_name] VARCHAR(200), [constraint_name] VARCHAR(200), [constraint_type] VARCHAR(10)
 		CONSTRAINT PK_DRI PRIMARY KEY CLUSTERED(databaseID, [schema_id], [object_id], [constraint_name]))
 
@@ -8760,18 +8758,18 @@ BEGIN
 	SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + '
 SELECT ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], ''' + @dbname + ''' AS [database_name], o.[schema_id], t.name AS [schema_name], mst.[object_id], mst.name AS [table_name], FKC.name AS [constraint_name], ''ForeignKey'' As [constraint_type]
-FROM sys.foreign_keys FKC WITH (NOLOCK)
-INNER JOIN sys.objects o WITH (NOLOCK) ON FKC.parent_object_id = o.[object_id]
-INNER JOIN sys.tables mst WITH (NOLOCK) ON mst.[object_id] = o.[object_id]
-INNER JOIN sys.schemas t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+FROM sys.foreign_keys FKC (NOLOCK)
+INNER JOIN sys.objects o (NOLOCK) ON FKC.parent_object_id = o.[object_id]
+INNER JOIN sys.tables mst (NOLOCK) ON mst.[object_id] = o.[object_id]
+INNER JOIN sys.schemas t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE o.type = ''U'' AND FKC.is_not_trusted = 1 AND FKC.is_not_for_replication = 0
 GROUP BY o.[schema_id], mst.[object_id], FKC.name, t.name, mst.name
 UNION ALL
 SELECT ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], ''' + @dbname + ''' AS [database_name], t.[schema_id], t.name AS [schema_name], mst.[object_id], mst.name AS [table_name], CC.name AS [constraint_name], ''Check'' As [constraint_type]
-FROM sys.check_constraints CC WITH (NOLOCK)
-INNER JOIN sys.objects o WITH (NOLOCK) ON CC.parent_object_id = o.[object_id]
-INNER JOIN sys.tables mst WITH (NOLOCK) ON mst.[object_id] = o.[object_id]
-INNER JOIN sys.schemas t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+FROM sys.check_constraints CC (NOLOCK)
+INNER JOIN sys.objects o (NOLOCK) ON CC.parent_object_id = o.[object_id]
+INNER JOIN sys.tables mst (NOLOCK) ON mst.[object_id] = o.[object_id]
+INNER JOIN sys.schemas t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE o.type = ''U'' AND CC.is_not_trusted = 1 AND CC.is_not_for_replication = 0 AND CC.is_disabled = 0
 GROUP BY t.[schema_id], mst.[object_id], CC.name, t.name, mst.name
 ORDER BY mst.name, [constraint_name];'
@@ -8850,9 +8848,9 @@ BEGIN
 	
 	DECLARE @dbcmptlevel int
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
 	DROP TABLE #tblStatsUpd;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
 	CREATE TABLE #tblStatsUpd ([DatabaseName] sysname, [databaseID] int, objectID int, schemaName VARCHAR(100), [tableName] VARCHAR(250), last_updated DATETIME, [rows] bigint, modification_counter bigint, [stats_id] int, [stat_name] VARCHAR(255), auto_created bit, user_created bit, has_filter bit NULL, filter_definition NVARCHAR(MAX) NULL, unfiltered_rows bigint, steps int)
 
 	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
@@ -8913,7 +8911,7 @@ HAVING SUM(p.[rows]) > 0
 
 	IF (SELECT COUNT(*) FROM #tblStatsUpd) > 0
 	BEGIN
-	IF (SELECT COUNT(*) FROM master.sys.databases WITH (NOLOCK) WHERE is_auto_update_stats_on = 0) > 0 AND (SELECT COUNT(*) FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd WITH (NOLOCK) ON su.[databaseID] = sd.[database_id] WHERE sd.is_auto_update_stats_on = 0) > 0
+	IF (SELECT COUNT(*) FROM master.sys.databases (NOLOCK) WHERE is_auto_update_stats_on = 0) > 0 AND (SELECT COUNT(*) FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd (NOLOCK) ON su.[databaseID] = sd.[database_id] WHERE sd.is_auto_update_stats_on = 0) > 0
 	BEGIN
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Check], '[WARNING: Some databases have Auto_Update_Statistics DISABLED and statistics that might need to be updated]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [tableName] AS [Table_Name], [stats_id] AS [statsID], [stat_name] AS [Statistic_Name],
@@ -8924,12 +8922,12 @@ HAVING SUM(p.[rows]) > 0
 				ELSE NULL
 			END AS [Statistic_Type],
 			su.steps, su.has_filter AS [Is_Filtered], su.filter_definition AS [Filter_Definition], su.unfiltered_rows AS [Unfiltered_Rows]
-			FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd WITH (NOLOCK) ON su.[databaseID] = sd.[database_id] 
+			FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd (NOLOCK) ON su.[databaseID] = sd.[database_id] 
 			WHERE sd.is_auto_update_stats_on = 0
 			ORDER BY [DatabaseName], [tableName], [stats_id] DESC
 		END;
 
-	IF (SELECT COUNT(*) FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd WITH (NOLOCK) ON su.[databaseID] = sd.[database_id] WHERE sd.is_auto_update_stats_on = 1) > 0
+	IF (SELECT COUNT(*) FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd (NOLOCK) ON su.[databaseID] = sd.[database_id] WHERE sd.is_auto_update_stats_on = 1) > 0
 	BEGIN
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Check], '[WARNING: Some databases have Auto_Update_Statistics ENABLED and statistics that might need to be updated]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [tableName] AS [Table_Name], [stats_id] AS [statsID], [stat_name] AS [Statistic_Name],
@@ -8940,7 +8938,7 @@ HAVING SUM(p.[rows]) > 0
 				ELSE NULL
 			END AS [Statistic_Type],
 			su.steps, su.has_filter AS [Is_Filtered], su.filter_definition AS [Filter_Definition]
-			FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd WITH (NOLOCK) ON su.[databaseID] = sd.[database_id] 
+			FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd (NOLOCK) ON su.[databaseID] = sd.[database_id] 
 			WHERE sd.is_auto_update_stats_on = 1
 			ORDER BY [DatabaseName], [tableName], [stats_id] DESC
 		END;
@@ -8960,9 +8958,9 @@ BEGIN
 	BEGIN
 		RAISERROR (N'  |-Starting Statistics sampling', 10, 1) WITH NOWAIT
 
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsSamp'))
+		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsSamp'))
 		DROP TABLE #tblStatsSamp;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsSamp'))
+		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsSamp'))
 		CREATE TABLE #tblStatsSamp ([DatabaseName] sysname, [databaseID] int, objectID int, schemaName VARCHAR(100), [tableName] VARCHAR(250), last_updated DATETIME, [rows] bigint, modification_counter bigint, [stats_id] int, [stat_name] VARCHAR(255), rows_sampled bigint, auto_created bit, user_created bit, has_filter bit NULL, filter_definition NVARCHAR(MAX) NULL, unfiltered_rows bigint, steps int)
 
 		UPDATE #tmpdbs0
@@ -9041,9 +9039,9 @@ IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Hypothetical objects', 10, 1) WITH NOWAIT
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj'))
 	DROP TABLE #tblHypObj;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj'))
 	CREATE TABLE #tblHypObj ([DBName] sysname, [Schema] VARCHAR(100), [Table] VARCHAR(255), [Object] VARCHAR(255), [Type] VARCHAR(10));
 
 	UPDATE #tmpdbs0
@@ -9072,9 +9070,9 @@ WHERE i.is_hypothetical = 1
 UNION ALL
 SELECT ''' + @dbname + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), s.name, ''STATISTICS'' 
 FROM sys.stats s 
-INNER JOIN sys.objects o WITH (NOLOCK) ON o.[object_id] = s.[object_id]
-INNER JOIN sys.tables AS mst WITH (NOLOCK) ON mst.[object_id] = s.[object_id]
-INNER JOIN sys.schemas AS t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+INNER JOIN sys.objects o (NOLOCK) ON o.[object_id] = s.[object_id]
+INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = s.[object_id]
+INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE (s.name LIKE ''hind_%'' OR s.name LIKE ''_dta_stat%'') AND auto_created = 0
 AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 
@@ -9144,33 +9142,33 @@ BEGIN
 	DECLARE @ColumnStoreGetIXSQL NVARCHAR(2000), @ColumnStoreGetIXSQL_Param NVARCHAR(1000), @HasInMem bit
 	DECLARE /*@sqlcmd NVARCHAR(4000), @params NVARCHAR(500),*/ @schema_name VARCHAR(100), @table_name VARCHAR(300), @KeyCols VARCHAR(4000), @distinctCnt bigint, @OptimBucketCnt bigint
 	
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS'))
 	DROP TABLE #tmpIPS;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS'))
 	CREATE TABLE #tmpIPS ([database_id] int, [object_id] int, [index_id] int, [partition_number] int, fragmentation DECIMAL(18,3), [page_count] bigint, [size_MB] DECIMAL(26,3), record_count bigint, forwarded_record_count int NULL,
 		CONSTRAINT PK_IPS PRIMARY KEY CLUSTERED(database_id, [object_id], [index_id], [partition_number]));
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
 	DROP TABLE #tmpIPS_CI;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
 	CREATE TABLE #tmpIPS_CI ([database_id] int, [object_id] int, [index_id] int, [partition_number] int, fragmentation DECIMAL(18,3), [page_count] bigint, [size_MB] DECIMAL(26,3), record_count bigint, delta_store_hobt_id bigint, row_group_id int , [state] tinyint, state_description VARCHAR(60),
 		CONSTRAINT PK_IPS_CI PRIMARY KEY CLUSTERED(database_id, [object_id], [index_id], [partition_number], row_group_id));
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
 	DROP TABLE #tmpXIS;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
 	CREATE TABLE #tmpXIS ([database_id] int, [object_id] int, [schema_name] VARCHAR(100) COLLATE database_default, [table_name] VARCHAR(300) COLLATE database_default, [index_id] int, [index_name] VARCHAR(300) COLLATE database_default, type_desc NVARCHAR(60), total_bucket_count bigint, empty_bucket_count bigint, avg_chain_length bigint, max_chain_length bigint, KeyCols VARCHAR(4000) COLLATE database_default, DistinctCnt bigint NULL, OptimBucketCnt bigint NULL, isdone bit, 
 		CONSTRAINT PK_tmpXIS PRIMARY KEY CLUSTERED(database_id, [object_id], [index_id]));
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
 	DROP TABLE #tmpXNCIS;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
 	CREATE TABLE #tmpXNCIS ([database_id] int, [object_id] int, [schema_name] VARCHAR(100) COLLATE database_default, [table_name] VARCHAR(300) COLLATE database_default, [index_id] int, [index_name] VARCHAR(300) COLLATE database_default, type_desc NVARCHAR(60), delta_pages bigint, internal_pages bigint, leaf_pages bigint, page_update_count bigint, page_update_retry_count bigint, page_consolidation_count bigint, page_consolidation_retry_count bigint, page_split_count bigint, page_split_retry_count bigint, key_split_count bigint, key_split_retry_count bigint, page_merge_count bigint, page_merge_retry_count bigint, key_merge_count bigint, key_merge_retry_count bigint, scans_started bigint, scans_retries bigint, 
 		CONSTRAINT PK_tmpXNCIS PRIMARY KEY CLUSTERED(database_id, [object_id], [index_id]));
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
 	DROP TABLE #tblWorking;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
 	CREATE TABLE #tblWorking (database_id int, [database_name] NVARCHAR(255), [object_id] int, [object_name] NVARCHAR(255), index_id int, index_name NVARCHAR(255), [schema_name] NVARCHAR(255), partition_number int, [type] tinyint, type_desc NVARCHAR(60), is_done bit)
 	-- type 0 = Heap; 1 = Clustered; 2 = Nonclustered; 3 = XML; 4 = Spatial; 5 = Clustered columnstore; 6 = Nonclustered columnstore; 7 = Nonclustered hash
 
@@ -9228,10 +9226,10 @@ SELECT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id], xis.[object_id], t
 	FOR XML PATH('''')), 2, 8000) AS KeyCols, NULL, NULL, 0
 FROM sys.dm_db_xtp_hash_index_stats AS xhis
 INNER JOIN sys.dm_db_xtp_index_stats AS xis ON xis.[object_id] = xhis.[object_id] AND xis.[index_id] = xhis.[index_id] 
-INNER JOIN sys.indexes AS si WITH (NOLOCK) ON xis.[object_id] = si.[object_id] AND xis.[index_id] = si.[index_id]
-INNER JOIN sys.objects AS o WITH (NOLOCK) ON si.[object_id] = o.[object_id]
-INNER JOIN sys.tables AS mst WITH (NOLOCK) ON mst.[object_id] = o.[object_id]
-INNER JOIN sys.schemas AS t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+INNER JOIN sys.indexes AS si (NOLOCK) ON xis.[object_id] = si.[object_id] AND xis.[index_id] = si.[index_id]
+INNER JOIN sys.objects AS o (NOLOCK) ON si.[object_id] = o.[object_id]
+INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = o.[object_id]
+INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE o.[type] = ''U'''
 
 					BEGIN TRY
@@ -9253,12 +9251,12 @@ SELECT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id],
 	xnis.key_split_count, xnis.key_split_retry_count, xnis.page_merge_count, xnis.page_merge_retry_count,
 	xnis.key_merge_count, xnis.key_merge_retry_count,
 	xis.scans_started, xis.scans_retries
-FROM sys.dm_db_xtp_nonclustered_index_stats AS xnis WITH (NOLOCK)
-INNER JOIN sys.dm_db_xtp_index_stats AS xis WITH (NOLOCK) ON xis.[object_id] = xnis.[object_id] AND xis.[index_id] = xnis.[index_id]
-INNER JOIN sys.indexes AS si WITH (NOLOCK) ON xis.[object_id] = si.[object_id] AND xis.[index_id] = si.[index_id]
-INNER JOIN sys.objects AS o WITH (NOLOCK) ON si.[object_id] = o.[object_id]
-INNER JOIN sys.tables AS mst WITH (NOLOCK) ON mst.[object_id] = o.[object_id]
-INNER JOIN sys.schemas AS t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+FROM sys.dm_db_xtp_nonclustered_index_stats AS xnis (NOLOCK)
+INNER JOIN sys.dm_db_xtp_index_stats AS xis (NOLOCK) ON xis.[object_id] = xnis.[object_id] AND xis.[index_id] = xnis.[index_id]
+INNER JOIN sys.indexes AS si (NOLOCK) ON xis.[object_id] = si.[object_id] AND xis.[index_id] = si.[index_id]
+INNER JOIN sys.objects AS o (NOLOCK) ON si.[object_id] = o.[object_id]
+INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = o.[object_id]
+INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE o.[type] = ''U'''
 
 					BEGIN TRY
@@ -9476,17 +9474,17 @@ END;
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Duplicate or Redundant indexes', 10, 1) WITH NOWAIT
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
 	DROP TABLE #tblIxs1;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
 	CREATE TABLE #tblIxs1 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
 		[indexID] int, [indexName] VARCHAR(200), [indexType] tinyint, is_primary_key bit, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit, has_filter bit, filter_definition NVARCHAR(max),
 		KeyCols VARCHAR(4000), KeyColsOrdered VARCHAR(4000), IncludedCols VARCHAR(4000) NULL, IncludedColsOrdered VARCHAR(4000) NULL, AllColsOrdered VARCHAR(4000) NULL, [KeyCols_data_length_bytes] int,
 		CONSTRAINT PK_Ixs PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID]));
 		
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
 	DROP TABLE #tblCode;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
 	CREATE TABLE #tblCode ([DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [indexName] VARCHAR(200), type_desc NVARCHAR(60));
 
 	UPDATE #tmpdbs1
@@ -9782,9 +9780,9 @@ END;
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Unused and rarely used indexes', 10, 1) WITH NOWAIT
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
 	DROP TABLE #tblIxs2;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
 	CREATE TABLE #tblIxs2 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
 		[indexID] int, [indexName] VARCHAR(200), [Hits] bigint NULL, [Reads_Ratio] DECIMAL(5,2), [Writes_Ratio] DECIMAL(5,2),
 		user_updates bigint, last_user_seek DATETIME NULL, last_user_scan DATETIME NULL, last_user_lookup DATETIME NULL, 
@@ -9811,11 +9809,11 @@ SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + @dbname + ''' AS
 	MAX(s.last_user_lookup) AS last_user_lookup,
 	MAX(s.last_user_update) AS last_user_update,
 	si.is_unique, si.[type], si.is_primary_key, si.is_unique_constraint, si.is_disabled	
-FROM sys.indexes AS si WITH (NOLOCK)
-INNER JOIN sys.objects AS o WITH (NOLOCK) ON si.[object_id] = o.[object_id]
-INNER JOIN sys.tables AS mst WITH (NOLOCK) ON mst.[object_id] = si.[object_id]
-INNER JOIN sys.schemas AS t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
-INNER JOIN sys.dm_db_index_usage_stats AS s WITH (NOLOCK) ON s.database_id = ' + CONVERT(VARCHAR(8), @dbid) + ' 
+FROM sys.indexes AS si (NOLOCK)
+INNER JOIN sys.objects AS o (NOLOCK) ON si.[object_id] = o.[object_id]
+INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = si.[object_id]
+INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+INNER JOIN sys.dm_db_index_usage_stats AS s (NOLOCK) ON s.database_id = ' + CONVERT(VARCHAR(8), @dbid) + ' 
 	AND s.object_id = si.object_id AND s.index_id = si.index_id
 WHERE mst.is_ms_shipped = 0
 	--AND OBJECTPROPERTY(o.object_id,''IsUserTable'') = 1 -- sys.tables only returns type U
@@ -9853,10 +9851,10 @@ SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + @dbname + ''' AS
 	si.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(si.[object_id], ' + CONVERT(VARCHAR(8), @dbid) + ') AS objectName, si.index_id AS indexID, 
 	si.[name] AS Index_Name, 0, 0, 0, 0, NULL, NULL, NULL, NULL,
 	si.is_unique, si.[type], si.is_primary_key, si.is_unique_constraint, si.is_disabled
-FROM sys.indexes AS si WITH (NOLOCK)
-INNER JOIN sys.objects AS so WITH (NOLOCK) ON si.object_id = so.object_id 
-INNER JOIN sys.tables AS mst WITH (NOLOCK) ON mst.[object_id] = si.[object_id]
-INNER JOIN sys.schemas AS t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+FROM sys.indexes AS si (NOLOCK)
+INNER JOIN sys.objects AS so (NOLOCK) ON si.object_id = so.object_id 
+INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = si.[object_id]
+INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 	AND mst.is_ms_shipped = 0
 	AND si.index_id NOT IN (SELECT s.index_id
@@ -10087,9 +10085,9 @@ END;
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Clustered Indexes with GUIDs in key', 10, 1) WITH NOWAIT
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
 	DROP TABLE #tblIxs6;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
 	CREATE TABLE #tblIxs6 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
 		[indexID] int, [indexName] VARCHAR(200), [indexType] tinyint, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit,
 		KeyCols VARCHAR(4000), KeyColsOrdered VARCHAR(4000), Key_has_GUID int,
@@ -10172,9 +10170,9 @@ END;
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Foreign Keys with no Index', 10, 1) WITH NOWAIT
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
 	DROP TABLE #tblFK;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
 	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] VARCHAR(200), [parent_schema_name] VARCHAR(100), 
 	[parent_table_name] VARCHAR(200), parent_columns VARCHAR(4000), [referenced_schema] VARCHAR(100), [referenced_table_name] VARCHAR(200), referenced_columns VARCHAR(4000),
 	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name]))
@@ -10194,24 +10192,24 @@ SELECT t.name AS [parent_schema_name],
 	t2.name AS [referenced_schema],
 	OBJECT_NAME(referenced_object_id) AS [referenced_table_name],
 	SUBSTRING((SELECT '','' + RTRIM(COL_NAME(k.parent_object_id,parent_column_id)) AS [data()]
-		FROM sys.foreign_key_columns k WITH (NOLOCK)
-		INNER JOIN sys.foreign_keys WITH (NOLOCK) ON k.constraint_object_id = [object_id]
+		FROM sys.foreign_key_columns k (NOLOCK)
+		INNER JOIN sys.foreign_keys (NOLOCK) ON k.constraint_object_id = [object_id]
 			AND k.constraint_object_id = FKC.constraint_object_id
 		ORDER BY constraint_column_id
 		FOR XML PATH('''')), 2, 8000) AS [parent_columns],
 	SUBSTRING((SELECT '','' + RTRIM(COL_NAME(k.referenced_object_id,referenced_column_id)) AS [data()]
-		FROM sys.foreign_key_columns k WITH (NOLOCK)
-		INNER JOIN sys.foreign_keys WITH (NOLOCK) ON k.constraint_object_id = [object_id]
+		FROM sys.foreign_key_columns k (NOLOCK)
+		INNER JOIN sys.foreign_keys (NOLOCK) ON k.constraint_object_id = [object_id]
 			AND k.constraint_object_id = FKC.constraint_object_id
 		ORDER BY constraint_column_id
 		FOR XML PATH('''')), 2, 8000) AS [referenced_columns]
-FROM sys.foreign_key_columns FKC WITH (NOLOCK)
-INNER JOIN sys.objects o WITH (NOLOCK) ON FKC.parent_object_id = o.[object_id]
-INNER JOIN sys.tables mst WITH (NOLOCK) ON mst.[object_id] = o.[object_id]
-INNER JOIN sys.schemas t WITH (NOLOCK) ON t.[schema_id] = mst.[schema_id]
-INNER JOIN sys.objects so WITH (NOLOCK) ON FKC.referenced_object_id = so.[object_id]
-INNER JOIN sys.tables AS mst2 WITH (NOLOCK) ON mst2.[object_id] = so.[object_id]
-INNER JOIN sys.schemas AS t2 WITH (NOLOCK) ON t2.[schema_id] = mst2.[schema_id]
+FROM sys.foreign_key_columns FKC (NOLOCK)
+INNER JOIN sys.objects o (NOLOCK) ON FKC.parent_object_id = o.[object_id]
+INNER JOIN sys.tables mst (NOLOCK) ON mst.[object_id] = o.[object_id]
+INNER JOIN sys.schemas t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
+INNER JOIN sys.objects so (NOLOCK) ON FKC.referenced_object_id = so.[object_id]
+INNER JOIN sys.tables AS mst2 (NOLOCK) ON mst2.[object_id] = so.[object_id]
+INNER JOIN sys.schemas AS t2 (NOLOCK) ON t2.[schema_id] = mst2.[schema_id]
 WHERE o.type = ''U'' AND so.type = ''U''
 GROUP BY o.[schema_id],so.[schema_id],FKC.parent_object_id,constraint_object_id,referenced_object_id,t.name,t2.name
 ),
@@ -10300,19 +10298,19 @@ IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Indexing per Table', 10, 1) WITH NOWAIT
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
 	DROP TABLE #tblIxs3;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
 	CREATE TABLE #tblIxs3 ([Operation] tinyint, [databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200))
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
 	DROP TABLE #tblIxs4;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
 	CREATE TABLE #tblIxs4 ([databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [CntCols] int, [CntIxs] int)
 	
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
 	DROP TABLE #tblIxs5;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
 	CREATE TABLE #tblIxs5 ([databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [indexName] VARCHAR(200), [indexLocation]  VARCHAR(200))
 
 	UPDATE #tmpdbs1
@@ -10323,17 +10321,17 @@ BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT 1 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''',	s.name, t.name
-FROM sys.indexes AS si WITH (NOLOCK)
-INNER JOIN sys.tables AS t WITH (NOLOCK) ON si.[object_id] = t.[object_id]
-INNER JOIN sys.schemas AS s WITH (NOLOCK) ON s.[schema_id] = t.[schema_id]
+FROM sys.indexes AS si (NOLOCK)
+INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
+INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
 WHERE si.is_hypothetical = 0
 GROUP BY si.[object_id], t.name, s.name
 HAVING COUNT(index_id) = 1 AND MAX(index_id) = 0
 UNION ALL
 SELECT 2 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''',	s.name, t.name
-FROM sys.indexes AS si WITH (NOLOCK) 
-INNER JOIN sys.tables AS t WITH (NOLOCK) ON si.[object_id] = t.[object_id]
-INNER JOIN sys.schemas AS s WITH (NOLOCK) ON s.[schema_id] = t.[schema_id]
+FROM sys.indexes AS si (NOLOCK) 
+INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
+INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
 WHERE si.is_hypothetical = 0
 GROUP BY t.name, s.name
 HAVING COUNT(index_id) > 1 AND MIN(index_id) = 0;'
@@ -10352,9 +10350,9 @@ SELECT ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''',	s.name, t.name, 
 (SELECT COUNT(si.index_id) FROM sys.tables AS t2 INNER JOIN sys.indexes AS si ON si.[object_id] = t2.[object_id]
 	WHERE si.index_id > 0 AND si.[object_id] = t.[object_id] AND si.is_hypothetical = 0
 	GROUP BY si.[object_id])
-FROM sys.tables AS t WITH (NOLOCK)
-INNER JOIN sys.columns AS c WITH (NOLOCK) ON t.[object_id] = c.[object_id] 
-INNER JOIN sys.schemas AS s WITH (NOLOCK) ON s.[schema_id] = t.[schema_id]
+FROM sys.tables AS t (NOLOCK)
+INNER JOIN sys.columns AS c (NOLOCK) ON t.[object_id] = c.[object_id] 
+INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
 GROUP BY s.name, t.name, t.[object_id];'
 		BEGIN TRY
 			INSERT INTO #tblIxs4
@@ -10368,18 +10366,18 @@ GROUP BY s.name, t.name, t.[object_id];'
 
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT DISTINCT ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''', s.name, t.name, i.name, ds.name
-FROM sys.tables AS t WITH (NOLOCK)
-INNER JOIN sys.indexes AS i WITH (NOLOCK) ON t.[object_id] = i.[object_id] 
-INNER JOIN sys.data_spaces AS ds WITH (NOLOCK) ON ds.data_space_id = i.data_space_id
-INNER JOIN sys.schemas AS s WITH (NOLOCK) ON s.[schema_id] = t.[schema_id]
+FROM sys.tables AS t (NOLOCK)
+INNER JOIN sys.indexes AS i (NOLOCK) ON t.[object_id] = i.[object_id] 
+INNER JOIN sys.data_spaces AS ds (NOLOCK) ON ds.data_space_id = i.data_space_id
+INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
 WHERE t.[type] = ''U''
 	AND i.[type] IN (1,2)
 	AND i.is_hypothetical = 0
 	-- Get partitioned tables
 	AND t.name IN (SELECT ob.name 
-			FROM sys.tables AS ob WITH (NOLOCK)
-			INNER JOIN sys.indexes AS ind WITH (NOLOCK) ON ind.[object_id] = ob.[object_id] 
-			INNER JOIN sys.data_spaces AS sds WITH (NOLOCK) ON sds.data_space_id = ind.data_space_id
+			FROM sys.tables AS ob (NOLOCK)
+			INNER JOIN sys.indexes AS ind (NOLOCK) ON ind.[object_id] = ob.[object_id] 
+			INNER JOIN sys.data_spaces AS sds (NOLOCK) ON sds.data_space_id = ind.data_space_id
 			WHERE sds.[type] = ''PS''
 			GROUP BY ob.name)
 	AND ds.[type] <> ''PS'';'
@@ -10455,7 +10453,7 @@ BEGIN
 	SET @editionCheck = 0; -- does not support enterprise only features
 	
 	-- Create the helper functions
-	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
+	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
 	EXEC ('USE tempdb; EXEC(''
 CREATE FUNCTION dbo.fn_createindex_allcols (@ix_handle int)
 RETURNS NVARCHAR(max)
@@ -10479,7 +10477,7 @@ BEGIN
 	RETURN (@ReturnCols)
 END'')
 	')
-	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
+	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
 	EXEC ('USE tempdb; EXEC(''
 CREATE FUNCTION dbo.fn_createindex_keycols (@ix_handle int)
 RETURNS NVARCHAR(max)
@@ -10504,7 +10502,7 @@ BEGIN
 	RETURN (@ReturnCols)
 END'')
 	')
-	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
+	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
 	EXEC ('USE tempdb; EXEC(''
 CREATE FUNCTION dbo.fn_createindex_includecols (@ix_handle int)
 RETURNS NVARCHAR(max)
@@ -10530,9 +10528,9 @@ BEGIN
 END'')
 	')
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
 	DROP TABLE #IndexCreation;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
 	CREATE TABLE #IndexCreation (
 		[database_id] int,
 		DBName VARCHAR(255),
@@ -10551,9 +10549,9 @@ END'')
 		[IncludedColsOrdered] NVARCHAR(max)
 		)
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
 	DROP TABLE #IndexRedundant;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
 	CREATE TABLE #IndexRedundant (
 		DBName VARCHAR(255),
 		[Table] VARCHAR(255),
@@ -10730,14 +10728,14 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Objects naming conventions Checks', 10, 1) WITH NOWAIT
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
 DROP TABLE #tmpobjectnames;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
 CREATE TABLE #tmpobjectnames ([DBName] sysname, [schemaName] VARCHAR(100), [Object] VARCHAR(255), [Col] VARCHAR(255), [type] CHAR(2), type_desc VARCHAR(60));
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
 DROP TABLE #tmpfinalobjectnames;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
 CREATE TABLE #tmpfinalobjectnames ([Deviation] tinyint, [DBName] sysname, [schemaName] VARCHAR(100), [Object] VARCHAR(255), [Col] VARCHAR(255), type_desc VARCHAR(60), [Comment] VARCHAR(500) NULL);
 
 UPDATE #tmpdbs1
@@ -11394,20 +11392,20 @@ END;
 -- DBCC CHECKDB, Direct Catalog Updates and Data Purity subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting DBCC CHECKDB, Direct Catalog Updates and Data Purity', 10, 1) WITH NOWAIT
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
 DROP TABLE #output_dbinfo;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
 CREATE TABLE #output_dbinfo (ParentObject VARCHAR(255), [Object] VARCHAR(255), Field VARCHAR(255), [value] VARCHAR(255))
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
 DROP TABLE #dbinfo;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
 CREATE TABLE #dbinfo (rowid int IDENTITY(1,1) PRIMARY KEY CLUSTERED, dbname NVARCHAR(255), lst_known_checkdb DATETIME NULL, updSysCatalog DATETIME NULL, dbi_createVersion int NULL, dbi_dbccFlags int NULL) 
 
 IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1)
 BEGIN
 	--DECLARE @dbname NVARCHAR(255);
 	DECLARE @dbcc bit, @catupd bit, @purity bit;
-	DECLARE curDBs CURSOR FAST_FORWARD FOR SELECT name FROM master.sys.databases WITH (NOLOCK) WHERE is_read_only = 0 AND [state] = 0
+	DECLARE curDBs CURSOR FAST_FORWARD FOR SELECT name FROM master.sys.databases (NOLOCK) WHERE is_read_only = 0 AND [state] = 0
 	OPEN curDBs
 	FETCH NEXT FROM curDBs INTO @dbname
 	WHILE (@@FETCH_STATUS = 0)
@@ -11436,19 +11434,19 @@ BEGIN
 	DEALLOCATE curDBs;
 
 	;WITH cte_dbcc (name, lst_known_checkdb) AS (SELECT sd.name, tmpdbi.lst_known_checkdb 
-		FROM master.sys.databases sd WITH (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON sd.name = tmpdbi.dbname
+		FROM master.sys.databases sd (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON sd.name = tmpdbi.dbname
 		WHERE sd.database_id <> 2 AND is_read_only = 0 AND [state] = 0)
 	SELECT @dbcc = CASE WHEN COUNT(name) > 0 THEN 1 ELSE 0 END 
 	FROM cte_dbcc WHERE DATEDIFF(dd, lst_known_checkdb, GETDATE()) > 7 OR lst_known_checkdb IS NULL;
 
 	;WITH cte_catupd (name, updSysCatalog) AS (SELECT sd.name, tmpdbi.updSysCatalog 
-		FROM master.sys.databases sd WITH (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON sd.name = tmpdbi.dbname
+		FROM master.sys.databases sd (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON sd.name = tmpdbi.dbname
 		WHERE sd.database_id <> 2 AND is_read_only = 0 AND [state] = 0)
 	SELECT @catupd = CASE WHEN COUNT(name) > 0 THEN 1 ELSE 0 END 
 	FROM cte_catupd WHERE updSysCatalog > '1900-01-01 00:00:00.000';
 
 	;WITH cte_purity (name, dbi_createVersion, dbi_dbccFlags) AS (SELECT sd.name, tmpdbi.dbi_createVersion, tmpdbi.dbi_dbccFlags 
-		FROM master.sys.databases sd WITH (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON sd.name = tmpdbi.dbname
+		FROM master.sys.databases sd (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON sd.name = tmpdbi.dbname
 		WHERE sd.database_id > 4 AND is_read_only = 0 AND [state] = 0)
 	SELECT @purity = CASE WHEN COUNT(name) > 0 THEN 1 ELSE 0 END 
 	FROM cte_purity WHERE dbi_createVersion <= 611 AND dbi_dbccFlags = 0; -- <= SQL Server 2005
@@ -11457,7 +11455,7 @@ BEGIN
 	BEGIN
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'DBCC_CHECKDB' AS [Check], '[WARNING: database integrity checks have not been executed for over 7 days on some or all databases. It is recommended to run DBCC CHECKDB on these databases as soon as possible]' AS [Deviation]
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'DBCC_CHECKDB' AS [Information], [name] AS [Database_Name], MAX(lst_known_checkdb) AS Last_Known_CHECKDB
-		FROM master.sys.databases WITH (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
+		FROM master.sys.databases (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
 		WHERE database_id <> 2 AND is_read_only = 0 AND [state] = 0
 		GROUP BY [name]
 		HAVING DATEDIFF(dd, MAX(lst_known_checkdb), GETDATE()) > 7 OR MAX(lst_known_checkdb) IS NULL
@@ -11472,7 +11470,7 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Direct_Catalog_Updates' AS [Check], '[WARNING: Microsoft does not support direct catalog updates to databases.]' AS [Deviation]
 		SELECT DISTINCT 'Instance_checks' AS [Category], 'Direct_Catalog_Updates' AS [Information], [name] AS [Database_Name], MAX(updSysCatalog) AS Last_Direct_Catalog_Update
-		FROM master.sys.databases WITH (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
+		FROM master.sys.databases (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
 		WHERE database_id <> 2 AND is_read_only = 0 AND [state] = 0
 		GROUP BY [name]
 		HAVING (MAX(updSysCatalog) > '1900-01-01 00:00:00.000')
@@ -11489,7 +11487,7 @@ BEGIN
 	BEGIN
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Databases_need_data_purity_check' AS [Check], '[WARNING: Databases were found that need to run data purity checks.]' AS [Deviation]
 		SELECT DISTINCT 'Maintenance_Monitoring_checks' AS [Category], 'Databases_need_data_purity_check' AS [Information], [name] AS [Database_Name], dbi_dbccFlags AS Needs_Data_Purity_Checks
-		FROM master.sys.databases WITH (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
+		FROM master.sys.databases (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
 		WHERE database_id > 4 AND dbi_createVersion <= 611 AND dbi_dbccFlags = 0 AND is_read_only = 0 AND [state] = 0
 		ORDER BY [name]
 	END
@@ -11524,16 +11522,16 @@ BEGIN
 		SET @HadrRep = 0
 	END;
 	
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#pagerepair'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#pagerepair'))
 	DROP TABLE #pagerepair;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#pagerepair'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#pagerepair'))
 	CREATE TABLE #pagerepair (rowid int IDENTITY(1,1) PRIMARY KEY CLUSTERED, dbname NVARCHAR(255), [file_id] int NULL, [page_id] bigint NULL, error_type smallint NULL, page_status tinyint NULL, lst_modification_time DATETIME NULL, Repair_Source VARCHAR(20) NULL) 
 
-	IF (SELECT COUNT(*) FROM sys.dm_db_mirroring_auto_page_repair WITH (NOLOCK)) > 0
+	IF (SELECT COUNT(*) FROM sys.dm_db_mirroring_auto_page_repair (NOLOCK)) > 0
 	BEGIN
 		INSERT INTO #pagerepair
 		SELECT DB_NAME(database_id) AS [Database_Name], [file_id], [page_id], [error_type], page_status, MAX(modification_time), 'Mirroring' AS [Repair_Source]
-		FROM sys.dm_db_mirroring_auto_page_repair WITH (NOLOCK)
+		FROM sys.dm_db_mirroring_auto_page_repair (NOLOCK)
 		GROUP BY database_id, [file_id], [page_id], [error_type], page_status
 	END
 	
@@ -11543,7 +11541,7 @@ BEGIN
 		EXEC ('SELECT DB_NAME(database_id) AS [Database_Name], [file_id], [page_id], [error_type], page_status, MAX(modification_time), ''HADR'' AS [Repair_Source] FROM sys.dm_hadr_auto_page_repair GROUP BY database_id, [file_id], [page_id], [error_type], page_status ORDER BY DB_NAME(database_id), MAX(modification_time) DESC, [file_id], [page_id]')
 	END;
 	
-	IF (SELECT COUNT(*) FROM sys.dm_db_mirroring_auto_page_repair WITH (NOLOCK)) > 0
+	IF (SELECT COUNT(*) FROM sys.dm_db_mirroring_auto_page_repair (NOLOCK)) > 0
 		OR @HadrRep > 0
 	BEGIN
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Auto_Page_repairs' AS [Check], '[WARNING: Page repairs have been found. Check for suspect pages]' AS [Deviation]
@@ -11592,7 +11590,7 @@ BEGIN
 		END AS [Event_Type],
 		error_count AS [Error_Count],
 		last_update_date AS [Last_Update_Date]
-	FROM msdb.dbo.suspect_pages WITH (NOLOCK)
+	FROM msdb.dbo.suspect_pages (NOLOCK)
 	WHERE (event_type = 1 OR event_type = 2 OR event_type = 3) 
 	ORDER BY DB_NAME(database_id), last_update_date DESC, [file_id], [page_id]
 END
@@ -11604,7 +11602,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 -- Replication Errors subsection
 --------------------------------------------------------------------------------------------------------------------------------
-IF @replication = 1 AND (SELECT COUNT(*) FROM master.sys.databases WITH (NOLOCK) WHERE [name] = 'distribution') > 0
+IF @replication = 1 AND (SELECT COUNT(*) FROM master.sys.databases (NOLOCK) WHERE [name] = 'distribution') > 0
 BEGIN
 	RAISERROR (N'  |-Starting Replication Errors', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(*) FROM distribution.dbo.MSdistribution_history AS msh 
@@ -11626,9 +11624,9 @@ BEGIN
 			msa.[name] AS [Distribution_Agent], msa.publisher_db AS [Publisher_DB], 
 			msa.publication AS [Publication], msa.subscriber_db AS [Subscriber_DB],
 			mse.error_code, mse.error_text
-		FROM distribution.dbo.MSdistribution_history AS msh WITH (NOLOCK)
-		INNER JOIN distribution.dbo.MSrepl_errors AS mse WITH (NOLOCK) ON mse.id = msh.error_id AND mse.time = msh.time 
-		INNER JOIN distribution.dbo.MSdistribution_agents AS msa WITH (NOLOCK) ON msh.agent_id = msa.id
+		FROM distribution.dbo.MSdistribution_history AS msh (NOLOCK)
+		INNER JOIN distribution.dbo.MSrepl_errors AS mse (NOLOCK) ON mse.id = msh.error_id AND mse.time = msh.time 
+		INNER JOIN distribution.dbo.MSdistribution_agents AS msa (NOLOCK) ON msh.agent_id = msa.id
 		WHERE (mse.time >= DATEADD(hh, - 24, GETDATE()))
 		ORDER BY msh.time
 	END
@@ -11655,16 +11653,16 @@ IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 BEGIN
 	SET @lognumber = 0 
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc'))
 	DROP TABLE #dbcc;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc'))
 	CREATE TABLE #dbcc (rowid int IDENTITY(1,1) PRIMARY KEY, logid int NULL, logdate DATETIME, spid VARCHAR(50), logmsg VARCHAR(4000)) 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc'))
 	CREATE INDEX [dbcc_logmsg] ON dbo.[#dbcc](logid) 
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#avail_logs'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#avail_logs'))
 	DROP TABLE #avail_logs;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#avail_logs'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#avail_logs'))
 	CREATE TABLE #avail_logs (lognum int, logdate DATETIME, logsize int) 
 
 	-- Get the number of available logs 
@@ -11899,9 +11897,9 @@ IF @sqlmajorver > 10
 BEGIN
 	RAISERROR (N'  |-Starting System health checks', 10, 1) WITH NOWAIT
 	
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#SystemHealthSessionData'))
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#SystemHealthSessionData'))
 	DROP TABLE #SystemHealthSessionData;
-	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#SystemHealthSessionData'))
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#SystemHealthSessionData'))
 	CREATE TABLE #SystemHealthSessionData (target_data XML)
 		
 	-- Store the XML data in a temporary table
@@ -11968,141 +11966,141 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'Clearing up temporary objects', 10, 1) WITH NOWAIT
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo')) 
 DROP TABLE #dbinfo;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo')) 
 DROP TABLE #output_dbinfo;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIOStall')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIOStall')) 
 DROP TABLE #tblIOStall;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1')) 
 DROP TABLE #tmpdbs1;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')) 
 DROP TABLE #tmpdbs0;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount')) 
 DROP TABLE #tblPerfCount;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblPerfThresholds'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblPerfThresholds'))
 DROP TABLE tempdb.dbo.tblPerfThresholds;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj')) 
 DROP TABLE #tblHypObj;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1')) 
 DROP TABLE #tblIxs1;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2')) 
 DROP TABLE #tblIxs2;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3')) 
 DROP TABLE #tblIxs3;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4')) 
 DROP TABLE #tblIxs4;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5')) 
 DROP TABLE #tblIxs5;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6')) 
 DROP TABLE #tblIxs6;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK')) 
 DROP TABLE #tblFK;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc')) 
 DROP TABLE #dbcc;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#avail_logs')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#avail_logs')) 
 DROP TABLE #avail_logs;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1')) 
 DROP TABLE #log_info1;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2')) 
 DROP TABLE #log_info2;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
 DROP TABLE #tmpobjectnames;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
 DROP TABLE #tmpfinalobjectnames;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWaits'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWaits'))
 DROP TABLE #tblWaits;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalWaits'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalWaits'))
 DROP TABLE #tblFinalWaits;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblLatches'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblLatches'))
 DROP TABLE #tblLatches;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalLatches'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalLatches'))
 DROP TABLE #tblFinalLatches;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
 DROP TABLE #IndexCreation;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
 DROP TABLE #IndexRedundant;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBlkChains'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBlkChains'))
 DROP TABLE #tblBlkChains;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsSamp'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsSamp'))
 DROP TABLE #tblStatsSamp;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksBefore'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksBefore'))
 DROP TABLE #tblSpinlocksBefore;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksAfter'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksAfter'))
 DROP TABLE #tblSpinlocksAfter;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalSpinlocks'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalSpinlocks'))
 DROP TABLE #tblFinalSpinlocks;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#pagerepair'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#pagerepair'))
 DROP TABLE #pagerepair;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))
 DROP TABLE #tmp_dm_io_virtual_file_stats;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_exec_query_stats')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_exec_query_stats')) 
 DROP TABLE #tmp_dm_exec_query_stats;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dm_exec_query_stats')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dm_exec_query_stats')) 
 DROP TABLE #dm_exec_query_stats;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIOReq'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIOReq'))
 DROP TABLE #tblPendingIOReq;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIO'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIO'))
 DROP TABLE #tblPendingIO;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
 DROP TABLE #qpwarnings;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
 DROP TABLE #tblStatsUpd;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
 DROP TABLE #tblPerSku;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
 DROP TABLE #tblColStoreIXs;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#SystemHealthSessionData'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#SystemHealthSessionData'))
 DROP TABLE #SystemHealthSessionData;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 DROP TABLE #tmpdbfiledetail;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHints'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHints'))
 DROP TABLE #tblHints;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTriggers'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTriggers'))
 DROP TABLE #tblTriggers;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS'))
 DROP TABLE #tmpIPS;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
 DROP TABLE #tblCode;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
 DROP TABLE #tblWorking;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
 DROP TABLE #tmpdbs_userchoice;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
 DROP TABLE #xp_cmdshell_CluNodesOutput;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
 DROP TABLE #xp_cmdshell_CluOutput;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_Nodes'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_Nodes'))
 DROP TABLE #xp_cmdshell_Nodes;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEOutput'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEOutput'))
 DROP TABLE #xp_cmdshell_QFEOutput;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEFinal'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEFinal'))
 DROP TABLE #xp_cmdshell_QFEFinal;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#RegResult'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#RegResult'))
 DROP TABLE #RegResult;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ServiceStatus'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ServiceStatus'))
 DROP TABLE #ServiceStatus;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_AcctSPNoutput'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_AcctSPNoutput'))
 DROP TABLE #xp_cmdshell_AcctSPNoutput;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_DupSPNoutput'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_DupSPNoutput'))
 DROP TABLE #xp_cmdshell_DupSPNoutput;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#FinalDupSPN'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#FinalDupSPN'))
 DROP TABLE #FinalDupSPN;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ScopedDupSPN'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ScopedDupSPN'))
 DROP TABLE #ScopedDupSPN;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDRI'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDRI'))
 DROP TABLE #tblDRI;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblInMemDBs'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblInMemDBs'))
 DROP TABLE #tblInMemDBs;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
 DROP TABLE #tmpXIS;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
 DROP TABLE #tmpXNCIS;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
 DROP TABLE #tmpIPS_CI;
-EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
-EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
-EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
-EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects WITH (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
+EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
+EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
+EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
+EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
 RAISERROR (N'All done!', 10, 1) WITH NOWAIT
 GO
