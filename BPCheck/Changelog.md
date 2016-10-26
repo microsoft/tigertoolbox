@@ -1,0 +1,319 @@
+v1  	- 28-07-2011 - Initial release
+v1.1	- 28-01-2012 - Added some SQL 2012 support.
+v1.2	- 08-03-2012 - Added information to Database Information subsection;
+						Added I/O stall in excess of 50% in database files subsection.
+v1.2.1	- 20-03-2012 - Added redundant index subsection;
+						Added more SQL 2012 support;
+						Changed database loop method.
+v1.2.2	- 22-03-2012 - Added check for Direct Catalog Updates.
+v1.2.3	- 05-04-2012 - Added unused index subsection;
+						Fixed some collation issues.
+v1.2.4 - 07-04-2012 - Split in separate listings the unused indexes from rarely used indexes;
+						Split in separate listings the real duplicates from possibly redundant indexes.
+v1.2.5 - 08-04-2012 - Added power plan check, by Aaron Bertrand (http://www.mssqltips.com/tip.asp?tip=2225&ctc).
+v1.2.6 - 13-04-2012 - Added NTFS block size check;
+						Fixed issue in Data and Log locations check.
+v1.2.7 - 16-04-2012 - Added Errorlog based checks section.
+v1.2.8 - 21-04-2012 - Fixed issue with NTFS block size check;
+						Added Replication Components installation check;
+						Scan for Startup Procs checks for Replication Components installation.
+v1.2.9 - 04-05-2012 - Fixed issues when running on SQL Server 2005;
+						COM object creation was revised.
+v1.3  - 08-05-2012 - Added support for customizing save location for .ps1 files;
+						Default location is the Log folder. Optionally, uncomment line where @custompath is set and insert the desired path.
+v1.3.2 - 09-05-2012 - Added descriptive column to Database_Options test, to clear what are the Non-optimal_Settings for each database;
+						Corrected bug with powershell files default save location, in case default location has changed since SQL Server install.
+v1.3.3 - 31-05-2012 - Fixed issue with DBCC CHECKDB test and offline databases.		
+v1.3.4 - 03-06-2012 - Added more system configuration checks.
+v1.3.5 - 07-06-2012 - Added suspect pages check;
+						Added more permissions checks in pre-requisites section;
+						Added search for Errors in Errorlog checks.
+v1.3.6 - 08-06-2012 - Revised support for account checks in SQL 2012.
+v1.3.7 - 14-06-2012 - Fixed issue with large Object_Names;
+						Fixed issue with Powershell 3.0 script;
+						Data and log in same volume only lists affected objects now;
+						Fixed blocking issue with hypothetical objects drop statements;
+						Added duplicate indexes drop statements (all but the 1st of duplicates);
+						Added tempDB in same location as user DBs check;
+						Added backup checks.
+v1.3.8 - 19-06-2012 - Fixed issue with Errorlog based checks;
+						Fixed issue with Data and Log locations.
+v1.3.9 - 05-07-2012 - Fixed issue with CPUs vs. MaxDOP check.
+v1.4.0 - 10-07-2012 - Added LPIM check;
+						Added info to trace flags subsection.
+v1.4.1 - 18-07-2012 - Added information to CPUs vs. MaxDOP check.
+						Added information about all backups since last Full (Database, File or Partial).
+v1.4.2 - 02-08-2012 - Added Processor Affinity information to instance info.
+v1.4.3 - 19-09-2012 - Fixed issue with large integer in DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled) subsection.
+v1.4.4 - 23-09-2012 - Added events to monitor to SQL Agent alerts for severe errors subsection;
+						Added comment column for specific errors foun in Errorlog based checks subsection.
+v1.4.5 - 24-09-2012 - Fixed issue with Errorlog based checks subsection search.
+v1.4.6 - 17-10-2012 - Fixed issue with large percentages in Stall IO check.
+v1.4.7 - 24-10-2012 - Fixed issue with Data files and Logs in same physical volume check, where data and fulltext on the same volume raised an issue;
+						Fixed issue with Service Accounts and Status check where LocalSystem would not raise issues;
+						Widened search for Redundant Indexes.
+v1.4.8 - 01-11-2012 - Added generation of drop statements for existing Rarely Used indexes.
+v1.5.0 - 11-11-2012 - Fixed cpu affinity shows all zeros when auto affinity was used;
+						Fixed issue with duplicate indexes check introduced with v1.4.8;
+						Fixed issue with Errorlog based checks subsection search where no comments where shown;
+						Added aggregates to CPU information subsection;
+						Simplified logic in CPU Affinity in NUMA architecture subsection;
+						Added checks to Server Memory information subsection;
+						Added checks to System configurations subsection;
+						Added a Deprecated features subsection;
+						Changed perf counters collection method in Perf counters subsection;
+						Added more counters to Perf counters subsection.
+v1.5.1 - 11-11-2012 - Fixed perf counters collection collecting from default instances only.
+v1.5.2 - 15-11-2012 - Fixed issue with long mountpoint paths;
+						Fixed issue with Backup checks subsection;
+						Added output from sys.messages to Errorlog based checks.
+v1.5.4 - 18-11-2012 - Added sql server process trimming to Errorlog based checks;
+						Added more checks to System configurations subsection;
+						Added HA information subsection;
+						Added optimal nr of VLFs and log size to VLF subsection, based on current findings;
+						Added even file number check for tempDB;
+						Added minimum file number check for tempDB when < 4;
+						Added summary to Errorlog based checks;
+						Added column about IFI status in autogrow sections;
+						Added further info to VLF section.
+v1.5.5 - 19-11-2012 - Added info to Instance Information subsection;
+						Added Processor Summary subsection aggregating all CPU information;
+						Added RM task output notifications; 
+						Format binary affinity mask by node for better reading.
+v1.5.6 - 24-11-2012 - Changed collection for several tests that can be supported by DMVs on SQL Server 2008 R2 SP1 and above (was implemented for SQL Server 2012 only);
+						Added checks and information to Server Memory subsection.
+v1.5.7 - 10-12-2012 - Changed collection for Index checks to cope with large database names;
+						Added support for collection through SQLDiag custom collector.
+v1.5.9 - 30-12-2012 - Added schema to index script generation;
+						Fixed conversion issue with Max Worker Threads option;
+						Added extended pagefile checks;
+						Added Replication error checks;
+						Added check for Indexes with large keys (> 900 bytes).
+v1.6.1 - 21-01-2013 - Fixed issue with SQL Server 2005 in Server Memory subsection;
+						Fixed conversion issues with large msticks values;
+						Fixed issue with Memory reference values.
+v1.6.2 - 02-02-2013 - Fixed issues with case sensitive collations;
+						Expanded search for redundant indexes;
+						Expanded system configuration checks;
+						Added Plan use ratio checks;
+						Added Hints usage check;
+						Added Linked servers information;
+						Added AlwaysOn/Mirroring automatic page repairs check;
+						Added check for user DBs with Auto_Update_Statistics_Asynch enabled and Auto_Update_Statistics disabled;
+						Extended I/O Stall checks to verify I/O latencies.
+v1.6.3 - 13-02-2013 - Added option to skip PS based tests where activating xp_cmdshell is strictly forbidden (See Readme at the top).
+v1.6.4 - 18-02-2013 - Added Buffer Node to performance counters collection;
+						Added information to RM Notifications section;
+						Added Cached Query Plans issues checks (Top 25 by CPU, IO and Recompiles with plan warnings);
+						Added Object Naming Convention checks
+v1.6.5 - 27-02-2013 - Added check for databases that need to run DBCC CHECKDB (...) WITH DATA_PURITY;
+						Added Waits and Latches information;
+						Added check for statistics that need to be updated;
+						Optimized performance counters collection;
+						Extended performance counters collection to 90s;
+						Removed alternate keys from search for Unused and Rarely used indexes;
+						Added parameter to enable/disable performance tuning and optimization oriented checks;
+						Added parameter to enable/disable best practices oriented checks;
+v1.6.6 - 05-03-2013 - Removed MS Shipped objects from duplicate and redundant indexes check;
+						Added search for tables with no indexes, tables with no clustered indexes and tables with more indexes than columns.
+v1.6.7 - 01-04-2013 - Fixed issue with AlwaysOn/Mirroring automatic page repair subsection in SQL 2008R2 or below;
+						Fixed issue with Cached Query Plans issues subsection in SQL 2008R2 RTM;
+						Added more database files information;
+						Fixed false positives with DBs Autogrowth > 1GB check;
+						Added check for TF834 (Large Page Support for BP) when Column Store Indexes are used;
+						Fixed false positives with Power plan subsection.
+v1.6.8.1 - 03-04-2013 - Added min server memory setting checks;
+						Added information to Errorlog checks;
+						Fixed false negatives with "Data files and Logs / tempDB and user Databases in same volume" checks when PS is not available;
+						Added check for tempDB Files with different autogrow setting.
+v1.6.9 - 11-04-2013 - Added Worker threads exhaustion check;
+						Added support for sys.dm_db_stats_properties in Statistics update subsection, if on SQL 2008R2 SP2 or SQL 2012 SP1 or higher.
+						Made changes to latch checks;
+						Fixed false positives with Indexes with large keys (> 900 bytes) subsection.
+v1.7.0.2 - 07-05-2013 - Fixed Statistics update subsection for SQL 2005;
+						Changed Errorlog aggregates;
+						Added Historical Latches without BUFFER class;
+						Added page file size check for WS2003;
+						Added information to "Tables with more Indexes than Columns" check.
+v1.7.1 - 10-05-2013	- Added "Tables with partition misaligned indexes" check.
+v1.7.2 - 18-05-2013	- Added windows service pack level to machine information section;
+						Changed information available in "Database_File_Information", namely pages calculated in MB;
+						Added Enterprise features usage information per database;
+						Added batch performance counters (SQL Server 2012);
+						Rewrote all database loops.
+v1.7.3 - 24-05-2013 - "Query Plan Warnings" check now ignores workload in master and mssqlsystemresource databases;
+						Fixed issue with running BPchecks without PTOChecks.
+v1.7.4 - 01-06-2013 - Added FK with no indexes check;
+						Fixed issue with Statistics update check in prior to 2008R2 SP2 and 2012 SP1.
+v1.7.5 - 25-06-2013 - Added information to Enterprise features usage subsection;
+						Split Unused indexes section into Unused_Indexes_With_Updates and Unused_Indexes_No_Updates;
+						Extended Objects naming conventions checks;
+						Added Disabled indexes subsection;
+						Added indexes with low fill factor subsection;
+						Added Non-unique clustered indexes subsection;
+						Fixed issue with Cached Query Plans issues subsection.
+v1.7.6 - 20-07-2013 - Added check for AlwaysOn AG replication status per database (http://support.microsoft.com/kb/2857849);
+						Fixed issue with large values in I/O Stall subsection;
+						Added search parameters to Objects naming conventions subsection.
+v1.7.6.1-24-07-2013 - Fixed issue with Objects naming conventions checks.
+v1.7.6.2-30-07-2013 - Fixed issue with Objects naming conventions checks.
+v1.7.7 - 05-09-2013 - Added Missing Indexes output (most relevant - score based - use at you own discretion);
+						Changed Processor Usage info from 1h to 2h.
+v1.7.8 - 21-09-2013 - Changed system database exclusion choices;
+						Added information to User DBs with non-default options subsection;
+						VLF section shows added information only on databases failing threshold.
+v1.7.9 - 09-10-2013 - Fixed issue with false positives in Purity Check;
+						Added logic to exclude standard names of MS shipped databases from database design related checks;
+						Added performance counters to collection.
+v1.8 - 25-10-2013 - Added blocking chains (over 5s);
+						Added monitoring duration as parameter;
+						Added more file related info to Autogrowth checks;
+						Fixed CPU Affinity bit mask issue on 16 CPU+ servers;
+						Extended password checks;
+						Extended logic to exclude MS shipped databases, based on notable schema objects.
+v1.8.0.1 - 28-10-2013 - Fixed issues with logic to exclude MS shipped databases.
+v1.8.1 - 03-11-2013 - Added owner info to Database Information subsection;
+						Fixed issue where no warning was raised for DBs that never had a Log Backup, but had Full/Diff Backups in Full or Bulk-logged RM;
+						Added Statistics sampling < 25 pct check on SQL 2008R2 SP2 / SQL 2012 and above;
+						Added Pending I/O Requests check;
+						Added info to Windows Version and Architecture subsection;
+						Added spinlocks info;
+						Added Clustered Indexes with GUIDs in key checks;
+						Extended trace flag checks.
+v1.8.2.1 - 11-11-2013 - Removed cursor from VLF checks;
+						Added checks to System Configurations;
+						Added checks to TempDB subsection;
+						Fixed index statement generation in Foreign Keys with no Index subsection;
+						Fixed issue with Statistics update subsection up to SQL 2008R2 SP2;
+						Fixed duplicate key issue in Pending I/O Requests check;
+						Fixed duplicate entries in redundant indexes of Missing Indexes checks;
+						Fixed syntax issue in Foreign Keys with no Index subsection.
+v1.8.2.2 - 14-11-2013 - Added Dynamics GP database exclusions;
+						Fixed syntax issue in System Configurations checks.
+v1.8.3 - 19-12-2013 - Fixed presentation issue in Pending I/O Requests subsection;
+						Fixed conversion issue in Statistics Update subsection.
+v1.8.4 - 13-01-2014 - Fixed issue with database exclusions;
+						Fixed issue with Service Accounts section in WS2003;
+						Removed unwarranted information from DBCC CHECKDB, Direct Catalog Updates and Data Purity subsection.
+v1.8.4.1 - 06-02-2014- Added Service Accounts and SPN registration checks;
+						Fixed issue with Redundant index checks on servers with CS collations.
+v1.8.5	- 21-02-2014 - Added LowMemoryThreshold and OOM information to Server Memory subsection;
+						Extended Min Server Memory checks to Server Memory subsection;
+						Added DBs with Sparse files checks;
+						Added System health error checks;
+						Added Resource Governor information;
+						Added logdetail parameter to control listing the detail of all relevant Errorlog entries - which can sometimes bloat the output file to several hundred MBs;
+						Fixed blocking chains (over 5s) showing on SP_SERVER_DIAGNOSTICS_SLEEP wait;
+						Fixed backup size conversion issue;
+						Fixed false positives in log backup checks;
+						Fixed tempDB file size check and Database file information subsections based in sys.master_files may cause issues not to be reported;
+						Fixed arithmetic overflow error in Statistics update check.
+v1.8.6 - 14-03-2014 - Duplicate script generation includes logic to account for PK when several IXs are unique;
+						Optimized database discovery cycle;
+						Fixed execution issue in AG DBs when no connections are allowed to the databases in the secondary replica, and the databases are not available for read access.
+v1.8.7 - 01-04-2014 - Fixed issue in Hypothetical objects drop script generation;
+						Fixed issue in several subsections when offline DBs exist;
+						Fixed issue introduced in v1.8.6 version where some checks would skip user DBs;
+						Added information on clock hand notifications to Server Memory subsection;
+						Added thresholds to some Performance Counters -> this does NOT replace a longer perf counter data collection and analysis.
+v1.8.7.1 - 03-04-2014 - Added Service Pack Supportability check;
+						Fixed overflow issue in clock hand notifications;
+						Fixed issue with clock hand notifications and SQL 2005.
+v1.8.8 - 23-04-2014 - Changed Pagefile free space check;
+						Fixed missing index script creation of covering indexes;
+						Fixed divide by zero errors in perf counters;
+						Fixed issue with statistics checks in DBs with cmpt level 80;
+						Fixed tempDB data file size issue - check was ok, but listed information might not be accurate;
+						Added category column to all outputs (preparation for future developments).
+v1.8.9 - 09-05-2014 - Detailed categorization of memory related waits;
+						Detailed MaxMem recommendation output;
+						Added recommended MaxDOP value to Parallelism_MaxDOP check output;
+						Fixed issue with No_Full_Backups check.
+v1.9 - 04-06-2014 - Refined search for duplicate and redundant indexes;
+						Added partition misalign test (offset < 64KB);
+						Added Buffer Pool Extension info subsection.
+v1.9.1 - 09-06-2014 - Fixed issue with duplicate and redundant index script generation.
+v1.9.2 - 13-06-2014 - Fixed calculation in page file checks;
+						Added process paged out check (besides existing based in errorlog search).
+v1.9.3 - 08-07-2014 - Fixed backup checks reporting wrong size;
+						Changed backup chain based checks to ignore copy_only backups;
+						Updated Service Pack Supportability check;
+						Added Cluster Quorum Model check;
+						Added Cluster QFE node equality check.
+v1.9.4 - 16-07-2014 - Added Backups and Database files in same location check;
+						Enhanced Hints Usage check with info from sql modules;
+						Fixed Objects naming conventions checks not reporting issues.
+v1.9.5 - 17-09-2014 - Changed Hypothetical object search scope to all DBs, including MS shipped;
+						Changed missing index check to include all missing by order of score, but still generating script only when score >= 100000;
+						Added features to Enterprise features check;
+						Expanded TF checks.
+v1.9.6.1 - 20-10-2014 - Fixed hypothetical statistics search;
+						Fixed Parallelism_MaxDOP check on large NUMA nodes and specific MaxDOP settings;
+						Fixed Cluster Quorum Model false positive when PS is not available;
+						Changed Powershell availability verification to single step;
+						Added user objects in master check;
+						Added logon triggers information;
+						Added database triggers information;
+						Added Database file autogrows last 72h information;
+						Added Cluster NIC Binding order check;
+						Added Disk Fragmentation Analysis (only if running with elevated privs and enabled with variable @diskfrag);
+						Added Index Fragmentation Analysis (only if enabled with variable @ixfrag);
+						Fixed trace flag checks recommending trace flags that did not apply to server hardware.
+v1.9.6.2 - 23-10-2014 - Fixed false positive on Cluster NIC Binding order check;
+v1.9.6.3 - 25-10-2014 - Fixed syntax error on Cluster NIC Binding order check;
+v1.9.7 - 12-11-2014 - Changed Cluster Quorum Model check output;
+						Fixed conversion issue with Buffer Pool Consumers section;
+						Fixed issue on server that has only AG secondary replicas;
+						Added model information to Machine Information section;
+						Added @bpool_consumer option to skip listing Buffer Pool Consumers;
+						Added @gen_scripts option to skip generating scripts (disabled by default);
+						Added listing of which duplicate indexes are eligible for deletion;
+						Added search for which of the duplicate indexes that are eligible for deletion are hard coded in sql modules.
+v1.9.8 - 10-12-2014 - Fixed issue with Cluster NIC Binding order subsection on case sensitive instances;
+						Fixed issue with Database file autogrows last 72h subsection on case sensitive instances;
+						Fixed issues with PS based checks running in PS v1;
+						Fixed illegal characters issue in XML conversion;
+						Fixed syntax error in SQL 2014 Memory Consumers from In-Memory OLTP Engine.
+v1.9.8.1 - 16-12-2014 - Fixed issues in Enterprise features usage subsection on SQL 2012 and AlwaysOn in use. 
+v1.9.9 - 30-01-2015 - Fixed conversion issue in Plan_use_ratio check;
+						Added HADR info to Database Information subsection;
+						Added NUMA info to Server Memory subsection.
+v1.9.9.1 - 06-02-2015 - Fixed NUMA info collection issue up to SQL 2008R2 introduced in v1.9.9.
+v1.9.9.2 - 13-02-2015 - Fixed NUMA info collection issue on SQL 2012 and above introduced in v1.9.9;
+						Added support to scope only specific databases by ID.
+v1.9.9.3 - 15-03-2015 - Fixed some information in "Database Information" section not being collected, introduced in v1.9.9.2.
+v1.9.9.5 - 11-04-2015 - Fixed System health error checks conversion error;
+						Extended Memory Allocations from Memory Clerks checks;
+						Extended logic to exclude MS shipped databases;
+						Fixed overflow error in Blocking Chains check if larger than Integer supports;
+						Fixed insert error in Pending I/O Requests check.
+v2.0.0 - 22-04-2015 - Added Declarative Referential Integrity - Untrusted Constraints checks;
+					Added XTP Index Health Analysis;
+					Added CCI Index Health Analysis: pseudo-fragmentation for CCI is the ratio of deleted_rows to total_rows;
+					Renamed "Index Fragmentation Analysis" to "Index Health Analysis" subsection;
+					Added storage analysis for In-Memory OLTP Engine in Database Information subsection;
+					Fixed sp_server_diagnostics showing up as blocked session with long blocking time;
+					Extended AO cluster information;
+					Database filter now always includes sys DBs.
+v2.0.1 - 23-04-2015	Fixed issue with SQL 2012 in Index Health analysis.
+v2.0.2 - 14-05-2015 Added Default data collections (check for default trace, blackbox trace, SystemHealth xEvent session, sp_server_diagnostics xEvent session);
+					Extended Objects naming conventions checks to functions;
+					Added info on Inefficient Plans by CPU and Read I/O;
+					Improved search for hypothetical objects;
+					Added script generation to fix issues from Declarative Referential Integrity - Untrusted Constraints checks.
+v2.0.2.1 - 18-05-2015 Fixed Declarative Referential Integrity script generation.
+v2.0.3 - 10-09-2015 Added information about current PMO to Global Trace Flags check when 8048 may be missing.
+v2.0.3.1 - 11-09-2015 Fixed PMO check up to 2008R2.
+v2.1 - 9/30/2016 - Fixed issue with LPIM check in SQL Server 2005;
+					Tuned Memory Allocations from In-Memory OLTP Engine checks;
+					Tuned I/O stall checks to separate overall stall time from avg latency tests;
+					Fixed issue with DBs Autogrowth > 1GB check missing files if IFI is enabled;
+					Updated Cached Query Plans section with new DMV columns;
+					Workaround for windows version not correct under W10/WS2016;
+					Added Disk space information;
+					Added overall support for SQL Server 2012 SP3, 2014 SP2 and 2016 in multiple checks;
+					Added plans with Inefficient Memory Use to Performance checks.
+v2.1.1 - 10/01/2016 - Fixed issues with Database Information subsection in SQL 2005 to 2008R2.
+v2.1.2 - - Added incremental stats as default to Database Options check;
+			Added W10 Aniversary Edition to OS versions;
+			Fixed Indexing per Table subsection accounting for hypotheical indexes.
