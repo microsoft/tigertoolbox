@@ -288,32 +288,32 @@ v1.9.9.5 - 11-04-2015 - Fixed System health error checks conversion error;
 			Fixed overflow error in Blocking Chains check if larger than Integer supports;
 			Fixed insert error in Pending I/O Requests check.
 v2.0.0 - 22-04-2015 - Added Declarative Referential Integrity - Untrusted Constraints checks;
-					Added XTP Index Health Analysis;
-					Added CCI Index Health Analysis: pseudo-fragmentation for CCI is the ratio of deleted_rows to total_rows;
-					Renamed "Index Fragmentation Analysis" to "Index Health Analysis" subsection;
-					Added storage analysis for In-Memory OLTP Engine in Database Information subsection;
-					Fixed sp_server_diagnostics showing up as blocked session with long blocking time;
-					Extended AO cluster information;
-					Database filter now always includes sys DBs.
-v2.0.1 - 23-04-2015	Fixed issue with SQL 2012 in Index Health analysis.
-v2.0.2 - 14-05-2015 Added Default data collections (check for default trace, blackbox trace, SystemHealth xEvent session, sp_server_diagnostics xEvent session);
-					Extended Objects naming conventions checks to functions;
-					Added info on Inefficient Plans by CPU and Read I/O;
-					Improved search for hypothetical objects;
-					Added script generation to fix issues from Declarative Referential Integrity - Untrusted Constraints checks.
-v2.0.2.1 - 18-05-2015 Fixed Declarative Referential Integrity script generation.
-v2.0.3 - 10-09-2015 Added information about current PMO to Global Trace Flags check when 8048 may be missing.
-v2.0.3.1 - 11-09-2015 Fixed PMO check up to 2008R2.
+			Added XTP Index Health Analysis;
+			Added CCI Index Health Analysis: pseudo-fragmentation for CCI is the ratio of deleted_rows to total_rows;
+			Renamed "Index Fragmentation Analysis" to "Index Health Analysis" subsection;
+			Added storage analysis for In-Memory OLTP Engine in Database Information subsection;
+			Fixed sp_server_diagnostics showing up as blocked session with long blocking time;
+			Extended AO cluster information;
+			Database filter now always includes sys DBs.
+v2.0.1 - 23-04-2015 - Fixed issue with SQL 2012 in Index Health analysis.
+v2.0.2 - 14-05-2015 - Added Default data collections (check for default trace, blackbox trace, SystemHealth xEvent session, sp_server_diagnostics xEvent session);
+			Extended Objects naming conventions checks to functions;
+			Added info on Inefficient Plans by CPU and Read I/O;
+			Improved search for hypothetical objects;
+			Added script generation to fix issues from Declarative Referential Integrity - Untrusted Constraints checks.
+v2.0.2.1 - 18-05-2015 - Fixed Declarative Referential Integrity script generation.
+v2.0.3 - 10-09-2015 - Added information about current PMO to Global Trace Flags check when 8048 may be missing.
+v2.0.3.1 - 11-09-2015 - Fixed PMO check up to 2008R2.
 v2.1 - 9/30/2016 - Fixed issue with LPIM check in SQL Server 2005;
-					Tuned Memory Allocations from In-Memory OLTP Engine checks;
-					Tuned I/O stall checks to separate overall stall time from avg latency tests;
-					Fixed issue with DBs Autogrowth > 1GB check missing files if IFI is enabled;
-					Updated Cached Query Plans section with new DMV columns;
-					Workaround for windows version not correct under W10/WS2016;
-					Added Disk space information;
-					Added overall support for SQL Server 2012 SP3, 2014 SP2 and 2016 in multiple checks;
-					Added plans with Inefficient Memory Use to Performance checks.
+			Tuned Memory Allocations from In-Memory OLTP Engine checks;
+			Tuned I/O stall checks to separate overall stall time from avg latency tests;
+			Fixed issue with DBs Autogrowth > 1GB check missing files if IFI is enabled;
+			Updated Cached Query Plans section with new DMV columns;
+			Workaround for windows version not correct under W10/WS2016;
+			Added Disk space information;
+			Added overall support for SQL Server 2012 SP3, 2014 SP2 and 2016 in multiple checks;
+			Added plans with Inefficient Memory Use to Performance checks.
 v2.1.1 - 10/01/2016 - Fixed issues with Database Information subsection in SQL 2005 to 2008R2.
-v2.1.2 - - Added incremental stats as default to Database Options check;
+v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options check;
 			Added W10 Aniversary Edition to OS versions;
 			Fixed Indexing per Table subsection accounting for hypotheical indexes.
