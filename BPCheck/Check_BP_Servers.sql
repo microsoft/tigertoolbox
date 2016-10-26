@@ -3,7 +3,7 @@ GO
 
 DECLARE @custompath NVARCHAR(500), @allow_xpcmdshell bit, @ptochecks bit, @duration tinyint, @logdetail bit, @diskfrag bit, @ixfrag bit, @ixfragscanmode VARCHAR(8), @bpool_consumer bit, @gen_scripts bit, @dbScope VARCHAR(256), @spn_check bit
 
-/* Best Practices Check - pedro.lopes@microsoft.com (http://toolbox/BPCheck; http://aka.ms/sqlinsights)
+/* Best Practices Check - pedro.lopes@microsoft.com (http://aka.ms/BPCheck; http://aka.ms/sqlinsights)
 
 READ ME - Important options for executing BPCheck
 
