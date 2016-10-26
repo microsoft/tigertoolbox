@@ -346,22 +346,22 @@ v1.9.9.5 - 11-04-2015 - Fixed System health error checks conversion error;
 						Fixed overflow error in Blocking Chains check if larger than Integer supports;
 						Fixed insert error in Pending I/O Requests check.
 v2.0.0 - 22-04-2015 - Added Declarative Referential Integrity - Untrusted Constraints checks;
-					Added XTP Index Health Analysis;
-					Added CCI Index Health Analysis: pseudo-fragmentation for CCI is the ratio of deleted_rows to total_rows;
-					Renamed "Index Fragmentation Analysis" to "Index Health Analysis" subsection;
-					Added storage analysis for In-Memory OLTP Engine in Database Information subsection;
-					Fixed sp_server_diagnostics showing up as blocked session with long blocking time;
-					Extended AO cluster information;
-					Database filter now always includes sys DBs.
-v2.0.1 - 23-04-2015	Fixed issue with SQL 2012 in Index Health analysis.
-v2.0.2 - 14-05-2015 Added Default data collections (check for default trace, blackbox trace, SystemHealth xEvent session, sp_server_diagnostics xEvent session);
-					Extended Objects naming conventions checks to functions;
-					Added info on Inefficient Plans by CPU and Read I/O;
-					Improved search for hypothetical objects;
-					Added script generation to fix issues from Declarative Referential Integrity - Untrusted Constraints checks.
-v2.0.2.1 - 18-05-2015 Fixed Declarative Referential Integrity script generation.
-v2.0.3 - 10-09-2015 Added information about current PMO to Global Trace Flags check when 8048 may be missing.
-v2.0.3.1 - 11-09-2015 Fixed PMO check up to 2008R2.
+						Added XTP Index Health Analysis;
+						Added CCI Index Health Analysis: pseudo-fragmentation for CCI is the ratio of deleted_rows to total_rows;
+						Renamed "Index Fragmentation Analysis" to "Index Health Analysis" subsection;
+						Added storage analysis for In-Memory OLTP Engine in Database Information subsection;
+						Fixed sp_server_diagnostics showing up as blocked session with long blocking time;
+						Extended AO cluster information;
+						Database filter now always includes sys DBs.
+v2.0.1 - 23-04-2015	- Fixed issue with SQL 2012 in Index Health analysis.
+v2.0.2 - 14-05-2015 - Added Default data collections (check for default trace, blackbox trace, SystemHealth xEvent session, sp_server_diagnostics xEvent session);
+						Extended Objects naming conventions checks to functions;
+						Added info on Inefficient Plans by CPU and Read I/O;
+						Improved search for hypothetical objects;
+						Added script generation to fix issues from Declarative Referential Integrity - Untrusted Constraints checks.
+v2.0.2.1 - 18-05-2015 - Fixed Declarative Referential Integrity script generation.
+v2.0.3 - 10-09-2015 - Added information about current PMO to Global Trace Flags check when 8048 may be missing.
+v2.0.3.1 - 11-09-2015 - Fixed PMO check up to 2008R2.
 v2.1 - 9/30/2016 - Fixed issue with LPIM check in SQL Server 2005;
 					Tuned Memory Allocations from In-Memory OLTP Engine checks;
 					Tuned I/O stall checks to separate overall stall time from avg latency tests;
@@ -373,9 +373,10 @@ v2.1 - 9/30/2016 - Fixed issue with LPIM check in SQL Server 2005;
 					Added plans with Inefficient Memory Use to Performance checks.
 v2.1.1 - 10/01/2016 - Fixed issues with Database Information subsection in SQL 2005 to 2008R2.
 v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options check;
-			Added W10 Aniversary Edition to OS versions;
-			Fixed Indexing per Table subsection accounting for hypotheical indexes.
-v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks.
+						Added W10 Aniversary Edition to OS versions;
+						Fixed Indexing per Table subsection accounting for hypotheical indexes.
+v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
+						Fixed negative CPU usage in avg cpu usage last 2h check.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -2028,61 +2029,61 @@ BEGIN
 				AND record LIKE '%<SystemHealth>%') AS x
 		)
 	INSERT INTO @tblAggCPU
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 10 
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 10 
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -10, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 20
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 20
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -10, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -20, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 30
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 30
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -20, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -30, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 40
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 40
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -30, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -40, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 50
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 50
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -40, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -50, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 60
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 60
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -50, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -60, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 70
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 70
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -60, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -70, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 80
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 80
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -70, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -80, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 90
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 90
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -80, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -90, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 100
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 100
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -90, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -100, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 110
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 110
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -100, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -110, GETDATE())
 	UNION ALL 
-		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization), 120
+		SELECT AVG(SQLProcessUtilization), AVG(SystemIdle), CASE WHEN AVG(SystemIdle) + AVG(SQLProcessUtilization) < 100 THEN 100 - AVG(SystemIdle) - AVG(SQLProcessUtilization) ELSE 0 END, 120
 		FROM cteCPU 
 		WHERE DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) <= DATEADD(mi, -110, GETDATE()) AND 
 			DATEADD(ms, -1 * (@ts_now - [timestamp]), GETDATE()) > DATEADD(mi, -120, GETDATE())
