@@ -1,4 +1,4 @@
-**BPCheck** - Check SQL Best Practices
+**BPCheck** - SQL Best Practices and Performance checks
 
 **Purpose:** Checks SQL Server in scope for some of most common skewed Best Practices and performance issues. Valid from SQL Server 2005 onwards. By default all databases in the SQL Server instance are eligible for the several database specific checks, and you may use the optional parameter to narrow these checks to specific databases.
 
