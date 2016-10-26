@@ -2553,15 +2553,15 @@ BEGIN
 	END;
 END
 
-IF @lpim = 0 AND @winver < 6.0 AND @arch = 64
+IF @lpim = 0 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[WARNING: Locked pages are not in use by SQL Server. In a WS2003 x64 architecture it is recommended to enable LPIM]' AS [Deviation]
 END
-ELSE IF @lpim = 1 AND @winver < 6.0 AND @arch = 64
+ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in a WS2003 x64 architecture]' AS [Deviation]
 END
-ELSE IF @lpim = 1 AND @winver >= 6.0 AND @arch = 64
+ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) >= 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in WS2008 or above only when there are signs of paging]' AS [Deviation]
 END
@@ -2884,7 +2884,7 @@ DECLARE @planguid NVARCHAR(64), @powerkey NVARCHAR(255)
 --SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
 SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
 
-IF @winver >= 6.0
+IF CONVERT(DECIMAL(3,1), @winver) >= 6.0
 BEGIN
 	BEGIN TRY
 		--EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey, 'PreferredPlan', @planguid OUTPUT, NO_OUTPUT
