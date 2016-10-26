@@ -1,8 +1,8 @@
 **BPCheck** - Check SQL Best Practices
 
-Purpose: Checks SQL Server in scope for some of most common skewed Best Practices and performance issues. Valid from SQL Server 2005 onwards. By default all databases in the SQL Server instance are eligible for the several database specific checks, and you may use the optional parameter to narrow these checks to specific databases.
+**Purpose:** Checks SQL Server in scope for some of most common skewed Best Practices and performance issues. Valid from SQL Server 2005 onwards. By default all databases in the SQL Server instance are eligible for the several database specific checks, and you may use the optional parameter to narrow these checks to specific databases.
 
-Check the PARAMETERS.md file for usage parameters
+All checks marked with * can be disabled by @ptocheck parameter. Check the PARAMETERS.md file or script header for all usage parameters.
 
 Contains the following information:
 - Uptime
@@ -108,7 +108,7 @@ And performs the following checks:
   - Errorlog based checks
   - System health checks
 
-IMPORTANT pre-requisites:
+**IMPORTANT pre-requisites:**
 - Only a sysadmin/local host admin will be able to perform all checks.
 - If you want to perform all checks under non-sysadmin credentials, then that login must be:
   - Member of serveradmin server role or have the ALTER SETTINGS server permission; 

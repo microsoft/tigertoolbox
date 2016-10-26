@@ -1,7 +1,7 @@
 **Important options for executing BPCheck**
 
 Set **@duration** to the number of seconds between data collection points regarding perf counters, waits and latches. Duration must be between 10s and 255s (4m 15s), with a default of 90s.
-Set **@ptochecks** to OFF if you want to skip more performance tuning and optimization oriented checks. Uncomment @custompath below and set the custom desired path for .ps1 files. If not, default location for .ps1 files is the Log folder.
+Set **@ptochecks** to OFF if you want to skip more performance tuning and optimization oriented checks. Uncomment **@custompath** below and set the custom desired path for .ps1 files. If not, default location for .ps1 files is the Log folder.
 Set **@allow_xpcmdshell** to OFF if you want to skip checks that are dependant on xp_cmdshell. Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
 Set **@spn_check** to OFF if you want to skip SPN checks.
 Set **@diskfrag** to ON if you want to check for disk physical fragmentation. Can take some time in large disks. Requires elevated privileges.
