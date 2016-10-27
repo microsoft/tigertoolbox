@@ -1,106 +1,106 @@
 v1   	- 08-02-2011 - Initial release
 v1.1 	- 15-02-2011 - Added support for maintaining current index padding options;
-						Added logic for Exception of hypothetical objects;
-						Deal with LOB compaction when reorganizing;
-						Corrected bug with update stats kicking in when not supposed to;
-						Corrected options not compatible with partitioned indexes;
+			Added logic for Exception of hypothetical objects;
+			Deal with LOB compaction when reorganizing;
+			Corrected bug with update stats kicking in when not supposed to;
+			Corrected options not compatible with partitioned indexes;
 v1.2 	- 10-03-2011 - Increased control over new or changed database handling;
 v1.2.1 	- 22-03-2011 - Corrected method of finding available processors;
 v1.3    - 21-06-2011 - Added more options to act upon statistics (IX related or Table-wide);
-						Added finer thresholds for updates on table-wide statistics when reorganizing (when SAMPLED or DETAILED scanMode is selected);
-						Added option for no_recompute on index REBUILD;
-						Added restrictions for spatial and XML indexes;
-						Always rebuild filtered indexes;
-						If found, output list of disabled or hypothetical indexes so that you can act on them;
-						Added range scan count to logging table for comparison;
-						Added update index related stats (with defaults) before rebuild operations. This provides better cardinality estimation, and thus a more time-efficient operation when rebuilding;
-						Bug fix in Reorganize statements.
-						Bug fix in one Rescanning condition.
+			Added finer thresholds for updates on table-wide statistics when reorganizing (when SAMPLED or DETAILED scanMode is selected);
+			Added option for no_recompute on index REBUILD;
+			Added restrictions for spatial and XML indexes;
+			Always rebuild filtered indexes;
+			If found, output list of disabled or hypothetical indexes so that you can act on them;
+			Added range scan count to logging table for comparison;
+			Added update index related stats (with defaults) before rebuild operations. This provides better cardinality estimation, and thus a more time-efficient operation when rebuilding;
+			Bug fix in Reorganize statements.
+			Bug fix in one Rescanning condition.
 v1.3.1  - 28-06-2011 - Corrected issue with commands running on multiple partitions.
-						Changed behaviour of update statistics when tables have multiple partitions.
+			Changed behaviour of update statistics when tables have multiple partitions.
 v1.3.2  - 01-07-2011 - Changed objects named %Exclusions to %Exceptions. When re-deploying, existing %Exclusions table will be renamed and not recreated.
-						Added procedure to check current batch execution progress (usp_CurrentExecStats)
+			Added procedure to check current batch execution progress (usp_CurrentExecStats)
 v1.3.3	- 08-07-2011 - Corrected issue where explicit change in database scope parameter did not trigger rescan under certain conditions.
-						Corrected statistics update thresholds.
+			Corrected statistics update thresholds.
 v1.3.4	- 22-07-2011 - Bug fix in indexes information regarding the sql version.
 v1.3.5  - 15-11-2011 - Bug fix in logging showing as NULL on some issued commands.
-						Optimizations on support SP usp_AdaptiveIndexDefrag_Exceptions.
+			Optimizations on support SP usp_AdaptiveIndexDefrag_Exceptions.
 v1.3.6  - 17-02-2012 - Allow larger object names in tables and indexes.
 v1.3.7	- 27-02-2012 - Enhanced error reporting view to incorporate stats updates;
-						Bug fix when certain index options were chosen together.
+			Bug fix when certain index options were chosen together.
 v1.3.8	- 28-02-2012 - Corrected view that reports last run;
-						Added upgrade mode.
+			Added upgrade mode.
 v1.3.9	- 12-03-2012 - Fixed upgrade mode in case old data cannot be copied back.
 v1.4.0	- 12-04-2012 - Fixed issue with collation sensitive servers.
 v1.4.1  - 17-05-2012 - Fixed issue on support SP usp_AdaptiveIndexDefrag_Exceptions.
 v1.4.2  - 29-05-2012 - Fixed issue on support SP usp_AdaptiveIndexDefrag_CurrentExecStats,
-						Fixed issue with large object IDs.
+			Fixed issue with large object IDs.
 v1.4.3  - 29-08-2012 - Fixed issue with upgrade mode data retention,
-						Fixed issue with format dependent conversions.
+			Fixed issue with format dependent conversions.
 v1.4.4  - 10-09-2012 - Fixed issue where running the procedure to print commands only, previous execution errors would still be reported.
 v1.4.5  - 12-10-2012 - Added support for ignoring errors regarding database objects that were dropped since the defrag cycle began;
-						Added support for disabling indexes before rebuilding (space saving feature) - see notes below on parameter @disableNCIX.
+			Added support for disabling indexes before rebuilding (space saving feature) - see notes below on parameter @disableNCIX.
 v1.4.6  - 23-01-2013 - Added hard limit of 4 for MaxDOP setting;
-						Changed default for statistics update to updates all stats in table, as opposed to just index related stats;
-						Fixed issue on support SP usp_AdaptiveIndexDefrag_CurrentExecStats reporting incorrect number of already defraged indexes;
-						Fixed null elimination message with vw_LastRun_Log;
-						Incremented debug mode output;
-						Redesigned table wide statistics update (updateStatsWhere parameter);
-						Fixed issue with upgrade mode leaving old tables behind.
+			Changed default for statistics update to updates all stats in table, as opposed to just index related stats;
+			Fixed issue on support SP usp_AdaptiveIndexDefrag_CurrentExecStats reporting incorrect number of already defraged indexes;
+			Fixed null elimination message with vw_LastRun_Log;
+			Incremented debug mode output;
+			Redesigned table wide statistics update (updateStatsWhere parameter);
+			Fixed issue with upgrade mode leaving old tables behind.
 v1.4.7  - 28-01-2013 - Fixed issue with exceptions not working with on some days i.e, on a day that should not be doing anything, it did;
-						Tuned online rebuild options;
-						Redesigned support SP usp_AdaptiveIndexDefrag_Exceptions.
+			Tuned online rebuild options;
+			Redesigned support SP usp_AdaptiveIndexDefrag_Exceptions.
 v1.4.9  - 11-04-2013 - Added support for Enterprise Core Edition;
-						Added support for Always On secondary replicas;
-						Changed maxdop hard limit to 8;
-						Added support for sys.dm_db_stats_properties in statistics update, if on SQL 2008R2 SP2 or SQL 2012 SP1 or higher.
+			Added support for Always On secondary replicas;
+			Changed maxdop hard limit to 8;
+			Added support for sys.dm_db_stats_properties in statistics update, if on SQL 2008R2 SP2 or SQL 2012 SP1 or higher.
 v1.5.0  - 25-04-2013 - Fixed issue with online rebuilds;
-						Fixed issue with commands not being printed when choosing @ExecPrint = 0.
+			Fixed issue with commands not being printed when choosing @ExecPrint = 0.
 v1.5.1	- 01-05-2013 - Fixed issue with page locking off and trying index reorganize - should always rebuild;
-						Fixed issue with specific db scope and Always On replica checking;
-						Enhanced stats lookup for specific table scope;
-						Fixed issue where disable index would also do extra update on previous index related statistic;
-						Added support for online rebuild with LOBs in SQL Server 2012.
+			Fixed issue with specific db scope and Always On replica checking;
+			Enhanced stats lookup for specific table scope;
+			Fixed issue where disable index would also do extra update on previous index related statistic;
+			Added support for online rebuild with LOBs in SQL Server 2012.
 v1.5.1.1- 02-05-2013 - Fixed MaxDOP issue introduced in v1.4.9;
-						Fixed issue with DETAILED scan mode;
-						Fixed issue with extended indexes not being picked up.
+			Fixed issue with DETAILED scan mode;
+			Fixed issue with extended indexes not being picked up.
 v1.5.1.2- 05-05-2013 - Fixed issue with print command while executing introduced in v1.5.1;
-						Fixed issue where a statistics update error would show in the log associated with an XML or Spatial index.
+			Fixed issue where a statistics update error would show in the log associated with an XML or Spatial index.
 v1.5.1.4- 10-05-2013 - Fixed issue with statistics update when there is no work to be done, introduced in v1.5.1.
 v1.5.2	- 17-06-2013 - Added option for lock timeout;
-						Set deadlock priority to lowest possible;
-						Simulate TF 2371 behavior on update statistics threshold;
-						Fixed issue with @updateStatsWhere = 1 where not all non-index related statistics were updated.
+			Set deadlock priority to lowest possible;
+			Simulate TF 2371 behavior on update statistics threshold;
+			Fixed issue with @updateStatsWhere = 1 where not all non-index related statistics were updated.
 v1.5.3  - 02-07-2013  - Fixed issue with updating statistics and XML indexes;
-						Fixed issue with log data being partially overwritten;
-						Fixed issue where using @fillfactor to reset fill factor to default would not actually reset.
+			Fixed issue with log data being partially overwritten;
+			Fixed issue where using @fillfactor to reset fill factor to default would not actually reset.
 v1.5.3.1- 08-07-2013 - Fixed issue where using @fillfactor to reset fill factor to default would output command error.
 v1.5.4  - 12-09-2013 - Changed system database exclusion choices;
-						Fixed fill factor information not getting logged (thanks go to Chuck Lathrope);
-						All statistics update now included in exception days rule.
-						Changed partition handling to avoid unwarranted scanning and speed up process on tables with many partitions.
+			Fixed fill factor information not getting logged (thanks go to Chuck Lathrope);
+			All statistics update now included in exception days rule.
+			Changed partition handling to avoid unwarranted scanning and speed up process on tables with many partitions.
 v1.5.5  - 24-10-2013 - Added more verbose to debug mode;
-						Fixed issue with error while keeping original fill factor when it was already set to 0 on the index;
-						Fixed issue with error 35337 or 2706 on update statistics.
+			Fixed issue with error while keeping original fill factor when it was already set to 0 on the index;
+			Fixed issue with error 35337 or 2706 on update statistics.
 v1.5.6 - 27-11-2013 - Added SQL 2014 support for online partition rebuild;
-						Tuned LOB support with online operations;
-						Improved detection of scope changes - saves unneeded database scans;
-						Optimized defrag cycle pre-work with partially excluded DBs;
-						Fixed issue with skipping partially excluded databases;
-						Added resilience for CS collations.
+			Tuned LOB support with online operations;
+			Improved detection of scope changes - saves unneeded database scans;
+			Optimized defrag cycle pre-work with partially excluded DBs;
+			Fixed issue with skipping partially excluded databases;
+			Added resilience for CS collations.
 v1.5.7 - 14-01-2014 - Fixed issue on support SP usp_AdaptiveIndexDefrag_Exceptions with SQL Server 2005;
-						Fixed issue with support SP usp_AdaptiveIndexDefrag_CurrentExecStats.
+			Fixed issue with support SP usp_AdaptiveIndexDefrag_CurrentExecStats.
 v1.5.8 - 10-05-2014	- Added SQL 2014 support for Online Lock Priority;
-						Fixed issue introduced in previous version where an Online rebuild operation could not be executed in SQL 2012.
+			Fixed issue introduced in previous version where an Online rebuild operation could not be executed in SQL 2012.
 v1.5.9 - 17-11-2014 - Fixed issue on support SP usp_AdaptiveIndexDefrag_PurgeLogs.
 v1.6 - 18-11-2014 - Added resilience when objects are dropped while being scanned, avoiding error 2573.
 v1.6.1 - 04-02-2015 - Removed dependency of @scan_mode to use TF 2371 behavior for statistics update;
-						Improved support for Columnstore indexes on SQL 2014, with specific rebuild threshold and reorg option.
+			Improved support for Columnstore indexes on SQL 2014, with specific rebuild threshold and reorg option.
 v1.6.2 - 10/3/2016 - Added option to determine whether to exclude blobs from fragmentation scan;
-						Added support for incremental statistics;
-						Fixed PK issue with columnstore fragmentation discovery.
-						Fixed issue where auto created statistics would not be picked up for update.
+			Added support for incremental statistics;
+			Fixed PK issue with columnstore fragmentation discovery.
+			Fixed issue where auto created statistics would not be picked up for update.
 v1.6.3 - 10/14/2016 - Fixed issue with statistics collection in SQL Server 2012 and below;
-						Fixed issue where indexes on views generated error 1934.
+			Fixed issue where indexes on views generated error 1934.
 v1.6.3.1 - 10/26/2016 - Fixed failed migration from v1.6.2 with NULL insert error;
-						Fixed issue when running in debug mode.
+			Fixed issue when running in debug mode.
