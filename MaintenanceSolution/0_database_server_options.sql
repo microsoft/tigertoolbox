@@ -85,6 +85,7 @@ BEGIN
 			WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
 		END);
 	EXECUTE sp_executesql @sqlcmd;
+END
 ELSE IF (@maxservermem = 2147483647 OR @maxservermem > @systemmem) AND @numa_affined_config = 1
 BEGIN
 	SELECT @sqlcmd = 'sp_configure ''max server memory (MB)'', '+ CONVERT(NVARCHAR(20), 
