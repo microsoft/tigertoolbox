@@ -1,4 +1,4 @@
--- If you are using AdaptiveIndexDefrag together with the maintenance plans in https://aka.ms/maintenanceplans
+-- If you are using AdaptiveIndexDefrag together with the maintenance plans in http://blogs.msdn.com/b/blogdoezequiel/archive/2012/09/18/about-maintenance-plans-grooming-sql-server.aspx
 -- please note that the job that runs AdaptiveIndexDefrag is expecting msdb. As such, change the database context accordingly.
 
 USE msdb
@@ -292,7 +292,7 @@ FROM tbl_AdaptiveIndexDefrag_Stats_Working_old;')
 			ELSE
 			BEGIN
 				EXEC ('INSERT INTO tbl_AdaptiveIndexDefrag_Stats_Working ([dbID],[objectID],[statsID],[dbName],[schemaName],[objectName],[statsName],[partitionNumber],[no_recompute],[is_incremental],[scanDate],[updateDate],[printStatus])
-SELECT [dbID],[objectID],[statsID],[dbName],[schemaName],[objectName],[statsName],1,[no_recompute],0,[scanDate],[updateDate],[printStatus]
+SELECT [dbID],[objectID],[statsID],[dbName],[schemaName],[objectName],[statsName],NULL,[no_recompute],0,[scanDate],[updateDate],[printStatus]
 FROM tbl_AdaptiveIndexDefrag_Stats_Working_old;')
 			END
 		END
@@ -574,8 +574,6 @@ v1.6.2 - 10/3/2016 - Added option to determine whether to exclude blobs from fra
 						Fixed issue where auto created statistics would not be picked up for update.
 v1.6.3 - 10/14/2016 - Fixed issue with statistics collection in SQL Server 2012 and below;
 						Fixed issue where indexes on views generated error 1934.
-v1.6.3.1 - 10/26/2016 - Fixed failed migration from v1.6.2 with NULL insert error;
-						Fixed issue when running in debug mode.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1086,7 +1084,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @ColumnStoreGetIXSQL_Param NVARCHAR(1000)
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.3.1';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.3';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))

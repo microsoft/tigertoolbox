@@ -1143,7 +1143,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 		/* Output the parameters to work with */	
 		IF @debugMode = 1	
 		BEGIN	
-			SELECT @debugMessage = CHAR(10) + 'Executing AdaptiveIndexDefrag v' + @ver + ' on ' + @@VERSION '.
+			SELECT @debugMessage = CHAR(10) + 'Executing AdaptiveIndexDefrag v' + @ver + ' on ' + @@VERSION + '.
 The selected parameters are:
 Defragment indexes with fragmentation greater or equal to ' + CAST(@minFragmentation AS NVARCHAR(10)) + ';
 Rebuild indexes with fragmentation greater than ' + CAST(@rebuildThreshold AS NVARCHAR(10)) + ';
