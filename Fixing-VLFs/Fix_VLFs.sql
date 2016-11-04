@@ -1,9 +1,7 @@
 -- 2011-05-24 Pedro Lopes (Microsoft) pedro.lopes@microsoft.com (http://aka.ms/sqlinsights)
 --
 -- 2012-03-25 Added SQL 2012 support
---
 -- 2012-09-19 Simplified logic
---
 -- 2012-09-20 Changed grow settings if not SQL Server 2012
 --
 -- Generates the sql statements to preemtively fix VLF issues in all DBs within the server, based on the transaction log current size.

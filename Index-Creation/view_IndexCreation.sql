@@ -2,8 +2,7 @@
 -- 2007-10-11 Pedro Lopes (Microsoft) pedro.lopes@microsoft.com (http://aka.ms/sqlinsights/)
 --
 -- 2008-01-17 Check for possibly redundant indexes in the output.
--- 2009-05-21 Changed index scoring method;
---		Disregards indexes with [Score] < 100000 and [User_Hits_on_Missing_Index] < 99;
+-- 2009-05-21 Changed index scoring method; Disregards indexes with [Score] < 100000 and [User_Hits_on_Missing_Index] < 99;
 -- 2013-03-21 Changed database loop method;
 -- 2013-11-10 Added search for redundant indexes in missing indexes;
 
