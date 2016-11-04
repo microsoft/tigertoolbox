@@ -574,8 +574,8 @@ v1.6.2 - 10/3/2016 - Added option to determine whether to exclude blobs from fra
 						Fixed issue where auto created statistics would not be picked up for update.
 v1.6.3 - 10/14/2016 - Fixed issue with statistics collection in SQL Server 2012 and below;
 						Fixed issue where indexes on views generated error 1934.
-v1.6.3.1 - 10/14/2016 - Fixed syntax error; 
-						Fixed migration issue from v1.6.2.
+v1.6.3.1 - 10/26/2016 - Fixed failed migration from v1.6.2 with NULL insert error;
+						Fixed issue when running in debug mode.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
