@@ -578,7 +578,8 @@ v1.6.3.1 - 10/26/2016 - Fixed failed migration from v1.6.2 with NULL insert erro
 						Fixed issue when running in debug mode.
 v1.6.3.2 - 11/4/2016 - Fixed DISABLE index aplying to NCCI.
 						Fixed statistics not being updated before index rebuild - introduced in v1.6.2;
-						Fixed misplaced index disable statement if @Exec_Print = 0.
+						Fixed misplaced index disable statement if @Exec_Print = 0;
+						Fixed issue with statistics collection in SQL Server 2012 and below.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1533,7 +1534,7 @@ INNER JOIN sys.objects so ON ss.[object_id] = so.[object_id]
 INNER JOIN sys.schemas s ON so.[schema_id] = s.[schema_id]
 LEFT JOIN sys.indexes si ON ss.[object_id] = si.[object_id] and ss.name = si.name
 ' + CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver > 12) THEN 'CROSS APPLY sys.dm_db_stats_properties_internal(ss.[object_id], ss.stats_id) sp' ELSE '' END + '
-WHERE is_ms_shipped = 0 ' + CASE WHEN @sqlmajorver >= 12 THEN 'AND ss.is_temporary = 0' END + '
+WHERE is_ms_shipped = 0 ' + CASE WHEN @sqlmajorver >= 12 THEN 'AND ss.is_temporary = 0' ELSE '' END + '
 	AND so.[object_id] NOT IN (SELECT sit.[object_id] FROM sys.internal_tables AS sit)
 	AND so.[type] IN (''U'',''V'')
 	AND (si.[type] IS NULL OR si.[type] NOT IN (5,6,7))' -- Avoid error 35337
@@ -1550,7 +1551,7 @@ INNER JOIN sys.objects so ON ss.[object_id] = so.[object_id]
 INNER JOIN sys.schemas s ON so.[schema_id] = s.[schema_id]
 LEFT JOIN sys.indexes si ON ss.[object_id] = si.[object_id] and ss.name = si.name
 ' + CASE WHEN @sqlmajorver >= 12 THEN 'CROSS APPLY sys.dm_db_stats_properties_internal(ss.[object_id], ss.stats_id) sp' ELSE '' END + '
-WHERE is_ms_shipped = 0 ' + CASE WHEN @sqlmajorver >= 12 THEN 'AND ss.is_temporary = 0' END + '
+WHERE is_ms_shipped = 0 ' + CASE WHEN @sqlmajorver >= 12 THEN 'AND ss.is_temporary = 0' ELSE '' END + '
 	AND so.[object_id] NOT IN (SELECT sit.[object_id] FROM sys.internal_tables AS sit)
 	AND s.name = ''' + @schemaNameOnly + '''
 	AND so.name = ''' + @tblNameOnly + '''
