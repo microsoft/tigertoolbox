@@ -104,7 +104,8 @@ v1.6.3 - 10/14/2016 - Fixed issue with statistics collection in SQL Server 2012 
 			Fixed issue where indexes on views generated error 1934.
 v1.6.3.1 - 10/26/2016 - Fixed failed migration from v1.6.2 with NULL insert error;
 			Fixed issue when running in debug mode.
-v1.6.3.2 - 11/4/2016 - Fixed DISABLE index aplying to NCCI.
+v1.6.3.2 - 11/4/2016 - Fixed DISABLE index applying to NCCI.
 			Fixed statistics not being updated before index rebuild - introduced in v1.6.2;
 			Fixed misplaced index disable statement if @Exec_Print = 0;
-			Fixed issue with statistics collection in SQL Server 2012 and below.
+			Fixed issue with statistics collection in SQL Server 2012 and below;
+			Added statistic related info to log table (rows, mod counter, rows sampled).

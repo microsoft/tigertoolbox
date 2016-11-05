@@ -206,6 +206,9 @@ CREATE TABLE dbo.tbl_AdaptiveIndexDefrag_Stats_log
 	, statsID int NOT NULL
 	, statsName NVARCHAR(256) NULL
 	, partitionNumber smallint
+	, [rows] bigint
+	, rows_sampled bigint
+	, modification_counter bigint
 	, [no_recompute] bit
 	, dateTimeStart DATETIME NOT NULL
 	, dateTimeEnd DATETIME NULL
@@ -247,16 +250,22 @@ BEGIN
 		
 		IF EXISTS(SELECT [object_id] FROM sys.tables WHERE [name] = 'tbl_AdaptiveIndexDefrag_Stats_log') AND EXISTS(SELECT [object_id] FROM sys.tables WHERE [name] = 'tbl_AdaptiveIndexDefrag_Stats_log_old')
 		BEGIN
-			IF EXISTS (SELECT sc.column_id FROM sys.tables st INNER JOIN sys.columns sc ON st.[object_id] = sc.[object_id] WHERE sc.[name] = 'partitionNumber' AND st.[name] = 'tbl_AdaptiveIndexDefrag_Stats_log_old')
+			IF EXISTS (SELECT sc.column_id FROM sys.tables st INNER JOIN sys.columns sc ON st.[object_id] = sc.[object_id] WHERE sc.[name] = 'partitionNumber' AND sc.[name] = 'rows' AND sc.[name] = 'rows_sampled' AND sc.[name] = 'modification_counter' AND st.[name] = 'tbl_AdaptiveIndexDefrag_Stats_log_old')
 			BEGIN
-				EXEC ('INSERT INTO tbl_AdaptiveIndexDefrag_Stats_log ([dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage])
-SELECT [dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage]
+				EXEC ('INSERT INTO tbl_AdaptiveIndexDefrag_Stats_log ([dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],[rows],rows_sampled,modification_counter,[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage])
+SELECT [dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],[rows],rows_sampled,modification_counter,[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage]
 FROM tbl_AdaptiveIndexDefrag_Stats_log_old;')
 			END
-			ELSE
+			ELSE IF EXISTS (SELECT sc.column_id FROM sys.tables st INNER JOIN sys.columns sc ON st.[object_id] = sc.[object_id] WHERE sc.[name] = 'partitionNumber' AND st.[name] = 'tbl_AdaptiveIndexDefrag_Stats_log_old')
 			BEGIN
-				EXEC ('INSERT INTO tbl_AdaptiveIndexDefrag_Stats_log ([dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage])
-SELECT [dbID],[dbName],[objectID],[objectName],[statsID],[statsName],NULL,[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage]
+				EXEC ('INSERT INTO tbl_AdaptiveIndexDefrag_Stats_log ([dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],[rows],rows_sampled,modification_counter,[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage])
+SELECT [dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],-1,-1,-1,[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage]
+FROM tbl_AdaptiveIndexDefrag_Stats_log_old;')
+			END
+			ELSE 
+			BEGIN
+				EXEC ('INSERT INTO tbl_AdaptiveIndexDefrag_Stats_log ([dbID],[dbName],[objectID],[objectName],[statsID],[statsName],[partitionNumber],[rows],rows_sampled,modification_counter,[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage])
+SELECT [dbID],[dbName],[objectID],[objectName],[statsID],[statsName],1,-1,-1,-1,[no_recompute],[dateTimeStart],[dateTimeEnd],[durationSeconds],[sqlStatement],[errorMessage]
 FROM tbl_AdaptiveIndexDefrag_Stats_log_old;')
 			END
 		END
@@ -576,10 +585,11 @@ v1.6.3 - 10/14/2016 - Fixed issue with statistics collection in SQL Server 2012 
 						Fixed issue where indexes on views generated error 1934.
 v1.6.3.1 - 10/26/2016 - Fixed failed migration from v1.6.2 with NULL insert error;
 						Fixed issue when running in debug mode.
-v1.6.3.2 - 11/4/2016 - Fixed DISABLE index aplying to NCCI.
+v1.6.3.2 - 11/4/2016 - Fixed DISABLE index applying to NCCI.
 						Fixed statistics not being updated before index rebuild - introduced in v1.6.2;
 						Fixed misplaced index disable statement if @Exec_Print = 0;
-						Fixed issue with statistics collection in SQL Server 2012 and below.
+						Fixed issue with statistics collection in SQL Server 2012 and below;
+						Added statistic related info to log table (rows, mod counter, rows sampled).
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1058,7 +1068,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @partitionSQL_Param NVARCHAR(1000)
 				, @rowmodctrSQL NVARCHAR(4000)
 				, @rowmodctrSQL_Param NVARCHAR(1000)
-				, @rowmodctr int
+				, @rowmodctr bigint
 				, @record_count bigint
 				, @range_scan_count bigint
 				, @getStatSQL NVARCHAR(4000)
@@ -1088,6 +1098,8 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @ixCntsqlcmdParams NVARCHAR(100)
 				, @ColumnStoreGetIXSQL NVARCHAR(2000)
 				, @ColumnStoreGetIXSQL_Param NVARCHAR(1000)
+				, @rows bigint
+				, @rows_sampled bigint
 
 		/* Initialize variables */	
 		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.3.2';
@@ -1977,8 +1989,8 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 						/* If rebuilding, update statistics log with completion time */
 						IF @partitionCount > 1 AND @dealMaxPartition IS NOT NULL AND @editionCheck = 1
 						BEGIN
-							INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
-							SELECT @dbID, @dbName, @objectID, @objectName, statsID, statsName, @partitionNumber, [no_recompute], @dateTimeStart, @dateTimeEnd, DATEDIFF(second, @dateTimeStart, @dateTimeEnd), @sqlcommand
+							INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], [rows_sampled], [modification_counter], [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
+							SELECT @dbID, @dbName, @objectID, @objectName, statsID, statsName, @partitionNumber, -1, -1, -1, [no_recompute], @dateTimeStart, @dateTimeEnd, DATEDIFF(second, @dateTimeStart, @dateTimeEnd), @sqlcommand
 							FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working
 							WHERE objectID = @objectID AND dbID = @dbID
 								AND statsName = @indexName
@@ -1986,8 +1998,8 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 						END
 						ELSE
 						BEGIN
-							INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
-							SELECT @dbID, @dbName, @objectID, @objectName, statsID, statsName, 1, [no_recompute], @dateTimeStart, @dateTimeEnd, DATEDIFF(second, @dateTimeStart, @dateTimeEnd), @sqlcommand
+							INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], [rows_sampled], [modification_counter],[no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
+							SELECT @dbID, @dbName, @objectID, @objectName, statsID, statsName, 1, -1, -1, -1, [no_recompute], @dateTimeStart, @dateTimeEnd, DATEDIFF(second, @dateTimeStart, @dateTimeEnd), @sqlcommand
 							FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working
 							WHERE objectID = @objectID AND dbID = @dbID
 								AND statsName = @indexName
@@ -2163,10 +2175,12 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				
 				IF @debugMode = 1
 				RAISERROR('   Getting information on selected statistic...', 0, 42) WITH NOWAIT;
+
 				/* Get object name and auto update setting */
 				SELECT TOP 1 @statsName = statsName, @partitionNumber = partitionNumber, @stats_norecompute = [no_recompute], @stats_isincremental = [is_incremental]
 				FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working
 				WHERE objectID = @objectID AND statsID = @statsID AND [dbID] = @dbID;
+
 				IF @debugMode = 1
 				BEGIN
 					SET @debugMessage = '   Determining modification row counter for statistic ' + @statsName + ' on table or view ' + @objectName + ' of DB ' + @dbName + '...';
@@ -2178,29 +2192,30 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_incremental_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0) FROM sys.dm_db_incremental_stats_properties(' + CAST(@objectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
 				ELSE IF (@sqlmajorver = 12 AND @sqlbuild < 5000) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0) FROM sys.dm_db_stats_properties_internal(' + CAST(@objectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
-				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND @stats_isincremental = 0
+				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (@stats_isincremental = 0 OR UPPER(@statsSample) = 'FULLSCAN')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0) FROM sys.dm_db_stats_properties(' + CAST(@objectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ');'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ');'
 				END
 				ELSE
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.sysindexes...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)) FROM sys.sysindexes WHERE id = ' + CAST(@objectID AS NVARCHAR(10)) + ' AND indid = ' + CAST(@statsID AS NVARCHAR(10)) + ' AND rowmodctr > 0;'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)), @rows_Out = ISNULL(rowcnt,0), @rows_sampled_Out = -1 FROM sys.sysindexes WHERE id = ' + CAST(@statsObjectID AS NVARCHAR(10)) + ' AND indid = ' + CAST(@statsID AS NVARCHAR(10)) + ' AND rowmodctr > 0;'
 				END
-				SET @rowmodctrSQL_Param = N'@partitionNumber_In smallint, @rowmodctr_Out int OUTPUT'
+				SET @rowmodctrSQL_Param = N'@partitionNumber_In smallint, @rowmodctr_Out bigint OUTPUT, @rows_Out bigint OUTPUT, @rows_sampled_Out bigint OUTPUT'
+
 				BEGIN TRY
-					EXECUTE sp_executesql @rowmodctrSQL, @rowmodctrSQL_Param, @partitionNumber_In = @partitionNumber, @rowmodctr_Out = @rowmodctr OUTPUT;
+					EXECUTE sp_executesql @rowmodctrSQL, @rowmodctrSQL_Param, @partitionNumber_In = @partitionNumber, @rowmodctr_Out = @rowmodctr OUTPUT, @rows_Out = @rows OUTPUT, @rows_sampled_Out = @rows_sampled OUTPUT;
 					SET @rowmodctr = (SELECT ISNULL(@rowmodctr, 0));
 				END TRY
 				BEGIN CATCH						
@@ -2210,6 +2225,9 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 						RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 					END
 				END CATCH
+				
+				IF @rows IS NOT NULL AND @rows > 0 
+				SET @record_count = @rows
 
 				IF @debugMode = 1
 				BEGIN
@@ -2283,8 +2301,8 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					SET @dateTimeStart = GETDATE();
 
 					/* Log actions */		
-					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [no_recompute], dateTimeStart, sqlStatement)		
-					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @stats_norecompute, @dateTimeStart, @sqlcommand2;
+					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, sqlStatement)		
+					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @rows, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
 
 					SET @statsUpdate_id = SCOPE_IDENTITY();
 
@@ -2439,29 +2457,30 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_incremental_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0) FROM sys.dm_db_incremental_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
 				ELSE IF (@sqlmajorver = 12 AND @sqlbuild < 5000) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0) FROM sys.dm_db_stats_properties_internal(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
 				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (@stats_isincremental = 0 OR UPPER(@statsSample) = 'FULLSCAN')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0) FROM sys.dm_db_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ');'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ');'
 				END
 				ELSE
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.sysindexes...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)) FROM sys.sysindexes WHERE id = ' + CAST(@statsObjectID AS NVARCHAR(10)) + ' AND indid = ' + CAST(@statsID AS NVARCHAR(10)) + ' AND rowmodctr > 0;'
+					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)), @rows_Out = ISNULL(rowcnt,0), @rows_sampled_Out = -1 FROM sys.sysindexes WHERE id = ' + CAST(@statsObjectID AS NVARCHAR(10)) + ' AND indid = ' + CAST(@statsID AS NVARCHAR(10)) + ' AND rowmodctr > 0;'
 				END
-				SET @rowmodctrSQL_Param = N'@partitionNumber_In smallint, @rowmodctr_Out int OUTPUT'
+				SET @rowmodctrSQL_Param = N'@partitionNumber_In smallint, @rowmodctr_Out bigint OUTPUT, @rows_Out bigint OUTPUT, @rows_sampled_Out bigint OUTPUT'
+
 				BEGIN TRY
-					EXECUTE sp_executesql @rowmodctrSQL, @rowmodctrSQL_Param, @partitionNumber_In = @partitionNumber, @rowmodctr_Out = @rowmodctr OUTPUT;
+					EXECUTE sp_executesql @rowmodctrSQL, @rowmodctrSQL_Param, @partitionNumber_In = @partitionNumber, @rowmodctr_Out = @rowmodctr OUTPUT, @rows_Out = @rows OUTPUT, @rows_sampled_Out = @rows_sampled OUTPUT;
 					SET @rowmodctr = (SELECT ISNULL(@rowmodctr, 0));
 				END TRY
 				BEGIN CATCH						
@@ -2471,10 +2490,13 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 						RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 					END
 				END CATCH
+				
+				IF @rows IS NOT NULL AND @rows > 0 
+				SET @record_count = @rows
 
 				IF @debugMode = 1
 				BEGIN
-					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(10), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(10), @record_count) + ' rows' + CASE WHEN @stats_isincremental = 1 THEN ' on partition ' + CONVERT(NVARCHAR(10), @partitionNumber) ELSE '' END + '...';
+					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(10), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(10), CASE WHEN @rows IS NOT NULL AND @rows < @record_count THEN @rows ELSE @record_count END) + ' rows' + CASE WHEN @stats_isincremental = 1 THEN ' on partition ' + CONVERT(NVARCHAR(10), @partitionNumber) ELSE '' END + '...';
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 					--select @debugMessage
 				END
@@ -2544,9 +2566,8 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					SET @dateTimeStart = GETDATE();
 
 					/* Log actions */
-					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [no_recompute], dateTimeStart, sqlStatement)		
-					SELECT @dbID, @dbName, @statsObjectID, @statsobjectName, @statsID, @statsName, @partitionNumber, @stats_norecompute, @dateTimeStart, @sqlcommand2;
-
+					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, sqlStatement)		
+					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @rows, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
 					SET @statsUpdate_id = SCOPE_IDENTITY();
 
 					/* Wrap execution attempt in a TRY/CATCH and log any errors that occur */
