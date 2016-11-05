@@ -576,6 +576,9 @@ v1.6.3 - 10/14/2016 - Fixed issue with statistics collection in SQL Server 2012 
 						Fixed issue where indexes on views generated error 1934.
 v1.6.3.1 - 10/26/2016 - Fixed failed migration from v1.6.2 with NULL insert error;
 						Fixed issue when running in debug mode.
+v1.6.3.2 - 11/4/2016 - Fixed DISABLE index aplying to NCCI.
+						Fixed statistics not being updated before index rebuild - introduced in v1.6.2;
+						Fixed misplaced index disable statement if @Exec_Print = 0.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1775,7 +1778,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				SET @operationFlag = 0	
 
 				/* Set Reorg command */
-				SET @sqlcommand = N'ALTER INDEX ' + @indexName + N' ON ' + @dbName + N'.' + @schemaName + N'.' + @objectName + N' REORGANIZE';
+				SET @sqlcommand = N'ALTER INDEX ' + @indexName + N' ON [' + @dbName + N'].' + @schemaName + N'.' + @objectName + N' REORGANIZE';
 
 				/* Set partition reorg options; requires Enterprise Edition; valid only if more than one partition exists */		
 				IF @partitionCount > 1 AND @dealMaxPartition IS NOT NULL AND @editionCheck = 1	
@@ -1865,7 +1868,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 				/* Set NCIX disable command, except for clustered index*/
 				SET @sqldisablecommand = NULL
-				IF @disableNCIX = 1 AND @indexID > 1 AND @is_primary_key = 0
+				IF @disableNCIX = 1 AND @ixtype = 2 AND @is_primary_key = 0
 				BEGIN
 					SET @sqldisablecommand = N'ALTER INDEX ' + @indexName + N' ON ' + @dbName + N'.' + @schemaName + N'.' + @objectName + ' DISABLE;';
 				END
@@ -1878,7 +1881,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				SELECT TOP 1 @stats_isincremental = [is_incremental] FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working 
 				WHERE dbName = @dbName AND schemaName = @schemaName AND objectName = @objectName AND statsName = @indexName;
 				
-				IF (@sqlmajorver < 13 OR @partitionCount = 1) AND @stats_isincremental = 1 AND @sqldisablecommand IS NULL AND @ixtype IN (1,2)
+				IF (@sqlmajorver < 13 OR @partitionCount = 1) AND @sqldisablecommand IS NULL AND @ixtype IN (1,2)
 				BEGIN
 					SET @sqlprecommand = N'UPDATE STATISTICS ' + @dbName + N'.' + @schemaName + N'.' + @objectName + N' ' + @indexName
 					SET @sqlprecommand = @sqlprecommand + N'; '
@@ -1904,14 +1907,17 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					SET @debugMessage = 'We are unable to defrag index ' + @indexName + N' on table ' + @dbName + N'.' + @schemaName + N'.' + @objectName
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 				END
-			END
-	
+			END;
+
+			IF @operationFlag = 0 AND @sqlprecommand IS NOT NULL
+			SET @sqlprecommand = NULL
+
+			IF @operationFlag = 0 AND @sqldisablecommand IS NOT NULL
+			SET @sqldisablecommand = NULL
+					
 			/* Are we executing the SQL? If so, do it */
 			IF @Exec_Print = 1
 			BEGIN
-				IF @operationFlag = 0 AND @sqlprecommand IS NOT NULL
-				SET @sqlprecommand = NULL
-
 				/* Get the time for logging purposes */		
 				SET @dateTimeStart = GETDATE();
 
@@ -2003,7 +2009,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				END;
 
 				/* Execute NCIX disable command */
-				IF @operationFlag = 1 AND @disableNCIX = 1 AND @indexID > 1
+				IF @operationFlag = 1 AND @disableNCIX = 1 AND @indexID > 1 AND (@sqldisablecommand IS NOT NULL OR LEN(@sqldisablecommand) > 0)
 				BEGIN
 					BEGIN TRY
 						EXECUTE sp_executesql @sqldisablecommand;
@@ -2085,19 +2091,19 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				IF @operationFlag = 0 AND @sqlprecommand IS NOT NULL
 				SET @sqlprecommand = NULL
 				
-				IF @sqlprecommand IS NULL AND @sqldisablecommand IS NULL
+				IF @sqlprecommand IS NULL AND (@sqldisablecommand IS NULL OR @sqldisablecommand = '')
 				BEGIN
 					SET @debugMessage = '     ' + @sqlcommand;
 				END
-				ELSE IF @sqlprecommand IS NOT NULL AND @sqldisablecommand IS NULL
+				ELSE IF @sqlprecommand IS NOT NULL AND (@sqldisablecommand IS NULL OR @sqldisablecommand = '')
 				BEGIN
 					SET @debugMessage = '     ' + @sqlprecommand + CHAR(10) + '     ' + @sqlcommand;
 				END;
-				ELSE IF @sqlprecommand IS NULL AND @sqldisablecommand IS NOT NULL
+				ELSE IF @sqlprecommand IS NULL AND (@sqldisablecommand IS NOT NULL OR LEN(@sqldisablecommand) > 0)
 				BEGIN
 					SET @debugMessage = '     ' + @sqldisablecommand + CHAR(10) + '     ' + @sqlcommand;
 				END;
-				ELSE IF @sqlprecommand IS NOT NULL AND @sqldisablecommand IS NOT NULL
+				ELSE IF @sqlprecommand IS NOT NULL AND (@sqldisablecommand IS NOT NULL OR LEN(@sqldisablecommand) > 0)
 				BEGIN
 					SET @debugMessage = '     ' + @sqldisablecommand + CHAR(10) + '     ' + @sqlprecommand + CHAR(10) + '     ' + @sqlcommand;
 				END;
@@ -2131,7 +2137,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 			END;
 			
 			IF @operationFlag = 0 AND @updateStats = 1 -- When reorganizing, update stats afterwards
-				AND @updateStatsWhere = 0
+				AND @updateStatsWhere = 0 AND @ixtype NOT IN (5,6,7)
 			BEGIN
 				IF @debugMode = 1	
 				RAISERROR('   Updating index related statistics using finer thresholds (if any)...', 0, 42) WITH NOWAIT;
@@ -2156,17 +2162,15 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				
 				IF @debugMode = 1
 				RAISERROR('   Getting information on selected statistic...', 0, 42) WITH NOWAIT;
-				
 				/* Get object name and auto update setting */
 				SELECT TOP 1 @statsName = statsName, @partitionNumber = partitionNumber, @stats_norecompute = [no_recompute], @stats_isincremental = [is_incremental]
 				FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working
-				WHERE objectID = @objectID AND statsID = @statsID AND dbID = @dbID;
-
+				WHERE objectID = @objectID AND statsID = @statsID AND [dbID] = @dbID;
 				IF @debugMode = 1
 				BEGIN
 					SET @debugMessage = '   Determining modification row counter for statistic ' + @statsName + ' on table or view ' + @objectName + ' of DB ' + @dbName + '...';
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
-				END
+				END;
 
 				/* Determine modification row counter to ascertain if update stats is required */
 				IF ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
@@ -2421,7 +2425,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				/* Get object name and auto update setting */
 				SELECT TOP 1 @statsName = statsName, @stats_norecompute = [no_recompute], @stats_isincremental = [is_incremental]
 				FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working
-				WHERE objectID = @statsObjectID AND statsID = @statsID AND dbID = @dbID AND partitionNumber = @partitionNumber;
+				WHERE objectID = @statsObjectID AND statsID = @statsID AND [dbID] = @dbID AND partitionNumber = @partitionNumber;
 
 				IF @debugMode = 1
 				BEGIN
