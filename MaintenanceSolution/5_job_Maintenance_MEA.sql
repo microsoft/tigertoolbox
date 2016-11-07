@@ -852,14 +852,14 @@ BEGIN
 END
 ELSE
 BEGIN
-	EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'Daily Index Defrag', 
+	EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'Weekly Maintenance', 
 		@enabled=1, 
 		@notify_level_eventlog=2, 
 		@notify_level_email=3, 
 		@notify_level_netsend=0, 
 		@notify_level_page=0, 
 		@delete_level=0, 
-		@description=N'Inteligent defrag on one or more indexes for one or more databases.', 
+		@description=N'Runs weekly maintenance cycle. Most steps execute on Fridays only. For integrity checks, depending on whether the database in scope is a VLDB or not, different actions are executed. See job steps for further detail.', 
 		@category_name=N'Database Maintenance', 
 		@owner_login_name=@jobowner,
 		@job_id = @jobId OUTPUT
