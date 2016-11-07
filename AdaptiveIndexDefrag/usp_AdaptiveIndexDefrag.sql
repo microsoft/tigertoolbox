@@ -590,6 +590,7 @@ v1.6.3.2 - 11/4/2016 - Fixed DISABLE index applying to NCCI.
 						Fixed misplaced index disable statement if @Exec_Print = 0;
 						Fixed issue with statistics collection in SQL Server 2012 and below;
 						Added statistic related info to log table (rows, mod counter, rows sampled).
+v1.6.3.3 - 11/7/2016 - Rolled back previously reported issue with REORGANIZE and database names.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1102,7 +1103,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @rows_sampled bigint
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.3.2';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.3.3';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
