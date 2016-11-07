@@ -1791,7 +1791,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				SET @operationFlag = 0	
 
 				/* Set Reorg command */
-				SET @sqlcommand = N'ALTER INDEX ' + @indexName + N' ON [' + @dbName + N'].' + @schemaName + N'.' + @objectName + N' REORGANIZE';
+				SET @sqlcommand = N'ALTER INDEX ' + @indexName + N' ON ' + @dbName + N'.' + @schemaName + N'.' + @objectName + N' REORGANIZE';
 
 				/* Set partition reorg options; requires Enterprise Edition; valid only if more than one partition exists */		
 				IF @partitionCount > 1 AND @dealMaxPartition IS NOT NULL AND @editionCheck = 1	
