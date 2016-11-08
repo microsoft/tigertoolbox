@@ -587,7 +587,7 @@ drop table [tbl_security_ring_buffer]
 select 
 			c1.value('(./event/@timestamp)[1]', 'datetime') as utctimestamp,
 			DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
-			c1.value('(./event/data[@name="id"])[1]', 'int') as id,
+			c1.value('(./event/data[@name="id"])[1]', 'bigint') as id,
 			c1.value('(./event/data[@name="session_id"])[1]', 'int') as session_id,
 			c1.value('(./event/data[@name="error_code"])[1]', 'bigint') as [error_code],
 			c1.value('(./event/data[@name="api_name"])[1]', 'nvarchar(100)') as api_name,
