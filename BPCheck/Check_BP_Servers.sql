@@ -377,6 +377,7 @@ v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options che
 						Fixed Indexing per Table subsection accounting for hypotheical indexes.
 v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 						Fixed negative CPU usage in avg cpu usage last 2h check.
+v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1479,7 +1480,7 @@ BEGIN
 	)
 	SELECT 'Information' AS [Category], 'Recorded_Autogrows_Lst72H' AS [Information], DB_NAME(database_id) AS Database_Name, 
 		mf.name AS logical_file_name, mf.size*8 / 1024 AS size_MB, mf.type_desc,
-		(ag.Growth * 8) AS [growth_KB], CASE WHEN is_percent_growth = 1 THEN 'Pct' ELSE 'MB' END AS growth_type,
+		ag.Growth AS [growth_KB], CASE WHEN is_percent_growth = 1 THEN 'Pct' ELSE 'MB' END AS growth_type,
 		Duration/1000 AS Growth_Duration_ms, ag.StartTime, ag.EndTime
 	FROM sys.master_files mf
 	LEFT OUTER JOIN AutoGrow_CTE ag ON mf.database_id=ag.databaseid AND mf.name=ag.[filename]
