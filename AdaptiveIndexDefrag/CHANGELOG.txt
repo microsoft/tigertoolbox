@@ -110,3 +110,4 @@ v1.6.3.2 - 11/4/2016 - Fixed DISABLE index applying to NCCI.
 			Fixed issue with statistics collection in SQL Server 2012 and below;
 			Added statistic related info to log table (rows, mod counter, rows sampled).
 v1.6.3.3 - 11/7/2016 - Rolled back previously reported issue with REORGANIZE and database names.
+v1.6.4 - 11/10/2016 - Fixed support for incremental statistics  in SQL Server 2016 RTM.
