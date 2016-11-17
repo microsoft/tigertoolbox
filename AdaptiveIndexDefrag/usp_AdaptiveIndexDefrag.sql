@@ -591,7 +591,8 @@ v1.6.3.2 - 11/4/2016 - Fixed DISABLE index applying to NCCI.
 						Fixed issue with statistics collection in SQL Server 2012 and below;
 						Added statistic related info to log table (rows, mod counter, rows sampled).
 v1.6.3.3 - 11/7/2016 - Rolled back previously reported issue with REORGANIZE and database names.
-v1.6.4 - 11/10/2016 - Fixed support for incremental statistics  in SQL Server 2016 RTM.
+v1.6.4 - 11/10/2016 - Fixed support for incremental statistics in SQL Server 2016 RTM.
+v1.6.4.1 - 11/16/2016 - Added support for incremental statistics in SQL Server 2016 SP1.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1104,7 +1105,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @rows_sampled bigint
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.4';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.4.1';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -2190,13 +2191,13 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				END;
 
 				/* Determine modification row counter to ascertain if update stats is required */
-				IF ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR (@sqlmajorver = 13 AND @sqlmajorver >= 4000) OR @sqlmajorver > 13) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
+				IF ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR (@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_incremental_stats_properties DMF...', 0, 42) WITH NOWAIT;
 					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
-				ELSE IF ((@sqlmajorver = 12 AND @sqlbuild < 5000) OR (@sqlmajorver = 13 AND @sqlmajorver < 4000)) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
+				ELSE IF ((@sqlmajorver = 12 AND @sqlbuild < 5000) OR (@sqlmajorver = 13 AND @sqlbuild < 4000)) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
@@ -2455,13 +2456,13 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				END
  
 				/* Determine modification row counter to ascertain if update stats is required */
-				IF ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR (@sqlmajorver = 13 AND @sqlmajorver >= 4000) OR @sqlmajorver > 13) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
+				IF ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR (@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_incremental_stats_properties DMF...', 0, 42) WITH NOWAIT;
 					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(' + CAST(@statsObjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
-				ELSE IF ((@sqlmajorver = 12 AND @sqlbuild < 5000) OR (@sqlmajorver = 13 AND @sqlmajorver < 4000)) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
+				ELSE IF ((@sqlmajorver = 12 AND @sqlbuild < 5000) OR (@sqlmajorver = 13 AND @sqlbuild < 4000)) AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
