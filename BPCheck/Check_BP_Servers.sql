@@ -378,6 +378,7 @@ v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options che
 v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 						Fixed negative CPU usage in avg cpu usage last 2h check.
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
+v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1614,7 +1615,7 @@ SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sk
 		END
 	END;
 	
-	IF @sqlmajorver > 10 AND @sqlmajorver < 13 AND @IsHadrEnabled = 1
+	IF @sqlmajorver > 10 AND ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13) AND @IsHadrEnabled = 1
 	BEGIN
 		INSERT INTO #tblPerSku
 		SELECT NULL, 'Always_On' AS feature_name
@@ -1624,6 +1625,12 @@ SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sk
 	BEGIN
 		INSERT INTO #tblPerSku
 		SELECT DISTINCT d.name, 'DB_Snapshot' AS feature_name FROM master.sys.databases d (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL
+	END;
+	
+	IF (@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13
+	BEGIN
+		DELETE FROM #tblPerSku
+		WHERE feature_name IN ('ColumnStoreIndex','InMemoryOLTP')
 	END;
 	
 	IF (SELECT COUNT([Feature_Name]) FROM #tblPerSku) > 0
@@ -2479,7 +2486,14 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting LPIM', 10, 1) WITH NOWAIT
 DECLARE @lpim bit, @lognumber int, @logcount int
-IF @sqlmajorver > 9
+
+IF ((@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13)
+BEGIN
+	SET @sqlcmd = N'SELECT @lpimOUT = CASE WHEN sql_memory_model = 2 THEN 1 ELSE 0 END FROM sys.dm_os_sys_info';
+	SET @params = N'@lpimOUT bit OUTPUT';
+	EXECUTE sp_executesql @sqlcmd, @params, @lpimOUT=@lpim OUTPUT;
+END
+ELSE IF ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13)
 BEGIN
 	SET @sqlcmd = N'SELECT @lpimOUT = CASE WHEN locked_page_allocations_kb > 0 THEN 1 ELSE 0 END FROM sys.dm_os_process_memory (NOLOCK)'
 	SET @params = N'@lpimOUT bit OUTPUT';
@@ -4723,7 +4737,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 			OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 6000)
 			OR (@sqlmajorver = 11 AND @sqlbuild < 6020)
 			OR (@sqlmajorver = 12 AND @sqlbuild < 5000)
-			OR (@sqlmajorver = 13 AND @sqlbuild < 1601)
+			OR (@sqlmajorver = 13 AND @sqlbuild < 4000)
 		THEN '[WARNING: current service pack has been superseded in the current SQL Server version. Install the latest service pack as soon as possible.]'
 		ELSE '[OK]'
 	END AS [Deviation], 
@@ -5728,70 +5742,89 @@ END;
 -- IFI subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting IFI', 10, 1) WITH NOWAIT
-IF @allow_xpcmdshell = 1
+DECLARE @ifi bit, @IFIStatus NVARCHAR(256)
+IF ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13)
 BEGIN
-	DECLARE @ifi bit
-	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
-		OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
-			AND (SELECT COUNT(credential_id) FROM sys.credentials WHERE name = '##xp_cmdshell_proxy_account##') > 0)) -- Is not sysadmin but proxy account exists
-		OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
-			AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') > 0))
+	IF @allow_xpcmdshell = 1
 	BEGIN
-		RAISERROR ('    |-Configuration options set for IFI check', 10, 1) WITH NOWAIT
-		SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
-		SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
-		IF @sao = 0
+		IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
+			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
+				AND (SELECT COUNT(credential_id) FROM sys.credentials WHERE name = '##xp_cmdshell_proxy_account##') > 0)) -- Is not sysadmin but proxy account exists
+			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
+				AND (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') > 0))
 		BEGIN
-			EXEC sp_configure 'show advanced options', 1; RECONFIGURE WITH OVERRIDE;
-		END
-		IF @xcmd = 0
-		BEGIN
-			EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE WITH OVERRIDE;
-		END
-
-		BEGIN TRY
-			DECLARE @xp_cmdshell_output2 TABLE ([Output] VARCHAR (8000));
-			SET @CMD = ('whoami /priv')
-			INSERT INTO @xp_cmdshell_output2
-			EXEC master.dbo.xp_cmdshell @CMD;
-			
-			IF EXISTS (SELECT * FROM @xp_cmdshell_output2 WHERE [Output] LIKE '%SeManageVolumePrivilege%')
+			RAISERROR ('    |-Configuration options set for IFI check', 10, 1) WITH NOWAIT
+			SELECT @sao = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'show advanced options'
+			SELECT @xcmd = CAST([value] AS smallint) FROM sys.configurations (NOLOCK) WHERE [name] = 'xp_cmdshell'
+			IF @sao = 0
 			BEGIN
-				SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[OK]' AS [Deviation];
-				SET @ifi = 1;
+				EXEC sp_configure 'show advanced options', 1; RECONFIGURE WITH OVERRIDE;
 			END
-			ELSE
+			IF @xcmd = 0
 			BEGIN
-				SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[WARNING: Instant File Initialization is disabled. This can impact data file autogrowth times]' AS [Deviation];
-				SET @ifi = 0
+				EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE WITH OVERRIDE;
 			END
-		END TRY
-		BEGIN CATCH
-			SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-			SELECT @ErrorMessage = 'IFI subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
-			RAISERROR (@ErrorMessage, 16, 1);
-		END CATCH
 
-		IF @xcmd = 0
-		BEGIN
-			EXEC sp_configure 'xp_cmdshell', 0; RECONFIGURE WITH OVERRIDE;
+			BEGIN TRY
+				DECLARE @xp_cmdshell_output2 TABLE ([Output] VARCHAR (8000));
+				SET @CMD = ('whoami /priv')
+				INSERT INTO @xp_cmdshell_output2
+				EXEC master.dbo.xp_cmdshell @CMD;
+				
+				IF EXISTS (SELECT * FROM @xp_cmdshell_output2 WHERE [Output] LIKE '%SeManageVolumePrivilege%')
+				BEGIN
+					SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[OK]' AS [Deviation];
+					SET @ifi = 1;
+				END
+				ELSE
+				BEGIN
+					SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[WARNING: Instant File Initialization is disabled. This can impact data file autogrowth times]' AS [Deviation];
+					SET @ifi = 0
+				END
+			END TRY
+			BEGIN CATCH
+				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+				SELECT @ErrorMessage = 'IFI subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+				RAISERROR (@ErrorMessage, 16, 1);
+			END CATCH
+
+			IF @xcmd = 0
+			BEGIN
+				EXEC sp_configure 'xp_cmdshell', 0; RECONFIGURE WITH OVERRIDE;
+			END
+			IF @sao = 0
+			BEGIN
+				EXEC sp_configure 'show advanced options', 0; RECONFIGURE WITH OVERRIDE;
+			END
 		END
-		IF @sao = 0
+		ELSE
 		BEGIN
-			EXEC sp_configure 'show advanced options', 0; RECONFIGURE WITH OVERRIDE;
+			RAISERROR('[WARNING: Only a sysadmin can run the "Instant Initialization" check. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
+			RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: xp_cmdshell. Bypassing check]', 16, 1, N'extended_sprocs')
+			--RETURN
 		END
 	END
 	ELSE
 	BEGIN
-		RAISERROR('[WARNING: Only a sysadmin can run the "Instant Initialization" check. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
-		RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: xp_cmdshell. Bypassing check]', 16, 1, N'extended_sprocs')
+		RAISERROR('  |- [INFORMATION: "Instant Initialization" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
 		--RETURN
 	END
 END
-ELSE
+ELSE IF ((@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13)
 BEGIN
-	RAISERROR('  |- [INFORMATION: "Instant Initialization" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
-	--RETURN
+	SET @sqlcmd = N'SELECT @IFIStatusOUT = instant_file_initialization_enabled FROM sys.dm_server_services WHERE servicename LIKE ''SQL Server%'' AND servicename NOT LIKE ''SQL Server Agent%''';
+	SET @params = N'@IFIStatusOUT NVARCHAR(256) OUTPUT';
+	EXECUTE sp_executesql @sqlcmd, @params, @IFIStatusOUT=@IFIStatus OUTPUT;
+	IF @IFIStatus = 'Y'
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[OK]' AS [Deviation];
+		SET @ifi = 1;
+	END
+	ELSE
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[WARNING: Instant File Initialization is disabled. This can impact data file autogrowth times]' AS [Deviation];
+		SET @ifi = 0
+	END
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
