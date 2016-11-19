@@ -47,7 +47,7 @@ BEGIN
     INSERT INTO #TempSecurables2
     EXEC master.dbo.sp_MSforeachdb @command1='USE [?] 
     --Privileges for Procedures/Functions/CLR/Views to the User
-    SELECT ''[?]'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION'' THEN ''GRANT'' ELSE (b.state_desc COLLATE database_default) END + '' EXECUTE ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
+    SELECT ''[?]'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION'' THEN ''GRANT'' ELSE (b.state_desc COLLATE database_default) + '' '' END + + b.permission_name + ''ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
     CASE STATE WHEN ''W'' THEN '' WITH GRANT OPTION'' 
     ELSE '''' END FROM [?].sys.all_objects a, [?].sys.database_permissions b, [?].sys.schemas c 
     WHERE a.OBJECT_ID = b.major_id AND a.type IN (''X'',''P'',''FN'',''AF'',''FS'',''FT'') AND b.grantee_principal_id <>0 
@@ -84,7 +84,7 @@ BEGIN
     
     SET @SCDB='USE [' + @dbname + '] 
     --Privileges for Procedures/Functions/CLR/Views to the User
-    SELECT ''[' + @dbname + ']'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION '' THEN ''GRANT '' ELSE (b.state_desc COLLATE database_default) END + b.permission_name + '' ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
+    SELECT ''[' + @dbname + ']'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION '' THEN ''GRANT '' ELSE (b.state_desc COLLATE database_default) + '' '' END + b.permission_name + '' ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
     CASE STATE WHEN ''W'' THEN '' WITH GRANT OPTION'' 
     ELSE '''' END FROM [' + @dbname + '].sys.all_objects a, [' + @dbname + '].sys.database_permissions b, [' + @dbname + '].sys.schemas c 
     WHERE a.OBJECT_ID = b.major_id AND a.type IN (''X'',''P'',''FN'',''AF'',''FS'',''FT'') AND b.grantee_principal_id <>0 
@@ -120,7 +120,7 @@ BEGIN
 
     SET @SCUser = 'USE [?] 
     --Privileges for Procedures/Functions/CLR/Views to the User
-    SELECT ''[?]'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION '' THEN ''GRANT '' ELSE (b.state_desc COLLATE database_default) END + b.permission_name + '' ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
+    SELECT ''[?]'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION '' THEN ''GRANT '' ELSE (b.state_desc COLLATE database_default) + '' '' END + b.permission_name + '' ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
     CASE STATE WHEN ''W'' THEN '' WITH GRANT OPTION'' 
     ELSE '''' END FROM [?].sys.all_objects a, [?].sys.database_permissions b, [?].sys.schemas c 
     WHERE a.OBJECT_ID = b.major_id AND a.type IN (''X'',''P'',''FN'',''AF'',''FS'',''FT'') AND b.grantee_principal_id <>0 
@@ -165,7 +165,7 @@ BEGIN
     
     SET @SCDB='USE [' + @dbname + '] 
     --Privileges for Procedures/Functions/CLR/Views to the User
-    SELECT ''[' + @dbname + ']'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION '' THEN ''GRANT '' ELSE (b.state_desc COLLATE database_default) END + b.permission_name + '' ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
+    SELECT ''[' + @dbname + ']'', CASE WHEN (b.state_desc COLLATE database_default) = ''GRANT_WITH_GRANT_OPTION '' THEN ''GRANT '' ELSE (b.state_desc COLLATE database_default) + '' '' END + b.permission_name + '' ON ['' + c.name + ''].['' + a.name + ''] TO '' + QUOTENAME(USER_NAME(b.grantee_principal_id)) +
     CASE STATE WHEN ''W'' THEN '' WITH GRANT OPTION'' 
     ELSE '''' END FROM [' + @dbname + '].sys.all_objects a, [' + @dbname + '].sys.database_permissions b, [' + @dbname + '].sys.schemas c 
     WHERE a.OBJECT_ID = b.major_id AND a.type IN (''X'',''P'',''FN'',''AF'',''FS'',''FT'') AND b.grantee_principal_id <>0 
