@@ -216,7 +216,7 @@ BEGIN
 	er.status,
 	--er.command,
 	qp.query_plan,
-	qes.query_plan AS [live_query_plan_snapshot],
+	CASE WHEN qes.query_plan IS NULL THEN ''Lightweight Query Profiling Infrastructure is not enabled'' ELSE qes.query_plan END AS [live_query_plan_snapshot],
 	er.percent_complete,
 	CONVERT(VARCHAR(20),DATEADD(ms,er.estimated_completion_time,GETDATE()),20) AS [ETA_completion_time],
 	(er.cpu_time/1000) AS cpu_time_sec,
