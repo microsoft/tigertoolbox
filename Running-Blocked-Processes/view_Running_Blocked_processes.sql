@@ -195,7 +195,7 @@ FROM sys.dm_exec_requests er
 WHERE er.session_id <> @@SPID AND es.is_user_process = 1
 ORDER BY er.total_elapsed_time DESC, er.logical_reads DESC, [database_name], session_id'
 END
-ELSE IF @sqlmajorver IN (10,11,12) OR (@sqlmajorver = 13 AND @sqlbuild < 4000)
+ELSE IF (@sqlmajorver = 13 AND @sqlbuild > 4000) OR @sqlmajorver > 13
 BEGIN
 	SELECT @sqlcmd = N'SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
