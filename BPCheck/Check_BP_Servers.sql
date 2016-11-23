@@ -379,6 +379,7 @@ v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 						Fixed negative CPU usage in avg cpu usage last 2h check.
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
 v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
+v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -6077,7 +6078,7 @@ DECLARE @dbopterrtb TABLE (id int,
 	is_trustworthy_on bit,
 	is_parameterization_forced bit)
 
-IF @sqlmajorver < 11
+IF @sqlmajorver < 12
 BEGIN
 	SET @sqlcmd = 'SELECT ROW_NUMBER() OVER(ORDER BY name), name, is_auto_close_on, 
 	is_auto_shrink_on, page_verify_option, page_verify_option_desc,	
@@ -6107,7 +6108,7 @@ EXECUTE sp_executesql @sqlcmd;
 SET @cnt = (SELECT COUNT(id) FROM @dbopterrtb)
 SET @cnt_i = 1
 
-SELECT @is_auto_close_on = 0, @is_auto_shrink_on = 0, @page_verify_option = 0, @is_auto_create_stats_on = 0, @is_auto_update_stats_on = 0, @is_db_chaining_on = 0, @is_trustworthy_on = 0, @is_parameterization_forced = 0, @is_auto_create_stats_incremental_on = NULL--, @is_indirect_checkpoint_on = 0
+SELECT @is_auto_close_on = 0, @is_auto_shrink_on = 0, @page_verify_option = 0, @is_auto_create_stats_on = 0, @is_auto_update_stats_on = 0, @is_db_chaining_on = 0, @is_trustworthy_on = 0, @is_parameterization_forced = 0, @is_auto_create_stats_incremental_on = 0--, @is_indirect_checkpoint_on = 0
 
 WHILE @cnt_i <> @cnt
 BEGIN 
