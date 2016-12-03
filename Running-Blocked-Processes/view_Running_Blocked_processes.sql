@@ -13,6 +13,7 @@
 -- 2014-04-09 Added information to blocking section, and fixed conversion issue
 -- 2014-12-09 Handle illegal characters in XML conversion
 -- 11/16/2016 Added support for SQL Server 2016 SP1 and live query plan snapshot.
+-- 12/2/2016 Fixed transport-level error issue with SQL Server 2016 SP1.
 
 SET NOCOUNT ON;
 DECLARE @UpTime VARCHAR(12), @StartDate DATETIME, @sqlmajorver int, @sqlcmd NVARCHAR(500), @params NVARCHAR(500)
@@ -118,7 +119,11 @@ ORDER BY er.total_elapsed_time DESC, er.logical_reads DESC, [database_name], ses
 END
 ELSE IF @sqlmajorver IN (10,11,12) OR (@sqlmajorver = 13 AND @sqlbuild < 4000)
 BEGIN
-	SET @sqlcmd = N'SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
+	SET @sqlcmd = N';WITH tsu AS (SELECT session_id, SUM(user_objects_alloc_page_count) AS user_objects_alloc_page_count, 
+SUM(user_objects_dealloc_page_count) AS user_objects_dealloc_page_count, 
+SUM(internal_objects_alloc_page_count) AS internal_objects_alloc_page_count, 
+SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage GROUP BY session_id)
+SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qt.text,
 		NCHAR(1),N''?''),NCHAR(2),N''?''),NCHAR(3),N''?''),NCHAR(4),N''?''),NCHAR(5),N''?''),NCHAR(6),N''?''),NCHAR(7),N''?''),NCHAR(8),N''?''),NCHAR(11),N''?''),NCHAR(12),N''?''),NCHAR(14),N''?''),NCHAR(15),N''?''),NCHAR(16),N''?''),NCHAR(17),N''?''),NCHAR(18),N''?''),NCHAR(19),N''?''),NCHAR(20),N''?''),NCHAR(21),N''?''),NCHAR(22),N''?''),NCHAR(23),N''?''),NCHAR(24),N''?''),NCHAR(25),N''?''),NCHAR(26),N''?''),NCHAR(27),N''?''),NCHAR(28),N''?''),NCHAR(29),N''?''),NCHAR(30),N''?''),NCHAR(31),N''?'') 
@@ -175,10 +180,10 @@ BEGIN
 	mg.granted_memory_kb,
 	mg.ideal_memory_kb,
 	mg.query_cost,
-	((((ssu.user_objects_alloc_page_count + (SELECT SUM(tsu.user_objects_alloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)) -
-		(ssu.user_objects_dealloc_page_count + (SELECT SUM(tsu.user_objects_dealloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)))*8)/1024) AS user_obj_in_tempdb_MB,
-	((((ssu.internal_objects_alloc_page_count + (SELECT SUM(tsu.internal_objects_alloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)) -
-		(ssu.internal_objects_dealloc_page_count + (SELECT SUM(tsu.internal_objects_dealloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)))*8)/1024) AS internal_obj_in_tempdb_MB,
+	((((ssu.user_objects_alloc_page_count + tsu.user_objects_alloc_page_count) -
+		(ssu.user_objects_dealloc_page_count + tsu.user_objects_dealloc_page_count))*8)/1024) AS user_obj_in_tempdb_MB,
+	((((ssu.internal_objects_alloc_page_count + tsu.internal_objects_alloc_page_count) -
+		(ssu.internal_objects_dealloc_page_count + tsu.internal_objects_dealloc_page_count))*8)/1024) AS internal_obj_in_tempdb_MB,
 	es.[host_name],
 	es.login_name,
 	--es.original_login_name,
@@ -190,6 +195,7 @@ FROM sys.dm_exec_requests er
 	LEFT OUTER JOIN sys.dm_exec_query_memory_grants mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
 	LEFT OUTER JOIN sys.dm_db_session_space_usage ssu ON er.session_id = ssu.session_id
 	LEFT OUTER JOIN sys.dm_exec_sessions es ON er.session_id = es.session_id
+	LEFT OUTER JOIN tsu ON tsu.session_id = ssu.session_id
 	LEFT OUTER JOIN sys.dm_resource_governor_workload_groups g ON es.group_id = g.group_id
 	OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) qp
 WHERE er.session_id <> @@SPID AND es.is_user_process = 1
@@ -197,7 +203,11 @@ ORDER BY er.total_elapsed_time DESC, er.logical_reads DESC, [database_name], ses
 END
 ELSE IF (@sqlmajorver = 13 AND @sqlbuild > 4000) OR @sqlmajorver > 13
 BEGIN
-	SELECT @sqlcmd = N'SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
+	SELECT @sqlcmd = N'WITH tsu AS (SELECT session_id, SUM(user_objects_alloc_page_count) AS user_objects_alloc_page_count, 
+SUM(user_objects_dealloc_page_count) AS user_objects_dealloc_page_count, 
+SUM(internal_objects_alloc_page_count) AS internal_objects_alloc_page_count, 
+SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage GROUP BY session_id)
+SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qt.text,
 		NCHAR(1),N''?''),NCHAR(2),N''?''),NCHAR(3),N''?''),NCHAR(4),N''?''),NCHAR(5),N''?''),NCHAR(6),N''?''),NCHAR(7),N''?''),NCHAR(8),N''?''),NCHAR(11),N''?''),NCHAR(12),N''?''),NCHAR(14),N''?''),NCHAR(15),N''?''),NCHAR(16),N''?''),NCHAR(17),N''?''),NCHAR(18),N''?''),NCHAR(19),N''?''),NCHAR(20),N''?''),NCHAR(21),N''?''),NCHAR(22),N''?''),NCHAR(23),N''?''),NCHAR(24),N''?''),NCHAR(25),N''?''),NCHAR(26),N''?''),NCHAR(27),N''?''),NCHAR(28),N''?''),NCHAR(29),N''?''),NCHAR(30),N''?''),NCHAR(31),N''?'') 
@@ -255,10 +265,10 @@ BEGIN
 	mg.granted_memory_kb,
 	mg.ideal_memory_kb,
 	mg.query_cost,
-	((((ssu.user_objects_alloc_page_count + (SELECT SUM(tsu.user_objects_alloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)) -
-		(ssu.user_objects_dealloc_page_count + (SELECT SUM(tsu.user_objects_dealloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)))*8)/1024) AS user_obj_in_tempdb_MB,
-	((((ssu.internal_objects_alloc_page_count + (SELECT SUM(tsu.internal_objects_alloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)) -
-		(ssu.internal_objects_dealloc_page_count + (SELECT SUM(tsu.internal_objects_dealloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)))*8)/1024) AS internal_obj_in_tempdb_MB,
+	((((ssu.user_objects_alloc_page_count + tsu.user_objects_alloc_page_count) -
+		(ssu.user_objects_dealloc_page_count + tsu.user_objects_dealloc_page_count))*8)/1024) AS user_obj_in_tempdb_MB,
+	((((ssu.internal_objects_alloc_page_count + tsu.internal_objects_alloc_page_count) -
+		(ssu.internal_objects_dealloc_page_count + tsu.internal_objects_dealloc_page_count))*8)/1024) AS internal_obj_in_tempdb_MB,
 	es.[host_name],
 	es.login_name,
 	--es.original_login_name,
@@ -270,6 +280,7 @@ FROM sys.dm_exec_requests er
 	LEFT OUTER JOIN sys.dm_exec_query_memory_grants mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
 	LEFT OUTER JOIN sys.dm_db_session_space_usage ssu ON er.session_id = ssu.session_id
 	LEFT OUTER JOIN sys.dm_exec_sessions es ON er.session_id = es.session_id
+	LEFT OUTER JOIN tsu ON tsu.session_id = ssu.session_id
 	LEFT OUTER JOIN sys.dm_resource_governor_workload_groups g ON es.group_id = g.group_id
 	OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) qp 
 	OUTER APPLY sys.dm_exec_query_statistics_xml(er.session_id) qes
