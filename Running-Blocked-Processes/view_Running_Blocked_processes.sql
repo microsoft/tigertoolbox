@@ -43,7 +43,7 @@ SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
 SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
 IF @sqlmajorver = 9
 BEGIN
-	SELECT @sqlcmd = N'SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name], -- NULL if Ad-Hoc or Prepared statements
+	SELECT @sqlcmd = N'SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name], -- NULL if Ad-Hoc or Prepared statements
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qt.text,
 		NCHAR(1),N''?''),NCHAR(2),N''?''),NCHAR(3),N''?''),NCHAR(4),N''?''),NCHAR(5),N''?''),NCHAR(6),N''?''),NCHAR(7),N''?''),NCHAR(8),N''?''),NCHAR(11),N''?''),NCHAR(12),N''?''),NCHAR(14),N''?''),NCHAR(15),N''?''),NCHAR(16),N''?''),NCHAR(17),N''?''),NCHAR(18),N''?''),NCHAR(19),N''?''),NCHAR(20),N''?''),NCHAR(21),N''?''),NCHAR(22),N''?''),NCHAR(23),N''?''),NCHAR(24),N''?''),NCHAR(25),N''?''),NCHAR(26),N''?''),NCHAR(27),N''?''),NCHAR(28),N''?''),NCHAR(29),N''?''),NCHAR(30),N''?''),NCHAR(31),N''?'') 
@@ -99,10 +99,6 @@ BEGIN
 	mg.granted_memory_kb,
 	--mg.ideal_memory_kb,
 	mg.query_cost,
-	((((ssu.user_objects_alloc_page_count + (SELECT SUM(tsu.user_objects_alloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)) - 
-		(ssu.user_objects_dealloc_page_count + (SELECT SUM(tsu.user_objects_dealloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)))*8)/1024) AS user_obj_in_tempdb_MB,
-	((((ssu.internal_objects_alloc_page_count + (SELECT SUM(tsu.internal_objects_alloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)) - 
-		(ssu.internal_objects_dealloc_page_count + (SELECT SUM(tsu.internal_objects_dealloc_page_count) FROM sys.dm_db_task_space_usage tsu WHERE tsu.session_id = ssu.session_id)))*8)/1024) AS internal_obj_in_tempdb_MB,
 	es.[host_name],
 	es.login_name,
 	--es.original_login_name,
@@ -123,7 +119,7 @@ BEGIN
 SUM(user_objects_dealloc_page_count) AS user_objects_dealloc_page_count, 
 SUM(internal_objects_alloc_page_count) AS internal_objects_alloc_page_count, 
 SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage GROUP BY session_id)
-SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
+SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qt.text,
 		NCHAR(1),N''?''),NCHAR(2),N''?''),NCHAR(3),N''?''),NCHAR(4),N''?''),NCHAR(5),N''?''),NCHAR(6),N''?''),NCHAR(7),N''?''),NCHAR(8),N''?''),NCHAR(11),N''?''),NCHAR(12),N''?''),NCHAR(14),N''?''),NCHAR(15),N''?''),NCHAR(16),N''?''),NCHAR(17),N''?''),NCHAR(18),N''?''),NCHAR(19),N''?''),NCHAR(20),N''?''),NCHAR(21),N''?''),NCHAR(22),N''?''),NCHAR(23),N''?''),NCHAR(24),N''?''),NCHAR(25),N''?''),NCHAR(26),N''?''),NCHAR(27),N''?''),NCHAR(28),N''?''),NCHAR(29),N''?''),NCHAR(30),N''?''),NCHAR(31),N''?'') 
@@ -207,7 +203,7 @@ BEGIN
 SUM(user_objects_dealloc_page_count) AS user_objects_dealloc_page_count, 
 SUM(internal_objects_alloc_page_count) AS internal_objects_alloc_page_count, 
 SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage GROUP BY session_id)
-SELECT es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
+SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qt.text,
 		NCHAR(1),N''?''),NCHAR(2),N''?''),NCHAR(3),N''?''),NCHAR(4),N''?''),NCHAR(5),N''?''),NCHAR(6),N''?''),NCHAR(7),N''?''),NCHAR(8),N''?''),NCHAR(11),N''?''),NCHAR(12),N''?''),NCHAR(14),N''?''),NCHAR(15),N''?''),NCHAR(16),N''?''),NCHAR(17),N''?''),NCHAR(18),N''?''),NCHAR(19),N''?''),NCHAR(20),N''?''),NCHAR(21),N''?''),NCHAR(22),N''?''),NCHAR(23),N''?''),NCHAR(24),N''?''),NCHAR(25),N''?''),NCHAR(26),N''?''),NCHAR(27),N''?''),NCHAR(28),N''?''),NCHAR(29),N''?''),NCHAR(30),N''?''),NCHAR(31),N''?'') 
@@ -292,7 +288,7 @@ EXECUTE (@sqlcmd)
 GO
 
 -- Waiter and Blocking Report
-SELECT
+SELECT 'Waiter_Blocking_Report' AS [Information],
 	-- blocked
 	es.session_id AS blocked_spid,
 	es.[status] AS [blocked_spid_status],
@@ -421,7 +417,7 @@ SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
 
 IF @sqlmajorver >= 11
 BEGIN
-	SET @sqlcmd = N'SELECT CASE WHEN ps.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(ps.database_id) END AS DatabaseName, 
+	SET @sqlcmd = N'SELECT  ''Sproc_Stats_Report'' AS [Information], CASE WHEN ps.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(ps.database_id) END AS DatabaseName, 
 	CASE WHEN ps.database_id = 32767 THEN NULL ELSE OBJECT_NAME(ps.[object_id], ps.database_id) END AS ObjectName,
 	type_desc,
 	(SELECT qt.text AS [text()] 
