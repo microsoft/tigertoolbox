@@ -561,7 +561,7 @@ BEGIN
 	ORDER BY [CounterName] ASC
 END
 ';
-			PRINT 'Procedure spLoadSessionStatus created on server ' + CAST(SERVERPROPERTY('ServerName') AS VARCHAR(100)) + ' '
+			PRINT 'Procedure spGetPerfCountersFromPowerShell created on server ' + CAST(SERVERPROPERTY('ServerName') AS VARCHAR(100)) + ' '
 		END
 GO
 
