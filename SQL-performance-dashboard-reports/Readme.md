@@ -1,7 +1,8 @@
+I highly recommend to first read our blog post before you consider deploying this solution to your environment.
 
+https://blogs.msdn.microsoft.com/sql_server_team/sql-server-performance-dashboard-reports-unleashed-for-enterprise-monitoring/
 
-
-The following section provides the steps for setting up and configuring SQL Server Dashboard Reports for monitoring. 
+The following are steps for setting up and configuring SQL Server Dashboard Reports for monitoring. 
 
 1.	Install and configure SQL Server Reporting service (any version greater than SQL Server 2012 with latest SP and CU) on a server identified as a Central Monitoring Server. The central monitoring server should be part of the same domain and network as the target SQL Server instance.
 2.	Download SQL Performance Dashboard Reporting Solution from Tiger toobox github repository.
