@@ -1,6 +1,9 @@
+
 I highly recommend to first read our blog post before you consider deploying this solution to your environment.
 
 https://blogs.msdn.microsoft.com/sql_server_team/sql-server-performance-dashboard-reports-unleashed-for-enterprise-monitoring/
+
+Setting Up and Configuring SQL Server Dashboard Reports for Monitoring
 
 The following are steps for setting up and configuring SQL Server Dashboard Reports for monitoring. 
 
