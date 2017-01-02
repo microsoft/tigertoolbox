@@ -1,5 +1,5 @@
 
-I highly recommend to first read our blog post before you consider deploying this solution to your environment.
+The following blog post provides more details and background on this solution. I highly recommend you first readt the blog post before you consider deploying this solution to your environment.
 
 https://blogs.msdn.microsoft.com/sql_server_team/sql-server-performance-dashboard-reports-unleashed-for-enterprise-monitoring/
 
