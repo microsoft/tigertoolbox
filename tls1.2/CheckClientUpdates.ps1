@@ -6,28 +6,28 @@
 Function Check-Sqlncli()
 {
     # Fetch the different Native Client installations found on the machine
-    $sqlncli = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Native Client*"} | Select Name,Version
+    $sqlncli = Get-WmiObject -Class Win32reg_AddRemovePrograms | Where-Object {$_.DisplayName -like "*Native Client*"} | Select DisplayName,Version
     # Check and report if an update is required for each entry found
     foreach ($cli in $sqlncli)
     {
         # SQL Server 2012 and 2014
         if ($cli.Version.Split(".")[2] -lt 6538 -and $cli.Version.Split(".")[0] -eq 11)
         {
-            Write-Host $cli.Name "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
+            Write-Host $cli.DisplayName "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
         }
         # SQL Server 2008
         elseif ($cli.Version.Split(".")[2] -lt 6543  -and $cli.Version.Split(".")[1] -eq 0 -and $cli.Version.Split(".")[0] -eq 10) 
         {
-            Write-Host $cli.Name "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
+            Write-Host $cli.DisplayName "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
         }
         # SQL Server 2008 R2
         elseif ($cli.Version.Split(".")[2] -lt 6537 -and $cli.Version.Split(".")[1] -eq 50 -and $cli.Version.Split(".")[0] -eq 10)
         {
-            Write-Host $cli.Name "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
+            Write-Host $cli.DisplayName "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
         }
         else
         {
-            Write-Host $cli.Name "with version" $cli.Version " supports TLS 1.2" -ForegroundColor Green
+            Write-Host $cli.DisplayName "with version" $cli.Version " supports TLS 1.2" -ForegroundColor Green
         }
     }
 }
@@ -35,18 +35,18 @@ Function Check-Sqlncli()
 Function Check-SqlODBC()
 {
     # Fetch the different MS SQL ODBC installations found on the machine
-    $sqlodbc = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*ODBC*"} | Select Name,Version
+    $sqlodbc = Get-WmiObject -Class Win32reg_AddRemovePrograms | Where-Object {$_.DisplayName -like "*ODBC*"} | Select DisplayName,Version
     # Check and report if an update is required for each entry found
     foreach ($cli in $sqlodbc)
     {
         # SQL Server 2012 and 2014
         if ($cli.Version.Split(".")[2] -lt 4219 -and $cli.Version.Split(".")[0] -eq 12)
         {
-            Write-Host $cli.Name "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
+            Write-Host $cli.DisplayName "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
         }
         else
         {
-            Write-Host $cli.Name "with version" $cli.Version " supports TLS 1.2" -ForegroundColor Green
+            Write-Host $cli.DisplayName "with version" $cli.Version " supports TLS 1.2" -ForegroundColor Green
         }
     }
 }
