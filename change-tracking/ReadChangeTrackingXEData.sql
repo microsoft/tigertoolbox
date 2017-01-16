@@ -14,7 +14,7 @@ STATE = start
 
 -- Store the XML data in a temporary table
 SELECT CAST(xet.target_data as xml) as XMLDATA
-INTO #SystemHealthSessionData
+INTO #CTCleanupData
 FROM sys.dm_xe_session_targets xet
 JOIN sys.dm_xe_sessions xe
 ON (xe.address = xet.event_session_address)
@@ -22,10 +22,10 @@ WHERE xe.name = 'changetracking' -- ### UPDATE with appropriate change tracking 
 and target_name = 'ring_buffer'
 
 -- Get information about the steps executed by the automatic cleanup
-;WITH CTE_HealthSession (EventXML) AS
+;WITH CT_CleanupSession (EventXML) AS
 (
 	SELECT C.query('.') EventXML
-	FROM #SystemHealthSessionData a
+	FROM #CTCleanupData a
 	CROSS APPLY a.XMLDATA.nodes('/RingBufferTarget/event') as T(C)
 )
 SELECT 
@@ -41,8 +41,8 @@ SELECT
 		WHEN 16 THEN 'Finished' 
 		WHEN 32 THEN 'Error'
 		END as [Status]
-FROM CTE_HealthSession
+FROM CT_CleanupSession
 WHERE EventXML.value('(/event/@name)[1]', 'varchar(255)') = 'change_tracking_cleanup'
 
 -- Drop the temporary table
-DROP TABLE #SystemHealthSessionData
+DROP TABLE #CTCleanupData
