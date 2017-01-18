@@ -6,7 +6,7 @@
 Function Check-Sqlncli()
 {
     # Fetch the different Native Client installations found on the machine
-    $sqlncli = Get-WmiObject -Class Win32reg_AddRemovePrograms | Where-Object {$_.DisplayName -like "*Native Client*"} | Select DisplayName,Version
+    $sqlncli = Get-WmiObject -Class Win32reg_AddRemovePrograms | Where-Object {$_.DisplayName -like "*Native Client*" -and $_.Publisher -like "*Microsoft*"} | Select DisplayName,Version
     # Check and report if an update is required for each entry found
     foreach ($cli in $sqlncli)
     {
@@ -35,7 +35,7 @@ Function Check-Sqlncli()
 Function Check-SqlODBC()
 {
     # Fetch the different MS SQL ODBC installations found on the machine
-    $sqlodbc = Get-WmiObject -Class Win32reg_AddRemovePrograms | Where-Object {$_.DisplayName -like "*ODBC*"} | Select DisplayName,Version
+    $sqlodbc = Get-WmiObject -Class Win32reg_AddRemovePrograms | Where-Object {$_.DisplayName -like "*ODBC*" -and $_.Publisher -like "*Microsoft*"} | Select DisplayName,Version
     # Check and report if an update is required for each entry found
     foreach ($cli in $sqlodbc)
     {
