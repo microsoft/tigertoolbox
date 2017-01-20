@@ -1551,7 +1551,6 @@ SELECT DISTINCT ' + CAST(@dbID AS NVARCHAR(10)) + ', ''' + QUOTENAME(DB_NAME(@db
 FROM sys.stats ss
 INNER JOIN sys.objects so ON ss.[object_id] = so.[object_id]
 INNER JOIN sys.schemas s ON so.[schema_id] = s.[schema_id]
-INNER JOIN sys.partitions sp ON ss.[object_id] = sp.[object_id] AND si.index_id = sp.index_id
 LEFT JOIN sys.indexes si ON ss.[object_id] = si.[object_id] and ss.name = si.name
 ' + CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver > 12) THEN 'CROSS APPLY sys.dm_db_stats_properties_internal(ss.[object_id], ss.stats_id) sp' ELSE '' END + '
 WHERE is_ms_shipped = 0 ' + CASE WHEN @sqlmajorver >= 12 THEN 'AND ss.is_temporary = 0' ELSE '' END + '
