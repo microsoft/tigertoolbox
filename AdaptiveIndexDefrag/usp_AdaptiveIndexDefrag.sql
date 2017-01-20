@@ -26,6 +26,9 @@ DROP VIEW vw_LastRun_Log
 IF EXISTS(SELECT [object_id] FROM sys.views WHERE [name] = 'vw_ErrLst24Hrs')
 DROP VIEW vw_ErrLst24Hrs
 
+IF EXISTS(SELECT [object_id] FROM sys.views WHERE [name] = 'vw_AvgSamplingLst30Days')
+DROP VIEW vw_AvgSamplingLst30Days
+
 IF EXISTS(SELECT [object_id] FROM sys.views WHERE [name] = 'vw_AvgTimeLst30Days ')
 DROP VIEW vw_AvgTimeLst30Days
 
@@ -593,6 +596,7 @@ v1.6.3.2 - 11/4/2016 - Fixed DISABLE index applying to NCCI.
 v1.6.3.3 - 11/7/2016 - Rolled back previously reported issue with REORGANIZE and database names.
 v1.6.4 - 11/10/2016 - Fixed support for incremental statistics in SQL Server 2016 RTM.
 v1.6.4.1 - 11/16/2016 - Added support for incremental statistics in SQL Server 2016 SP1.
+v1.6.4.2 - 1/20/2017 - Fixed support for incremental statistics introduced error 4104.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1105,7 +1109,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @rows_sampled bigint
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.4.1';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.4.2';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1542,11 +1546,12 @@ WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 				IF @tblName IS NULL
 				BEGIN
 					SELECT @updateSQL = N'USE [' + DB_NAME(@dbID) + ']; 
-SELECT DISTINCT ' + CAST(@dbID AS NVARCHAR(10)) + ', ''' + QUOTENAME(DB_NAME(@dbID)) + ''', ss.[object_id], ss.stats_id, ' + CASE WHEN @sqlmajorver >= 12 THEN 'ISNULL(sp.partition_number,1),' ELSE '1,' END + '
+SELECT DISTINCT ' + CAST(@dbID AS NVARCHAR(10)) + ', ''' + QUOTENAME(DB_NAME(@dbID)) + ''', ss.[object_id], ss.stats_id, ' + CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver > 12) THEN 'ISNULL(sp.partition_number,1),' ELSE '1,' END + '
 	QUOTENAME(s.name), QUOTENAME(so.name), QUOTENAME(ss.name), ss.[no_recompute], ' + CASE WHEN @sqlmajorver < 12 THEN '0 AS ' ELSE 'ss.' END + '[is_incremental], GETDATE() AS scanDate
 FROM sys.stats ss
 INNER JOIN sys.objects so ON ss.[object_id] = so.[object_id]
 INNER JOIN sys.schemas s ON so.[schema_id] = s.[schema_id]
+INNER JOIN sys.partitions sp ON ss.[object_id] = sp.[object_id] AND si.index_id = sp.index_id
 LEFT JOIN sys.indexes si ON ss.[object_id] = si.[object_id] and ss.name = si.name
 ' + CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver > 12) THEN 'CROSS APPLY sys.dm_db_stats_properties_internal(ss.[object_id], ss.stats_id) sp' ELSE '' END + '
 WHERE is_ms_shipped = 0 ' + CASE WHEN @sqlmajorver >= 12 THEN 'AND ss.is_temporary = 0' ELSE '' END + '
@@ -1559,7 +1564,7 @@ WHERE is_ms_shipped = 0 ' + CASE WHEN @sqlmajorver >= 12 THEN 'AND ss.is_tempora
 					DECLARE @tblNameOnly NVARCHAR(1000), @schemaNameOnly NVARCHAR(128)
 					SELECT @tblNameOnly = RIGHT(@tblName, LEN(@tblName) - CHARINDEX('.', @tblName, 1)), @schemaNameOnly = LEFT(@tblName, CHARINDEX('.', @tblName, 1) -1)
 					SELECT @updateSQL = N'USE [' + DB_NAME(@dbID) + ']; 
-SELECT DISTINCT ' + CAST(@dbID AS NVARCHAR(10)) + ', ''' + QUOTENAME(DB_NAME(@dbID)) + ''', ss.[object_id], ss.stats_id, ' + CASE WHEN @sqlmajorver >= 12 THEN 'ISNULL(sp.partition_number,1),' ELSE '1,' END + '
+SELECT DISTINCT ' + CAST(@dbID AS NVARCHAR(10)) + ', ''' + QUOTENAME(DB_NAME(@dbID)) + ''', ss.[object_id], ss.stats_id, ' + CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver > 12) THEN 'ISNULL(sp.partition_number,1),' ELSE '1,' END + '
 	QUOTENAME(s.name), QUOTENAME(so.name), QUOTENAME(ss.name), ss.[no_recompute], ' + CASE WHEN @sqlmajorver < 12 THEN '0 AS ' ELSE 'ss.' END + '[is_incremental], GETDATE() AS scanDate
 FROM sys.stats ss
 INNER JOIN sys.objects so ON ss.[object_id] = so.[object_id]
@@ -2781,7 +2786,7 @@ SELECT TOP 100 PERCENT dbName, objectName, indexName, partitionNumber, NULL AS s
 FROM dbo.tbl_AdaptiveIndexDefrag_log
 WHERE errorMessage IS NOT NULL AND dateTimeStart >= DATEADD(hh, -24, GETDATE())
 UNION ALL
-SELECT TOP 100 PERCENT dbName, objectName, NULL AS indexName, NULL AS partitionNumber, statsName, dateTimeStart, dateTimeEnd, sqlStatement, errorMessage		
+SELECT TOP 100 PERCENT dbName, objectName, NULL AS indexName, partitionNumber, statsName, dateTimeStart, dateTimeEnd, sqlStatement, errorMessage		
 FROM dbo.tbl_AdaptiveIndexDefrag_Stats_log
 WHERE errorMessage IS NOT NULL AND dateTimeStart >= DATEADD(hh, -24, GETDATE())
 ORDER BY dateTimeStart;
@@ -2803,6 +2808,14 @@ FROM dbo.tbl_AdaptiveIndexDefrag_Working
 WHERE defragDate >= DATEADD(dd, DATEDIFF(dd, 0, GETDATE()), -30)
 GROUP BY dbName, objectName, indexName, partitionNumber
 ORDER BY AVG(fragmentation) DESC, dbName, objectName, indexName, partitionNumber;
+GO
+
+CREATE VIEW vw_AvgSamplingLst30Days
+AS
+SELECT TOP 100 PERCENT 'Avg_Sampling' AS Comment, dbName, objectName, partitionNumber, statsName, CAST((rows_sampled/([rows]*1.00))*100.0 AS DECIMAL(5,2)) AS sampling, dateTimeStart, dateTimeEnd, sqlStatement, errorMessage		
+FROM dbo.tbl_AdaptiveIndexDefrag_Stats_log
+WHERE errorMessage IS NOT NULL AND dateTimeStart >= DATEADD(dd, DATEDIFF(dd, 0, GETDATE()), -30)
+ORDER BY dateTimeStart;
 GO
 
 CREATE VIEW vw_AvgLargestLst30Days
