@@ -519,3 +519,50 @@ IF  NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[spLoadS
 		END
 GO
 
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[spGetPerfCountersFromPowerShell]') AND type in (N'P', N'PC'))
+              BEGIN
+                     DROP PROCEDURE dbo.[spGetPerfCountersFromPowerShell]
+                     PRINT 'Procedure spGetPerfCountersFromPowerShell exists on server ' + CAST(SERVERPROPERTY('ServerName') AS VARCHAR(100)) + ' dropping procedure'
+              END;
+IF  NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[spGetPerfCountersFromPowerShell]') AND type in (N'P', N'PC'))
+			BEGIN
+				EXEC dbo.sp_executesql @statement = N'
+-- =============================================
+-- Author:		Adrian Sullivan, af.sullivan@outlook.com
+-- Create date: 2016/12/12
+-- Description:	Taking away the need for PS1 files and script folder
+-- =============================================
+CREATE PROCEDURE spGetPerfCountersFromPowerShell
+AS
+BEGIN
+
+	DECLARE @syscounters NVARCHAR(4000)
+	SET @syscounters=STUFF((SELECT DISTINCT '''''','''''' +LTRIM([counter_name])
+	FROM [dba_local].[dbo].[PerformanceCounterList]
+	WHERE [is_captured_ind] = 1 FOR XML PATH('''')), 1, 2, '''')+'''''''' 
+
+	DECLARE @cmd NVARCHAR(4000)
+	DECLARE @syscountertable TABLE (id INT IDENTITY(1,1), [output] VARCHAR(500))
+	DECLARE @syscountervaluestable TABLE (id INT IDENTITY(1,1), [value] VARCHAR(500))
+
+	SET @cmd = ''C:\WINDOWS\system32\WindowsPowerShell\v1.0\powershell.exe "& get-counter -counter ''+ @syscounters +'' | Select-Object -ExpandProperty Readings"''
+	INSERT @syscountertable
+	EXEC master..xp_cmdshell @cmd; 
+
+	INSERT [dba_local].[dbo].[PerformanceCounter] (CounterName, CounterValue, DateSampled)
+	SELECT  REPLACE(REPLACE(REPLACE(ct.[output],''\\''+@@SERVERNAME+''\'',''''),'' :'',''''),''sqlserver:'','''')[CounterName] , CONVERT(MONEY,ct2.[output]) [CounterValue], GETDATE() [DateSampled]
+	FROM @syscountertable ct
+	LEFT OUTER JOIN (
+	SELECT id - 1 [id], [output]
+	FROM @syscountertable
+	WHERE PATINDEX(''%[0-9]%'', LEFT([output],1)) > 0  
+	) ct2 ON ct.id = ct2.id
+	WHERE  ct.[output] LIKE ''\\%''
+	ORDER BY [CounterName] ASC
+END
+';
+			PRINT 'Procedure spGetPerfCountersFromPowerShell created on server ' + CAST(SERVERPROPERTY('ServerName') AS VARCHAR(100)) + ' '
+		END
+GO
+
+
