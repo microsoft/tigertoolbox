@@ -1,0 +1,15 @@
+Change log and other information available at http://aka.ms/SQLInsights - SQL Swiss Army Knife Series
+
+**Purpose:** Evaluates table and index compression, specifically an approach on how to select the best compression method for a database object.
+
+The Compression feature takes additional CPU resources while compressing and decompressing data, so it is important to know the workload on the specific database/instance/host combo when deciding how and what to compress. Usually, as long as your server is not CPU bound, the benefits outweigh the cost.
+With this in mind, it is highly recommended that you start by reading about table and index compression (http://msdn.microsoft.com/en-us/library/cc280449.aspx) and the related whitepaper (http://msdn.microsoft.com/en-us/library/dd894051(SQL.100).aspx) before moving on with any choice. The whitepaper is the basis for the choice algorithm I use in this script.
+Also, there is a caveat with using this script, because table and index compression (and even the system SP sp_estimate_data_compression_savings that this script wraps around) is an Enterprise only feature, and outputs the savings that can occur when you enable a table or partition for row or page compression. 
+Furthermore, this script is all the more trustworthy as instance uptime increases (or full business cycles go through it), because it uses sys.dm_db_index_operational_stats to assert read and write ratio.  Keep in mind that it is meant to provide mere guidance on the best compression method for a given object, providing enough memory and CPU resources are available.
+
+In the output, you will find the following information:
+-  Column *Percent_Update* shows the percentage of update operations on a specific table, index, or partition, relative to total operations on that object. The lower the percentage of Updates (that is, the table, index, or partition is infrequently updated), the better candidate it is for page compression. 
+-  Column *Percent_Scan* shows the percentage of scan operations on a table, index, or partition, relative to total operations on that object. The higher the value of Scan (that is, the table, index, or partition is mostly scanned), the better candidate it is for page compression. 
+-  Column *Compression_Type_Recommendation* can have four possible outputs indicating where there is most gain, if any: ‘PAGE’, ‘ROW’, ‘NO_GAIN’ or ‘?’. When the output is ‘?’ this approach could not give a recommendation, so as a rule of thumb I would lean to ROW if the object suffers mainly UPDATES, or PAGE if mainly INSERTS, but this is where knowing your workload is essential. When the output is ‘NO_GAIN’ well, that means that according to sp_estimate_data_compression_savings no space gains will be attained when compressing, as in the above output example, where compressing would grow the affected object. 
+
+**Note:** Note that this script will execute on the context of the current database. Also be aware that this may take awhile to execute on large objects, because if the IS locks taken by the sp_estimate_data_compression_savings cannot be honored, the SP will be blocked.

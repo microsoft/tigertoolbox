@@ -1,0 +1,123 @@
+**BPCheck** - SQL Best Practices and Performance checks
+
+**Purpose:** Checks SQL Server in scope for some of most common skewed Best Practices and performance issues. Valid from SQL Server 2005 onwards. By default all databases in the SQL Server instance are eligible for the several database specific checks, and you may use the optional parameter to narrow these checks to specific databases.
+
+All checks marked with * can be disabled by @ptocheck parameter. Check the PARAMETERS.md file or script header for all usage parameters.
+
+Contains the following information:
+- Uptime
+- Windows Version and Architecture
+- HA Information
+- Linked servers info
+- Instance info
+- Buffer Pool Extension info
+- Resource Governor info
+- Logon triggers
+- Database Information
+- Database file autogrows last 72h
+- Database triggers
+- Enterprise features usage
+- System Configuration
+
+And performs the following checks:
+- Processor
+  - Number of available Processors for this instance vs. MaxDOP setting
+  - Processor Affinity in NUMA architecture
+  - Additional Processor information
+- Memory
+  - Server Memory
+  - RM Task *
+  - Clock hands *
+  - Buffer Pool Consumers from Buffer Descriptors *
+  - Memory Allocations from Memory Clerks *
+  - Memory Consumers from In-Memory OLTP Engine *
+  - Memory Allocations from In-Memory OLTP Engine *
+  - OOM
+  - LPIM
+- Pagefile
+  - Pagefile
+- I/O
+  - I/O Stall subsection (wait for 5s) *
+  - Pending disk I/O Requests subsection (wait for a max of 5s) *
+- Server
+  - Power plan
+  - NTFS block size in volumes that hold database files <> 64KB
+  - Disk Fragmentation Analysis (if enabled)
+  - Cluster Quorum Model
+  - Cluster QFE node equality
+  - Cluster NIC Binding order
+- Service Accounts
+  - Service Accounts Status
+  - Service Accounts and SPN registration
+- Instance
+  - Recommended build check
+  - Backups
+  - Global trace flags
+  - System configurations
+  - IFI
+  - Full Text Configurations
+  - Deprecated features *
+  - Default data collections (default trace, blackbox trace, SystemHealth xEvent session, spserverdiagnostics xEvent session) *
+- Database and tempDB
+  - User objects in master
+  - DBs with collation <> master
+  - DBs with skewed compatibility level
+  - User DBs with non-default options
+  - DBs with Sparse files
+  - DBs Autogrow in percentage
+  - DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled)
+  - VLF
+  - Data files and Logs / tempDB and user Databases / Backups and Database files in same volume (Mountpoint aware)
+  - tempDB data file configurations
+  - tempDB Files autogrow of equal size
+- Performance
+  - Perf counters, Waits and Latches (wait for XXs) *
+  - Worker thread exhaustion *
+  - Blocking Chains *
+  - Plan use ratio *
+  - Hints usage *
+  - Cached Query Plans issues *
+  - Declarative Referential Integrity - Untrusted Constraints
+- Indexes and Statistics
+  - Statistics update *
+  - Statistics sampling *
+  - Hypothetical objects *
+  - Row Index Fragmentation Analysis (if enabled) *
+  - CS Index Health Analysis (if enabled) *
+  - XTP Index Health Analysis (if enabled) *
+  - Duplicate or Redundant indexes *
+  - Unused and rarely used indexes *
+  - Indexes with large keys (> 900 bytes) *
+  - Indexes with fill factor < 80 pct *
+  - Disabled indexes *
+  - Non-unique clustered indexes *
+  - Clustered Indexes with GUIDs in key *
+  - Foreign Keys with no Index *
+  - Indexing per Table *
+  - Missing Indexes *
+- Naming Convention
+  - Objects naming conventions
+- Security
+  - Password check
+- Maintenance and Monitoring
+  - SQL Agent alerts for severe errors
+  - DBCC CHECKDB, Direct Catalog Updates and Data Purity
+  - AlwaysOn/Mirroring automatic page repair
+  - Suspect pages
+  - Replication Errors
+  - Errorlog based checks
+  - System health checks
+
+**IMPORTANT pre-requisites:**
+- Only a sysadmin/local host admin will be able to perform all checks.
+- If you want to perform all checks under non-sysadmin credentials, then that login must be:
+  - Member of serveradmin server role or have the ALTER SETTINGS server permission; 
+  - Member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB;
+  - Granted EXECUTE permissions on the following extended sprocs to run checks: spOACreate, spOADestroy, spOAGetErrorInfo, xpenumerrorlogs, xpfileexist and xpregenumvalues;
+  - Granted EXECUTE permissions on xp_msver;
+  - Granted the VIEW SERVER STATE permission;
+  - Granted the VIEW DATABASE STATE permission;
+  - A xp_cmdshell proxy account should exist to run checks that access disk or OS security configurations.
+  - Member of securityadmin role, or have EXECUTE permissions on sp_readerrorlog. 
+  - Otherwise some checks will be bypassed and warnings will be shown.
+- Powershell must be installed to run checks that access disk configurations, as well as allow execution of unsigned scripts.
