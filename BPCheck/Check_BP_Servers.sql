@@ -1,7 +1,7 @@
 ﻿USE [master]
 GO
 
-DECLARE @custompath NVARCHAR(500), @allow_xpcmdshell bit, @ptochecks bit, @duration tinyint, @logdetail bit, @diskfrag bit, @ixfrag bit, @ixfragscanmode VARCHAR(8), @bpool_consumer bit, @gen_scripts bit, @dbScope VARCHAR(256), @spn_check bit
+DECLARE @custompath NVARCHAR(500), @allow_xpcmdshell bit, @ptochecks bit, @duration tinyint, @logdetail bit, @diskfrag bit, @ixfrag bit, @ixfragscanmode VARCHAR(8), @bpool_consumer bit, @gen_scripts bit, @dbScope VARCHAR(256), @spn_check bit, @deviation_table bit
 
 /* Best Practices Check - pedro.lopes@microsoft.com (http://aka.ms/BPCheck; http://aka.ms/sqlinsights)
 
@@ -29,6 +29,8 @@ Set @gen_scripts to ON if you want to generate index related scripts.
 Set @dbScope to the appropriate list of database IDs if there's a need to have a specific scope for database specific checks.
 	Valid input should be numeric value(s) between single quotes, as follows: '1,6,15,123'
 	Leave NULL for all databases
+Set @deviation_table to ON if you want to an output table of all Deviation comparisons at the end of the script, normal behaviour applies
+	Use this as a best practice checklist
 */
 
 SET @duration = 90
@@ -43,7 +45,7 @@ SET @logdetail = 0 --(1 = ON; 0 = OFF)
 SET @bpool_consumer = 1 --(1 = ON; 0 = OFF)
 SET @gen_scripts = 0 --(1 = ON; 0 = OFF)
 SET @dbScope = NULL --(NULL = All DBs)
-
+SET @deviation_table = 1 --(1 = ON; 0 = OFF)
 /*
 DESCRIPTION: This script checks for skews in the most common best practices from SQL Server 2005 onwards.
 
@@ -380,7 +382,8 @@ v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
 v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
 v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
-
+v2.1.6 - 14/02/2017 - Added output table for all Deviation outputs
+ 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
 	- Contains the following information:
@@ -631,6 +634,13 @@ WHERE dp.state = ''G''
 		--RETURN
 	END
 END;
+-- Create output table
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#bpdeviationoutput'))
+DROP TABLE #bpdeviationoutput;
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#bpdeviationoutput'))
+CREATE TABLE #bpdeviationoutput (id int IDENTITY(1,1), [Category] VARCHAR(200), [Check] VARCHAR(200), [Deviation] VARCHAR(1000), [Detail] VARCHAR(MAX));
+CREATE CLUSTERED INDEX CIX ON #bpdeviationoutput ([Category],[Check],[id]);
+
 
 -- Declare Global Variables
 DECLARE @UpTime VARCHAR(12),@StartDate DATETIME
@@ -1955,6 +1965,8 @@ END
 
 SELECT @affined_cpus = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64;
 --SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
+
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
 	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)]'
 		WHEN @numa = 1 AND @affined_cpus > 8 AND ([value] = 0 OR [value] > 8) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
@@ -1963,6 +1975,20 @@ SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
 		ELSE '[OK]'
 	END AS [Deviation]
 FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
+
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Processor_checks'
+AND [Check] = 'Parallelism_MaxDOP'
+
+--SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
+--	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)]'
+--		WHEN @numa = 1 AND @affined_cpus > 8 AND ([value] = 0 OR [value] > 8) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
+--		WHEN @numa > 1 AND (@cpucount/@numa) < 8 AND ([value] = 0 OR [value] > (@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+--		WHEN @numa > 1 AND (@cpucount/@numa) >= 8 AND ([value] = 0 OR [value] > 8 OR [value] > (@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+--		ELSE '[OK]'
+--	END AS [Deviation]
+--FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
 
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information], 
 	CASE WHEN [value] > @affined_cpus THEN @affined_cpus
@@ -1984,13 +2010,19 @@ IF @numa > 1
 BEGIN
 	WITH ncpuCTE (ncpus) AS (SELECT COUNT(cpu_id) AS ncpus from sys.dm_os_schedulers WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64 GROUP BY parent_node_id, is_online HAVING COUNT(cpu_id) = 1),
 	cpuCTE (node, afin) AS (SELECT DISTINCT(parent_node_id), is_online FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64 GROUP BY parent_node_id, is_online)
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Processor_checks' AS [Category], 'Affinity_NUMA' AS [Check],
 		CASE WHEN (SELECT COUNT(*) FROM ncpuCTE) > 0 THEN '[WARNING: Current NUMA configuration is not recommended. At least one node has a single assigned CPU]' 
 			WHEN (SELECT COUNT(DISTINCT(node)) FROM cpuCTE WHERE afin = 0 AND node NOT IN (SELECT DISTINCT(node) FROM cpuCTE WHERE afin = 1)) > 0 THEN '[WARNING: Current NUMA configuration is not recommended. At least one node does not have assigned CPUs]' 
 			ELSE '[OK]' END AS [Deviation]
 	FROM sys.dm_os_sys_info (NOLOCK) 
 	OPTION (RECOMPILE);
-	
+
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Processor_checks'
+	AND [Check] = 'Affinity_NUMA'
+
 	SELECT 'Processor_checks' AS [Category], 'Affinity_NUMA' AS [Information], cpu_count AS [Logical_CPU_Count], 
 		(SELECT COUNT(DISTINCT parent_node_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64) AS [NUMA_Nodes],
 		-- Processor Affinity is shown highest to lowest CPU ID
@@ -2000,8 +2032,14 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Processor_checks' AS [Category], 'Affinity_NUMA' AS [Check], '[Not_NUMA]' AS [Deviation]
 	FROM sys.dm_os_sys_info (NOLOCK)
+	
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Processor_checks'
+	AND [Check] = 'Affinity_NUMA'
 	OPTION (RECOMPILE);
 END;
 
@@ -2099,16 +2137,25 @@ BEGIN
 	
 	IF (SELECT COUNT(SysIdle) FROM @tblAggCPU WHERE SysIdle < 30) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Processor_checks' AS [Category], 'Processor_Usage_last_2h' AS [Check], '[WARNING: Detected CPU usage over 70 pct]' AS [Deviation];
 	END
 	ELSE IF (SELECT COUNT(SysIdle) FROM @tblAggCPU WHERE SysIdle < 10) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Processor_checks' AS [Category], 'Processor_Usage_last_2h' AS [Check], '[WARNING: Detected CPU usage over 90 pct]' AS [Deviation];
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Processor_checks' AS [Category], 'Processor_Usage_last_2h' AS [Check], '[OK]' AS [Deviation];
 	END;
+	
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Processor_checks'
+	AND [Check] = 'Processor_Usage_last_2h'
+
 
 	SELECT 'Processor_checks' AS [Category], 'Agg_Processor_Usage_last_2h' AS [Information], SQLProc AS [SQL_Process_Utilization], SysIdle AS [System_Idle], OtherProc AS [Other_Process_Utilization], Minutes AS [Time_Slice_min]
 	FROM @tblAggCPU;
@@ -2189,37 +2236,46 @@ BEGIN
 	--RETURN
 END;
 
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Memory_checks' AS [Category], 'Memory_issues_MaxServerMem' AS [Check],
 	CASE WHEN @maxservermem = 2147483647 THEN '[WARNING: MaxMem setting is default. Please revise memory settings]'
 		WHEN @maxservermem > @systemmem THEN '[WARNING: MaxMem setting exceeds available system memory]'
 		WHEN @numa > 1 AND (@maxservermem/@numa) * @numa_nodes_afinned > (@systemmem/@numa) * @numa_nodes_afinned THEN '[WARNING: Current MaxMem setting will leverage node foreign memory. 
 Maximum value for MaxMem setting on this configuration is ' + CONVERT(NVARCHAR,(@systemmem/@numa) * @numa_nodes_afinned) + ' for a single instance]'
 		ELSE '[OK]'
-	END AS [Deviation], @maxservermem AS [sql_max_mem_MB];
+	END AS [Deviation]
+	, '[sql_max_mem_MB]: ' + CONVERT(VARCHAR,@maxservermem) [Detail];
 
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Memory_checks' AS [Category], 'Memory_issues_MinServerMem' AS [Check],
 	CASE WHEN @minservermem = 0 AND (LOWER(@SystemManufacturer) = 'microsoft' OR LOWER(@SystemManufacturer) = 'vmware') THEN '[WARNING: Min Server Mem setting is not set in a VM, allowing memory pressure on the Host to attempt to deallocate memory on a guest SQL Server]'
 		WHEN @minservermem = 0 AND @clustered = 1 THEN '[INFORMATION: Min Server Mem setting is default in a clustered instance. Leverage Min Server Mem for the purpose of limiting memory concurrency between instances]'
 		WHEN @minservermem = @maxservermem THEN '[WARNING: Min Server Mem setting is equal to Max Server Mem. This will not allow dynamic memory. Please revise memory settings]'
 		WHEN @numa > 1 AND (@minservermem/@numa) * @numa_nodes_afinned > (@systemmem/@numa) * @numa_nodes_afinned THEN '[WARNING: Current MinMem setting will leverage node foreign memory]'
 		ELSE '[OK]'
-	END AS [Deviation], @minservermem AS [sql_min_mem_MB];
+	END AS [Deviation]
+	, '[sql_min_mem_MB]: ' + CONVERT(VARCHAR,@minservermem) [Detail] ;
 
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Memory_checks' AS [Category], 'Memory_issues_FreeMem' AS [Check],
 	CASE WHEN (@systemfreemem*100)/@systemmem <= 5 THEN '[WARNING: Less than 5 percent of Free Memory available. Please revise memory settings]'
 		/* 64 is the default LowMemThreshold for windows on a system with 8GB of mem or more*/
 		WHEN @systemfreemem <= 64*3 THEN '[WARNING: System Free Memory is dangerously low. Please revise memory settings]'
 		ELSE '[OK]'
-	END AS [Deviation], @systemmem AS system_total_physical_memory_MB, @systemfreemem AS system_available_physical_memory_MB;
+	END AS [Deviation]
+	, '[system_total_physical_memory_MB]: ' + CONVERT(VARCHAR,@systemmem) + '; [system_available_physical_memory_MB]: '+ CONVERT(VARCHAR, @systemfreemem) [Detail];
 
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Memory_checks' AS [Category], 'Memory_issues_CommitedMem' AS [Check],
 	CASE WHEN @commit_target > @committed AND @sqlmajorver >= 11 THEN '[INFORMATION: Memory manager will try to obtain additional memory]'
 		WHEN @commit_target < @committed AND @sqlmajorver >= 11  THEN '[INFORMATION: Memory manager will try to shrink the amount of memory committed]'
 		WHEN @commit_target > @committed AND @sqlmajorver < 11 THEN '[INFORMATION: Buffer Pool will try to obtain additional memory]'
 		WHEN @commit_target < @committed AND @sqlmajorver < 11  THEN '[INFORMATION: Buffer Pool will try to shrink]'
 		ELSE '[OK]'
-	END AS [Deviation], @commit_target/1024 AS sql_commit_target_MB, @committed/1024 AS sql_commited_MB;
+	END AS [Deviation]
+	, '[sql_commit_target_MB]: ' + CONVERT(VARCHAR,@commit_target/1024) +'; [sql_commited_MB]: '+ CONVERT(VARCHAR, @committed/1024) [Detail] ;
 
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 	CASE WHEN @arch IS NULL THEN '[WARNING: Could not determine architecture needed for check]'
 		WHEN (@systemmem <= 2048 AND @maxservermem > @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
@@ -2230,7 +2286,8 @@ SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 		(@systemmem BETWEEN 24577 AND 32768 AND @maxservermem > @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
 		(@systemmem > 32768 AND @maxservermem > @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) THEN '[WARNING: Not at the recommended MaxMem setting for this server memory configuration, with a single instance]'
 		ELSE '[OK]'
-	END AS [Deviation],
+	END AS [Deviation]
+	, '[Recommended_MaxMem_MB_SingleInstance]: ' + CONVERT(VARCHAR,
 	CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
 		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
 		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
@@ -2238,7 +2295,7 @@ SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
 		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
 		WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-	END AS [Recommended_MaxMem_MB_SingleInstance],
+	END ) + ';  [Potential_threads_mem_MB]: ' + CONVERT(VARCHAR,
 	CASE WHEN @systemmem <= 2048 THEN 512
 		WHEN @systemmem BETWEEN 2049 AND 4096 THEN 819
 		WHEN @systemmem BETWEEN 4097 AND 8192 THEN 1228
@@ -2246,7 +2303,7 @@ SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 		WHEN @systemmem BETWEEN 12289 AND 24576 THEN 2560
 		WHEN @systemmem BETWEEN 24577 AND 32768 THEN 3072
 		WHEN @systemmem > 32768 THEN 4096
-	END AS [Mem_MB_for_OS],
+	END) + '; [Potential_threads_mem_MB]: ' + CONVERT(VARCHAR,
 	CASE WHEN @systemmem <= 2048 THEN @mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)
 		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)
 		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)
@@ -2254,8 +2311,13 @@ SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)
 		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)
 		WHEN @systemmem > 32768 THEN @mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)
-	END AS [Potential_threads_mem_MB],
-	@mwthreads_count AS [Configured_workers];
+	END )+ '; [Configured_workers]: ' + CONVERT(VARCHAR,	@mwthreads_count) [Detail];
+
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Memory_checks'
+AND [Check] LIKE 'Memory_issues_%'
+ORDER BY id ASC
 
 IF @sqlmajorver = 9
 BEGIN
@@ -2572,24 +2634,35 @@ END
 
 IF @lpim = 0 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[WARNING: Locked pages are not in use by SQL Server. In a WS2003 x64 architecture it is recommended to enable LPIM]' AS [Deviation]
 END
 ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in a WS2003 x64 architecture]' AS [Deviation]
 END
 ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) >= 6.0 AND @arch = 64
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in WS2008 or above only when there are signs of paging]' AS [Deviation]
 END
 ELSE IF @lpim IS NULL
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[Could_not_retrieve_information]' AS [Deviation]
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[Not_used]' AS [Deviation]
 END;
+
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Memory_checks'
+AND [Check] = 'Locked_pages'
+ORDER BY id ASC
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Pagefile subsection
@@ -2648,7 +2721,7 @@ BEGIN
 			WHEN (SELECT COUNT(*) FROM @tbl_pf_value WHERE Data LIKE '%:\pagefile.sys 0 0%') > 0 THEN 3
 		ELSE 0 END
 	FROM @tbl_pf_value
-
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Pagefile_checks' AS [Category], 'Pagefile_management' AS [Check], 
 		CASE WHEN @pf_value = 1 THEN '[WARNING: No pagefile is configured]'
 			WHEN @pf_value = 2 THEN '[WARNING: Pagefile is managed automatically on ALL drives]'
@@ -2656,24 +2729,32 @@ BEGIN
 		ELSE '[OK]' END AS [Deviation]
 END
 
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Pagefile_checks' AS [Category], 'Pagefile_free_space' AS [Check],
 	CASE WHEN @freepagefile <= 150 THEN '[WARNING: Pagefile free space is dangerously low. Please revise Pagefile settings]'
 		WHEN (@freepagefile*100)/@pagefile <= 10 THEN '[WARNING: Less than 10 percent of Pagefile is available. Please revise Pagefile settings]'
 		WHEN (@freepagefile*100)/@pagefile <= 30 THEN '[INFORMATION: Less than 30 percent of Pagefile is available]'
 		ELSE '[OK]' END AS [Deviation], 
-	@pagefile AS total_pagefile_MB, @freepagefile AS available_pagefile_MB;
+	'[total_pagefile_MB]: ' + CONVERT(VARCHAR,@pagefile) + '; [available_pagefile_MB]: ' + CONVERT(VARCHAR,@freepagefile) [Detail] ;
 
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Pagefile_checks' AS [Category], 'Pagefile_minimum_size' AS [Check],
 	CASE WHEN @winver = '5.2' AND @arch = 64 AND @pagefile < 8192 THEN '[WARNING: Pagefile is smaller than 8GB on a WS2003 x64 system. Please revise Pagefile settings]'
 		WHEN @winver = '5.2' AND @arch = 32 AND @pagefile < 2048 THEN '[WARNING: Pagefile is smaller than 2GB on a WS2003 x86 system. Please revise Pagefile settings]'
 		WHEN @winver <> '5.2' THEN '[NA]'
 		ELSE '[OK]' END AS [Deviation], 
-	@pagefile AS total_pagefile_MB;
-	
+	'[total_pagefile_MB]: ' + CONVERT(VARCHAR,@pagefile) [Detail] ;
+
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 SELECT 'Pagefile_checks' AS [Category], 'Process_paged_out' AS [Check],
 	CASE WHEN @paged > 0 THEN '[WARNING: Part of SQL Server process memory has been paged out. Please revise LPIM settings]'
 		ELSE '[OK]' END AS [Deviation], 
-	@paged AS paged_out_MB;
+	'[paged_out_MB]: ' + CONVERT(VARCHAR,@paged) [Detail] ;
+
+SELECT [Category], [Check],[Deviation],[Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Pagefile_checks'
+ORDER BY id ASC
 
 IF @ptochecks = 1
 RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
@@ -2775,6 +2856,7 @@ BEGIN
 	IF (SELECT COUNT([logical_file_name]) FROM #tblIOStall WHERE avg_read_latency_ms >= 20) > 0
 		OR (SELECT COUNT([logical_file_name]) FROM #tblIOStall WHERE avg_write_latency_ms >= 20) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'IO_checks' AS [Category], 'Stalled_IO' AS [Check], '[WARNING: Some database files have latencies >= 20ms in the last 5s. Review I/O related performance counters and storage-related configurations.]' AS [Deviation]
 		SELECT 'IO_checks' AS [Category], 'Stalled_IO' AS [Information], [DBName] AS [Database_Name], [logical_file_name], [type_desc], avg_read_latency_ms, avg_write_latency_ms, 
 			[physical_location], size_on_disk_Mbytes, num_of_reads AS physical_reads, num_of_writes AS physical_writes, 
@@ -2786,6 +2868,7 @@ BEGIN
 	END
 	ELSE IF (SELECT COUNT([logical_file_name]) FROM #tblIOStall WHERE io_stall_pct_of_cumulative_sample > 50) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'IO_checks' AS [Category], 'Stalled_IO' AS [Check], '[WARNING: Some database files have stall I/O exceeding 50 pct of cumulative sampled time. Review I/O related performance counters and storage-related configurations.]' AS [Deviation]
 		SELECT 'IO_checks' AS [Category], 'Stalled_IO' AS [Information], [DBName] AS [Database_Name], [logical_file_name], [type_desc], avg_read_latency_ms, avg_write_latency_ms, 
 			[physical_location], size_on_disk_Mbytes, num_of_reads AS physical_reads, num_of_writes AS physical_writes, 
@@ -2797,6 +2880,7 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'IO_checks' AS [Category], 'Stalled_IO' AS [Check], '[OK]' AS [Deviation]
 		/*SELECT 'IO_checks' AS [Category], 'Stalled_IO' AS [Information], [DBName] AS [Database_Name], [logical_file_name], [type_desc], avg_read_latency_ms, avg_write_latency_ms, 
 			[physical_location], size_on_disk_Mbytes, num_of_reads AS physical_reads, num_of_writes AS physical_writes, 
@@ -2805,6 +2889,11 @@ BEGIN
 		FROM #tblIOStall
 		ORDER BY [DBName], [type_desc], [logical_file_name]*/
 	END;
+	SELECT [Category], [Check],[Deviation], [Detail]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'IO_checks'
+	AND [Check] = 'Stalled_IO'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -2876,6 +2965,7 @@ BEGIN
 
 	IF (SELECT COUNT(io_pending) FROM #tblPendingIOReq WHERE io_type = 'disk') > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'IO_checks' AS [Category], 'Pending_IO' AS [Check], '[WARNING: Pending disk I/O requests were found. Review I/O related performance counters and storage-related configurations]' AS [Deviation]
 		SELECT 'IO_checks' AS [Category], 'Pending_IO' AS [Information], [DBName] AS [Database_Name], [logical_file_name], [type_desc], avg_read_latency_ms, avg_write_latency_ms, 
 		io_stall_read_pct, io_stall_write_pct, sampled_HH, io_stall_pct_of_overall_sample, [physical_location], io_stall_min, io_stall_read_min, io_stall_write_min,
@@ -2886,8 +2976,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'IO_checks' AS [Category], 'Pending_IO' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation], [Detail]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'IO_checks'
+	AND [Check] = 'Pending_IO'
+	ORDER BY id ASC
 END;
 
 RAISERROR (N'|-Starting Server Checks', 10, 1) WITH NOWAIT
@@ -2918,6 +3014,7 @@ END
 
 IF @winver IS NULL 
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[WARNING: Could not determine Windows version for check]' AS [Deviation]
 END
 ELSE IF @planguid IS NOT NULL AND @planguid <> '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
@@ -2930,8 +3027,16 @@ BEGIN
 END
 ELSE IF @planguid IS NOT NULL AND @planguid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[OK]' AS [Deviation]
 END;
+
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Server_checks'
+AND [Check] ='Current_Power_Plan'
+ORDER BY id ASC
+
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Disk Partition alignment offset < 64KB subsection
@@ -3130,6 +3235,7 @@ Write-Output $diskpart
 		
 		IF @diskpart > 0 AND @diskpart IS NOT NULL
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Server_checks' AS [Category], 'Partition_Alignment' AS [Check], '[WARNING: Some disk partitions are not using a minimum recommended alignment offset of 64KB]' AS [Deviation]
 			SELECT 'Server_checks' AS [Category], 'Partition_Alignment' AS [Information], LEFT(t1.[HD_Partition],LEN(t1.[HD_Partition])-CHARINDEX('_',t1.[HD_Partition])) AS HD_Volume, 
 				RIGHT(t1.[HD_Partition],LEN(t1.[HD_Partition])-CHARINDEX('_',t1.[HD_Partition])) AS [HD_Partition], 
@@ -3141,10 +3247,12 @@ Write-Output $diskpart
 		END
 		ELSE IF @diskpart IS NULL
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Server_checks' AS [Category], 'Partition_Alignment' AS [Check], '[WARNING: Could not gather information on disk partition offset size]' AS [Deviation]
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Server_checks' AS [Category], 'Partition_Alignment' AS [Check], '[OK]' AS [Deviation]
 		END;
 	END
@@ -3154,6 +3262,12 @@ Write-Output $diskpart
 		RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_cmdshell, xp_instance_regread, xp_regread, xp_fileexist and xp_regenumvalues. Bypassing check]', 16, 1, N'extended_sprocs')
 		--RETURN
 	END
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Server_checks'
+	AND [Check] ='Partition_Alignment'
+	ORDER BY id ASC
+
 END
 ELSE
 BEGIN
@@ -3359,6 +3473,7 @@ Write-Output $drive
 		
 		IF @ntfs > 0 AND @ntfs IS NOT NULL
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Server_checks' AS [Category], 'NTFS_Block_Size' AS [Check], '[WARNING: Some volumes that hold database files are not formatted using the recommended NTFS block size of 64KB]' AS [Deviation]
 			SELECT 'Server_checks' AS [Category], 'NTFS_Block_Size' AS [Information], t1.HD_Volume, (t1.[NTFS_Block]/1024) AS [NTFS_Block_Size_KB]
 			FROM (SELECT DISTINCT(LEFT(physical_name, LEN(t2.HD_Volume))) AS [HD_Volume], [NTFS_Block]
@@ -3369,12 +3484,20 @@ Write-Output $drive
 		END
 		ELSE IF @ntfs IS NULL
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Server_checks' AS [Category], 'NTFS_Block_Size' AS [Check], '[WARNING: Could not gather information on NTFS block size]' AS [Deviation]
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Server_checks' AS [Category], 'NTFS_Block_Size' AS [Check], '[OK]' AS [Deviation]
 		END;
+		SELECT [Category], [Check],[Deviation], [Detail]
+		FROM #bpdeviationoutput
+		WHERE [Category] = 'Server_checks'
+		AND [Check] ='NTFS_Block_Size'
+		ORDER BY id ASC
+
 	END
 	ELSE
 	BEGIN
@@ -3617,6 +3740,7 @@ else
 		
 			IF @frag > 0 AND @frag IS NOT NULL
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Server_checks' AS [Category], 'Disk_Fragmentation' AS [Check], '[WARNING: Found volumes with physical fragmentation. Determine how and when these can be defragmented]' AS [Deviation]
 				SELECT 'Server_checks' AS [Category], 'Disk_Fragmentation' AS [Information], 
 					LEFT(t1.[volfrag],1) AS HD_Volume, 
@@ -3633,6 +3757,7 @@ else
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Server_checks' AS [Category], 'Disk_Fragmentation' AS [Check], '[OK]' AS [Deviation]
 				SELECT 'Server_checks' AS [Category], 'Disk_Fragmentation' AS [Information], 
 					LEFT(t1.[volfrag],1) AS HD_Volume, 
@@ -3715,15 +3840,16 @@ BEGIN
 			IF (SELECT COUNT([Output]) FROM #xp_cmdshell_CluNodesOutput WHERE [Output] = '') > 0
 			BEGIN				
 				SELECT @CntNodes = COUNT(NodeName) FROM sys.dm_os_cluster_nodes (NOLOCK)
-				
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 				SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 
 					CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @winver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndDiskMajority' AND @CntNodes % 2 = 1 THEN '[WARNING: The current quorum model is not recommended for a cluster with ODD number of nodes]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeMajority' AND @CntNodes % 2 = 0 THEN '[WARNING: The current quorum model is not recommended for a cluster with EVEN number of nodes]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndFileShareMajority' THEN '[INFORMATION: The current quorum model is recommended for clusters with special configurations]'
 						ELSE '[OK]' END AS [Deviation], 
-					QUOTENAME(REPLACE([Output], CHAR(9), '')) AS QuorumModel,
-					'[WARNING: No count of votes available, using count of nodes instead. Check if KB2494036 applies and is installed]' AS [Comment] -- http://support.microsoft.com/kb/2494036
+					'[QuorumModel]: ' + CONVERT(VARCHAR,QUOTENAME(REPLACE([Output], CHAR(9), '')))
+					 +
+					'[WARNING: No count of votes available, using count of nodes instead. Check if KB2494036 applies and is installed]'  -- http://support.microsoft.com/kb/2494036
 				FROM #xp_cmdshell_CluOutput WHERE [Output] IS NOT NULL
 			END
 			ELSE
@@ -12004,140 +12130,145 @@ END;
 RAISERROR (N'Clearing up temporary objects', 10, 1) WITH NOWAIT
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo')) 
-DROP TABLE #dbinfo;
+	DROP TABLE #dbinfo;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo')) 
-DROP TABLE #output_dbinfo;
+	DROP TABLE #output_dbinfo;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIOStall')) 
-DROP TABLE #tblIOStall;
+	DROP TABLE #tblIOStall;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1')) 
-DROP TABLE #tmpdbs1;
+	DROP TABLE #tmpdbs1;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')) 
-DROP TABLE #tmpdbs0;
+	DROP TABLE #tmpdbs0;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount')) 
-DROP TABLE #tblPerfCount;
+	DROP TABLE #tblPerfCount;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblPerfThresholds'))
-DROP TABLE tempdb.dbo.tblPerfThresholds;
+	DROP TABLE tempdb.dbo.tblPerfThresholds;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHypObj')) 
-DROP TABLE #tblHypObj;
+	DROP TABLE #tblHypObj;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1')) 
-DROP TABLE #tblIxs1;
+	DROP TABLE #tblIxs1;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2')) 
-DROP TABLE #tblIxs2;
+	DROP TABLE #tblIxs2;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3')) 
-DROP TABLE #tblIxs3;
+	DROP TABLE #tblIxs3;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4')) 
-DROP TABLE #tblIxs4;
+	DROP TABLE #tblIxs4;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5')) 
-DROP TABLE #tblIxs5;
+	DROP TABLE #tblIxs5;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6')) 
-DROP TABLE #tblIxs6;
+	DROP TABLE #tblIxs6;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK')) 
-DROP TABLE #tblFK;
+	DROP TABLE #tblFK;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbcc')) 
-DROP TABLE #dbcc;
+	DROP TABLE #dbcc;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#avail_logs')) 
-DROP TABLE #avail_logs;
+	DROP TABLE #avail_logs;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1')) 
-DROP TABLE #log_info1;
+	DROP TABLE #log_info1;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2')) 
-DROP TABLE #log_info2;
+	DROP TABLE #log_info2;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
-DROP TABLE #tmpobjectnames;
+	DROP TABLE #tmpobjectnames;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
-DROP TABLE #tmpfinalobjectnames;
+	DROP TABLE #tmpfinalobjectnames;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWaits'))
-DROP TABLE #tblWaits;
+	DROP TABLE #tblWaits;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalWaits'))
-DROP TABLE #tblFinalWaits;
+	DROP TABLE #tblFinalWaits;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblLatches'))
-DROP TABLE #tblLatches;
+	DROP TABLE #tblLatches;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalLatches'))
-DROP TABLE #tblFinalLatches;
+	DROP TABLE #tblFinalLatches;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
-DROP TABLE #IndexCreation;
+	DROP TABLE #IndexCreation;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
-DROP TABLE #IndexRedundant;
+	DROP TABLE #IndexRedundant;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBlkChains'))
-DROP TABLE #tblBlkChains;
+	DROP TABLE #tblBlkChains;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsSamp'))
-DROP TABLE #tblStatsSamp;
+	DROP TABLE #tblStatsSamp;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksBefore'))
-DROP TABLE #tblSpinlocksBefore;
+	DROP TABLE #tblSpinlocksBefore;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSpinlocksAfter'))
-DROP TABLE #tblSpinlocksAfter;
+	DROP TABLE #tblSpinlocksAfter;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFinalSpinlocks'))
-DROP TABLE #tblFinalSpinlocks;
+	DROP TABLE #tblFinalSpinlocks;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#pagerepair'))
-DROP TABLE #pagerepair;
+	DROP TABLE #pagerepair;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))
-DROP TABLE #tmp_dm_io_virtual_file_stats;
+	DROP TABLE #tmp_dm_io_virtual_file_stats;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_exec_query_stats')) 
-DROP TABLE #tmp_dm_exec_query_stats;
+	DROP TABLE #tmp_dm_exec_query_stats;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dm_exec_query_stats')) 
-DROP TABLE #dm_exec_query_stats;
+	DROP TABLE #dm_exec_query_stats;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIOReq'))
-DROP TABLE #tblPendingIOReq;
+	DROP TABLE #tblPendingIOReq;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPendingIO'))
-DROP TABLE #tblPendingIO;
+	DROP TABLE #tblPendingIO;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
-DROP TABLE #qpwarnings;
+	DROP TABLE #qpwarnings;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
-DROP TABLE #tblStatsUpd;
+	DROP TABLE #tblStatsUpd;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
-DROP TABLE #tblPerSku;
+	DROP TABLE #tblPerSku;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
-DROP TABLE #tblColStoreIXs;
+	DROP TABLE #tblColStoreIXs;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#SystemHealthSessionData'))
-DROP TABLE #SystemHealthSessionData;
+	DROP TABLE #SystemHealthSessionData;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
-DROP TABLE #tmpdbfiledetail;
+	DROP TABLE #tmpdbfiledetail;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblHints'))
-DROP TABLE #tblHints;
+	DROP TABLE #tblHints;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTriggers'))
-DROP TABLE #tblTriggers;
+	DROP TABLE #tblTriggers;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS'))
-DROP TABLE #tmpIPS;
+	DROP TABLE #tmpIPS;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
-DROP TABLE #tblCode;
+	DROP TABLE #tblCode;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
-DROP TABLE #tblWorking;
+	DROP TABLE #tblWorking;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
-DROP TABLE #tmpdbs_userchoice;
+	DROP TABLE #tmpdbs_userchoice;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
-DROP TABLE #xp_cmdshell_CluNodesOutput;
+	DROP TABLE #xp_cmdshell_CluNodesOutput;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
-DROP TABLE #xp_cmdshell_CluOutput;
+	DROP TABLE #xp_cmdshell_CluOutput;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_Nodes'))
-DROP TABLE #xp_cmdshell_Nodes;
+	DROP TABLE #xp_cmdshell_Nodes;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEOutput'))
-DROP TABLE #xp_cmdshell_QFEOutput;
+	DROP TABLE #xp_cmdshell_QFEOutput;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_QFEFinal'))
-DROP TABLE #xp_cmdshell_QFEFinal;
+	DROP TABLE #xp_cmdshell_QFEFinal;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#RegResult'))
-DROP TABLE #RegResult;
+	DROP TABLE #RegResult;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ServiceStatus'))
-DROP TABLE #ServiceStatus;
+	DROP TABLE #ServiceStatus;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_AcctSPNoutput'))
-DROP TABLE #xp_cmdshell_AcctSPNoutput;
+	DROP TABLE #xp_cmdshell_AcctSPNoutput;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_DupSPNoutput'))
-DROP TABLE #xp_cmdshell_DupSPNoutput;
+	DROP TABLE #xp_cmdshell_DupSPNoutput;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#FinalDupSPN'))
-DROP TABLE #FinalDupSPN;
+	DROP TABLE #FinalDupSPN;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#ScopedDupSPN'))
-DROP TABLE #ScopedDupSPN;
+	DROP TABLE #ScopedDupSPN;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDRI'))
-DROP TABLE #tblDRI;
+	DROP TABLE #tblDRI;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblInMemDBs'))
-DROP TABLE #tblInMemDBs;
+	DROP TABLE #tblInMemDBs;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
-DROP TABLE #tmpXIS;
+	DROP TABLE #tmpXIS;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
-DROP TABLE #tmpXNCIS;
+	DROP TABLE #tmpXNCIS;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
-DROP TABLE #tmpIPS_CI;
+	DROP TABLE #tmpIPS_CI;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#bpdeviationoutput'))
+	DROP TABLE #bpdeviationoutput;
+
+
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
 RAISERROR (N'All done!', 10, 1) WITH NOWAIT
 GO
+
