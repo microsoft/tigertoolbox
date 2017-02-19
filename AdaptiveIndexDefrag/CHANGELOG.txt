@@ -113,3 +113,7 @@ v1.6.3.3 - 11/7/2016 - Rolled back previously reported issue with REORGANIZE and
 v1.6.4 - 11/10/2016 - Fixed support for incremental statistics  in SQL Server 2016 RTM.
 v1.6.4.1 - 11/16/2016 - Added support for incremental statistics in SQL Server 2016 SP1.
 v1.6.4.2 - 1/20/2017 - Fixed support for incremental statistics introduced error 4104.
+v1.6.5 - 2/18/2017 - Fixed empty columnstore indexes being picked up;
+			Fixed orphaned statistic not being updated and preventing rescan;
+			Fixed getting null comparison in sys.indexes (only on SQL 2005, SQL 2008 or SQL 2008R2 pre-SP2);
+			Fixed insert error into tbl_AdaptiveIndexDefrag_Stats_log table.
