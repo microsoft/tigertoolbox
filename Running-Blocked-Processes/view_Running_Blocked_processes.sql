@@ -14,6 +14,7 @@
 -- 2014-12-09 Handle illegal characters in XML conversion
 -- 11/16/2016 Added support for SQL Server 2016 SP1 and live query plan snapshot.
 -- 12/2/2016 Fixed transport-level error issue with SQL Server 2016 SP1.
+-- 2/16/2016 Added NOLOCK hints
 
 SET NOCOUNT ON;
 DECLARE @UpTime VARCHAR(12), @StartDate DATETIME, @sqlmajorver int, @sqlcmd NVARCHAR(500), @params NVARCHAR(500)
@@ -105,11 +106,11 @@ BEGIN
 	es.[program_name],
 	--ec.client_net_address,
 	es.is_user_process
-FROM sys.dm_exec_requests er
-	LEFT OUTER JOIN sys.dm_exec_query_memory_grants mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
-	LEFT OUTER JOIN sys.dm_db_session_space_usage ssu ON er.session_id = ssu.session_id
-	LEFT OUTER JOIN sys.dm_exec_sessions es ON er.session_id = es.session_id
-	OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) qp
+FROM sys.dm_exec_requests (NOLOCK) er
+	LEFT OUTER JOIN sys.dm_exec_query_memory_grants (NOLOCK) mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
+	LEFT OUTER JOIN sys.dm_db_session_space_usage (NOLOCK) ssu ON er.session_id = ssu.session_id
+	LEFT OUTER JOIN sys.dm_exec_sessions (NOLOCK) es ON er.session_id = es.session_id
+	OUTER APPLY sys.dm_exec_query_plan(er.plan_handle) qp
 WHERE er.session_id <> @@SPID AND es.is_user_process = 1
 ORDER BY er.total_elapsed_time DESC, er.logical_reads DESC, [database_name], session_id'
 END
@@ -118,7 +119,7 @@ BEGIN
 	SET @sqlcmd = N';WITH tsu AS (SELECT session_id, SUM(user_objects_alloc_page_count) AS user_objects_alloc_page_count, 
 SUM(user_objects_dealloc_page_count) AS user_objects_dealloc_page_count, 
 SUM(internal_objects_alloc_page_count) AS internal_objects_alloc_page_count, 
-SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage GROUP BY session_id)
+SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage (NOLOCK) GROUP BY session_id)
 SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qt.text,
@@ -187,13 +188,13 @@ SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS 
 	--ec.client_net_address,
 	es.is_user_process,
 	g.name AS workload_group
-FROM sys.dm_exec_requests er
-	LEFT OUTER JOIN sys.dm_exec_query_memory_grants mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
-	LEFT OUTER JOIN sys.dm_db_session_space_usage ssu ON er.session_id = ssu.session_id
-	LEFT OUTER JOIN sys.dm_exec_sessions es ON er.session_id = es.session_id
+FROM sys.dm_exec_requests (NOLOCK) er
+	LEFT OUTER JOIN sys.dm_exec_query_memory_grants (NOLOCK) mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
+	LEFT OUTER JOIN sys.dm_db_session_space_usage (NOLOCK) ssu ON er.session_id = ssu.session_id
+	LEFT OUTER JOIN sys.dm_exec_sessions (NOLOCK) es ON er.session_id = es.session_id
 	LEFT OUTER JOIN tsu ON tsu.session_id = ssu.session_id
-	LEFT OUTER JOIN sys.dm_resource_governor_workload_groups g ON es.group_id = g.group_id
-	OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) qp
+	LEFT OUTER JOIN sys.dm_resource_governor_workload_groups (NOLOCK) g ON es.group_id = g.group_id
+	OUTER APPLY sys.dm_exec_query_plan(er.plan_handle) qp
 WHERE er.session_id <> @@SPID AND es.is_user_process = 1
 ORDER BY er.total_elapsed_time DESC, er.logical_reads DESC, [database_name], session_id'
 END
@@ -202,7 +203,7 @@ BEGIN
 	SELECT @sqlcmd = N'WITH tsu AS (SELECT session_id, SUM(user_objects_alloc_page_count) AS user_objects_alloc_page_count, 
 SUM(user_objects_dealloc_page_count) AS user_objects_dealloc_page_count, 
 SUM(internal_objects_alloc_page_count) AS internal_objects_alloc_page_count, 
-SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage GROUP BY session_id)
+SUM(internal_objects_dealloc_page_count) AS internal_objects_dealloc_page_count FROM sys.dm_db_task_space_usage (NOLOCK) GROUP BY session_id)
 SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS [database_name], OBJECT_NAME(qp.objectid, qp.dbid) AS [object_name],
 	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qt.text,
@@ -272,13 +273,13 @@ SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS 
 	--ec.client_net_address,
 	es.is_user_process,
 	g.name AS workload_group
-FROM sys.dm_exec_requests er
-	LEFT OUTER JOIN sys.dm_exec_query_memory_grants mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
-	LEFT OUTER JOIN sys.dm_db_session_space_usage ssu ON er.session_id = ssu.session_id
-	LEFT OUTER JOIN sys.dm_exec_sessions es ON er.session_id = es.session_id
+FROM sys.dm_exec_requests (NOLOCK) er
+	LEFT OUTER JOIN sys.dm_exec_query_memory_grants (NOLOCK) mg ON er.session_id = mg.session_id AND er.request_id = mg.request_id
+	LEFT OUTER JOIN sys.dm_db_session_space_usage (NOLOCK) ssu ON er.session_id = ssu.session_id
+	LEFT OUTER JOIN sys.dm_exec_sessions (NOLOCK) es ON er.session_id = es.session_id
 	LEFT OUTER JOIN tsu ON tsu.session_id = ssu.session_id
-	LEFT OUTER JOIN sys.dm_resource_governor_workload_groups g ON es.group_id = g.group_id
-	OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) qp 
+	LEFT OUTER JOIN sys.dm_resource_governor_workload_groups (NOLOCK) g ON es.group_id = g.group_id
+	OUTER APPLY sys.dm_exec_query_plan(er.plan_handle) qp 
 	OUTER APPLY sys.dm_exec_query_statistics_xml(er.session_id) qes
 WHERE er.session_id <> @@SPID AND es.is_user_process = 1
 ORDER BY er.total_elapsed_time DESC, er.logical_reads DESC, [database_name], session_id'
@@ -380,13 +381,13 @@ SELECT 'Waiter_Blocking_Report' AS [Information],
 		WHEN es2.session_id = -3 THEN 'Defered_recovery_tran' 
 		WHEN es2.session_id = -4 THEN 'Unknown_tran' ELSE NULL END AS blocker_session_comment,
 	es2.is_user_process AS [blocker_is_user_process]
-FROM sys.dm_exec_sessions es
-LEFT OUTER JOIN sys.dm_exec_requests er ON es.session_id = er.session_id
-LEFT OUTER JOIN sys.dm_exec_connections ec ON es.session_id = ec.session_id
-LEFT OUTER JOIN sys.dm_os_tasks ot ON er.session_id = ot.session_id AND er.request_id = ot.request_id
-LEFT OUTER JOIN sys.dm_exec_sessions es2 ON er.blocking_session_id = es2.session_id
-LEFT OUTER JOIN sys.dm_exec_requests er2 ON es2.session_id = er2.session_id
-LEFT OUTER JOIN sys.dm_exec_connections ec2 ON es2.session_id = ec2.session_id
+FROM sys.dm_exec_sessions (NOLOCK) es
+LEFT OUTER JOIN sys.dm_exec_requests (NOLOCK) er ON es.session_id = er.session_id
+LEFT OUTER JOIN sys.dm_exec_connections (NOLOCK) ec ON es.session_id = ec.session_id
+LEFT OUTER JOIN sys.dm_os_tasks (NOLOCK) ot ON er.session_id = ot.session_id AND er.request_id = ot.request_id
+LEFT OUTER JOIN sys.dm_exec_sessions (NOLOCK) es2 ON er.blocking_session_id = es2.session_id
+LEFT OUTER JOIN sys.dm_exec_requests (NOLOCK) er2 ON es2.session_id = er2.session_id
+LEFT OUTER JOIN sys.dm_exec_connections (NOLOCK) ec2 ON es2.session_id = ec2.session_id
 LEFT OUTER JOIN 
 (
     -- In some cases (e.g. parallel queries, also waiting for a worker), one thread can be flagged as 
@@ -402,13 +403,13 @@ LEFT OUTER JOIN
 		CASE WHEN [wait_type] LIKE 'LCK%' AND [resource_description] LIKE '%associatedObjectId%' AND ISNUMERIC(RIGHT([resource_description],CHARINDEX('=', REVERSE([resource_description]))-1)) = 1 THEN CAST(RIGHT([resource_description],CHARINDEX('=', REVERSE([resource_description]))-1) AS bigint)
 			ELSE NULL END AS [objid],
 		ROW_NUMBER() OVER (PARTITION BY waiting_task_address ORDER BY wait_duration_ms DESC) AS row_num
-    FROM sys.dm_os_waiting_tasks
+    FROM sys.dm_os_waiting_tasks (NOLOCK)
 ) owt ON ot.task_address = owt.waiting_task_address AND owt.row_num = 1
---OUTER APPLY sys.dm_exec_sql_text (er.sql_handle) est
---OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) eqp
+--OUTER APPLY sys.dm_exec_sql_text(er.sql_handle) est
+--OUTER APPLY sys.dm_exec_query_plan(er.plan_handle) eqp
 WHERE es.session_id <> @@SPID AND es.is_user_process = 1 
 	--AND ((owt.wait_duration_ms/1000 > 5) OR (er.total_elapsed_time/1000) > 5 OR er.total_elapsed_time IS NULL) --Only report blocks > 5 Seconds plus head blocker
-	AND (es.session_id IN (SELECT er3.blocking_session_id FROM sys.dm_exec_requests er3) OR er.blocking_session_id IS NOT NULL OR er.blocking_session_id > 0)
+	AND (es.session_id IN (SELECT er3.blocking_session_id FROM sys.dm_exec_requests (NOLOCK) er3) OR er.blocking_session_id IS NOT NULL OR er.blocking_session_id > 0)
 ORDER BY blocked_spid, is_head_blocker DESC, blocked_spid_wait_time_ms DESC, blocker_spid
 
 -- Stored procedure stats
@@ -421,7 +422,7 @@ BEGIN
 	CASE WHEN ps.database_id = 32767 THEN NULL ELSE OBJECT_NAME(ps.[object_id], ps.database_id) END AS ObjectName,
 	type_desc,
 	(SELECT qt.text AS [text()] 
-		FROM sys.dm_exec_procedure_stats AS ps2 CROSS APPLY sys.dm_exec_sql_text(ps2.sql_handle) AS qt 
+		FROM sys.dm_exec_procedure_stats (NOLOCK) ps2 CROSS APPLY sys.dm_exec_sql_text(ps2.sql_handle) qt 
 		WHERE ps2.database_id = ps.database_id AND ps2.[object_id] = ps.[object_id] 
 		FOR XML PATH(''''), TYPE) AS [sqltext],
 	qp.query_plan,
@@ -439,14 +440,14 @@ BEGIN
 	ps.last_physical_reads, ps.min_physical_reads, ps.max_physical_reads,
 	ps.total_logical_writes/ps.execution_count AS avg_logical_writes,
 	ps.last_logical_writes, ps.min_logical_writes, ps.max_logical_writes
- FROM sys.dm_exec_procedure_stats AS ps
- CROSS APPLY sys.dm_exec_query_plan(ps.plan_handle) AS qp'
+ FROM sys.dm_exec_procedure_stats (NOLOCK) ps
+ CROSS APPLY sys.dm_exec_query_plan(ps.plan_handle) qp'
 	EXEC (@sqlcmd);
  END
  
 -- Acquired locks
 /*SELECT tl.*, sp.[object_id], sp.index_id 
-FROM sys.dm_tran_locks tl
-LEFT JOIN sys.partitions sp ON tl.resource_associated_entity_id = sp.[hobt_id]
+FROM sys.dm_tran_locks (NOLOCK) tl
+LEFT JOIN sys.partitions (NOLOCK) sp ON tl.resource_associated_entity_id = sp.[hobt_id]
 */
 GO
