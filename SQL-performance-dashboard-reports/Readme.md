@@ -9,7 +9,7 @@ The following are steps for setting up and configuring SQL Server Dashboard Repo
 
 1.	Install and configure SQL Server Reporting service (any version greater than SQL Server 2012 with latest SP and CU) on a server identified as a Central Monitoring Server. The central monitoring server should be part of the same domain and network as the target SQL Server instance.
 2.	Download SQL Performance Dashboard Reporting Solution from Tiger toobox github repository.
-3.	Download SSDT-BI for Visual Studio 2012 or Download SSDT-BI for Visual Studio 2013 and install BI designer on workstation where github solution is downloaded or copied.
+3.	Install ReportingServicesTools PowerShell module from the `PowerShell Gallery Install-Module -Name ReportingServicesTools` or from their GitHub repository `Invoke-Expression (Invoke-WebRequest https://aka.ms/rstools)` onto workstation where github solution is downloaded or copied.
 4.	Open PerfDashboard solution using Visual Studio 2012 or 2013 on the workstation and deploy it against the SQL Server Reporting service instance by providing the TargetServerUrl as shown below
 5.	Make sure report deployment is successful and browse the report manager url to see the reports deployed under SQL Server Performance Dashboard folder.
 6.	Run setup.sql script from Tiger toobox github repository against all the target SQL Server instances which creates a schema MS_PerfDashboard in msdb database. All the relevant objects required for SQL performance dashboard reports are contained in MS_PerfDashboard schema.
