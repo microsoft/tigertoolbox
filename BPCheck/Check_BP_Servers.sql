@@ -380,6 +380,7 @@ v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
 v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
 v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
+v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -4528,9 +4529,9 @@ BEGIN
 			WHEN @accntdtsservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 			WHEN @accntdtsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Integration Services under the same account as SQL Server is not recommended]' 
 			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @winver <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
+			WHEN CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4543,7 +4544,7 @@ BEGIN
 			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			WHEN @sqlmajorver >= 11 AND @winver <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4557,9 +4558,9 @@ BEGIN
 				WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 				WHEN @sqlmajorver <= 10 AND @accntftservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running Full-Text Service under this account is not recommended]' 
 				WHEN @sqlmajorver <= 10 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
-				WHEN @sqlmajorver >= 11 AND @winver <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
+				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 				-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-				WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
+				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 			ELSE '[OK]' END 
 		ELSE '[INFORMATION: Service is not installed]' 
 		END AS [Deviation]
