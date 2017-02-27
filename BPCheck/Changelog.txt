@@ -323,3 +323,5 @@ v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
 v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
 v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
 v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
+v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information section;
+			Fixed conversion error when multiple TCP ports.

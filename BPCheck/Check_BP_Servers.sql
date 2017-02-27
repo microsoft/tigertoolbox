@@ -378,9 +378,11 @@ v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options che
 v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 						Fixed negative CPU usage in avg cpu usage last 2h check.
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
-v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
+v2.1.5 - 11/17/2016 - Added support for SQL Server 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
 v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
 v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
+v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information section;
+						Fixed conversion error when multiple TCP ports.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -931,10 +933,12 @@ BEGIN
 	IF @ptochecks = 1 AND @IsHadrEnabled = 1
 	BEGIN
 		-- Note: If low_water_mark_for_ghosts number is not increasing over time, it implies that ghost cleanup might not happen.
-		SELECT 'Information' AS [Category], 'AlwaysOn_Replicas' AS [Information], database_id, group_id, replica_id, group_database_id, is_local, synchronization_state_desc, 
-			is_commit_participant, synchronization_health_desc, database_state_desc, is_suspended, suspend_reason_desc, last_sent_time, last_received_time, last_hardened_time, 
-			last_redone_time, log_send_queue_size, log_send_rate, redo_queue_size, redo_rate, filestream_send_rate, last_commit_time, low_water_mark_for_ghosts 
-		FROM sys.dm_hadr_database_replica_states;
+		SET @sqlcmd = 'SELECT ''Information'' AS [Category], ''AlwaysOn_Replicas'' AS [Information], database_id, group_id, replica_id, group_database_id, is_local, synchronization_state_desc, 
+	is_commit_participant, synchronization_health_desc, database_state_desc, is_suspended, suspend_reason_desc, last_sent_time, last_received_time, last_hardened_time, 
+	last_redone_time, log_send_queue_size, log_send_rate, redo_queue_size, redo_rate, filestream_send_rate, last_commit_time, 
+	low_water_mark_for_ghosts' + CASE WHEN @sqlmajorver > 12 THEN ', secondary_lag_seconds' ELSE '' END + ' 
+FROM sys.dm_hadr_database_replica_states'
+		EXECUTE sp_executesql @sqlcmd
 
 		SELECT 'Information' AS [Category], 'AlwaysOn_Replica_Cluster' AS [Information], replica_id, group_database_id, database_name, is_failover_ready, is_pending_secondary_suspend, 
 			is_database_joined, recovery_lsn, truncation_lsn 
@@ -989,7 +993,7 @@ END;
 -- Instance info subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
-DECLARE @port VARCHAR(5), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(255), @cpucount int, @numa int
+DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(255), @cpucount int, @numa int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300)
 
 IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
@@ -1016,13 +1020,13 @@ END
 ELSE
 BEGIN
 	BEGIN TRY
-		SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(int,CONVERT(float,value_data))) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpPort%'' AND CONVERT(float,value_data) > 0;';
-		SET @params = N'@portOUT int OUTPUT';
+		SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(VARCHAR(15),value_data)) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpPort%'' AND CONVERT(float,value_data) > 0;';
+		SET @params = N'@portOUT VARCHAR(15) OUTPUT';
 		EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
 		IF @port IS NULL
 		BEGIN
-			SET @sqlcmd = N'SELECT @portOUT = CONVERT(int,CONVERT(float,value_data)) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpDynamicPort%'' AND CONVERT(float,value_data) > 0;';
-			SET @params = N'@portOUT int OUTPUT';
+			SET @sqlcmd = N'SELECT @portOUT = CONVERT(VARCHAR(15),value_data) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpDynamicPort%'' AND CONVERT(float,value_data) > 0;';
+			SET @params = N'@portOUT VARCHAR(15) OUTPUT';
 			EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
 		END
 	END TRY
