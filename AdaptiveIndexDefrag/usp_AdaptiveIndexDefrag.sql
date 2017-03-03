@@ -437,6 +437,10 @@ CREATE PROCEDURE dbo.usp_AdaptiveIndexDefrag
 		/* 1 = updates only index related stats; 0 = updates all stats in table */
 	, @statsSample NCHAR(8)	= NULL
 		/* Valid options are: NULL, FULLSCAN, and RESAMPLE */
+	, @statsThreshold float	= NULL
+		/* Valid options are: NULL to use default stats sample method (same as TF2371), float number greater or equal to 0.01 and less than 100 to use custom stats sample */
+	, @statsMinRows bigint = NULL
+		/* Valid options are: NULL , integer number that sets the min number of rows a table has to have to be considered for @statsThreshold use */
 	, @ix_statsnorecompute bit = 0
 		/* 1 = STATISTICS_NORECOMPUTE on; 0 = default which is with STATISTICS_NORECOMPUTE off */
 	, @statsIncremental	bit = NULL
@@ -602,6 +606,8 @@ v1.6.5 - 2/18/2017 - Fixed empty columnstore indexes being picked up;
 						Fixed orphaned statistic not being updated and preventing rescan;
 						Fixed getting null comparison in sys.indexes (only on SQL 2005, SQL 2008 or SQL 2008R2 pre-SP2);
 						Fixed insert error into tbl_AdaptiveIndexDefrag_Stats_log table.
+v1.6.5.1 - 3/3/2017 - Added custom threshold parameter for percent of changes needed to trigger statistics update, overriding default handling;
+						Added parameter for min rows to be considered with custom threshold parameter.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -696,6 +702,14 @@ ALL parameters are optional. If not specified, the defaults for each parameter a
 @statsSample		NULL = perform a sample scan on the target table or indexed view. The database engine automatically computes the required sample size;
 					FULLSCAN = all rows in table or view should be read to gather the statistics;
 					RESAMPLE = statistics will be gathered using an inherited sampling ratio for all existing statistics including indexes
+					
+@statsThreshold		Custom threshold of changes needed to trigger update statistics, overriding default handling;
+					NULL = assume default handling which is similar to TF2371;
+					A float number greater or equal to 0.01 and less than 100 to use custom stats sample
+					
+@statsMinRows 		Sets the min number of rows a table has to have to be considered for @statsThreshold use;
+					NULL = use @statsThreshold (if set) for any size table;
+					An integer number that sets the min number of rows a table has to have to be considered for @statsThreshold use
 
 @ix_statsnorecompute	1 = STATISTICS_NORECOMPUTE on will disable the auto update statistics.
 					If you are dealing with stats update with a custom job (or even with this code by updating statistics), you may use this option;
@@ -809,6 +823,9 @@ BEGIN
 				
 		IF @rebuildThreshold_cs IS NULL OR @rebuildThreshold_cs NOT BETWEEN 0.00 AND 100.0
 		SET @rebuildThreshold_cs = 10.0;
+		
+		IF @statsThreshold IS NOT NULL AND @statsThreshold NOT BETWEEN 0.01 AND 100.0
+		SET @statsThreshold = NULL;
 
 		IF @timeLimit IS NULL
 		SET @timeLimit = 480;
@@ -1115,7 +1132,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @rows_sampled bigint
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5.1';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1200,7 +1217,9 @@ WHEN @dealMaxPartition = 0 AND @editionCheck = 1 THEN '
 Only the right-most populated partitions will be considered if greater than ' + CAST(@minPageCount AS NVARCHAR(10)) + ' page(s);'
 ELSE CHAR(10) + 'All partitions will be considered;' END +
 CHAR(10) + 'Statistics ' + CASE WHEN @updateStats = 1 THEN 'WILL' ELSE 'WILL NOT' END + ' be updated ' + CASE WHEN @updateStatsWhere = 1 THEN 'on reorganized indexes;' ELSE 'on all stats belonging to parent table;' END +		
-CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL THEN CHAR(10) + 'Statistics will be updated with ' + @statsSample + '.' ELSE '' END +		
+CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL THEN CHAR(10) + 'Statistics will be updated with ' + @statsSample + '.' ELSE '' END +
+CHAR(10) + 'Statistics will be updated using ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 THEN 'a threshold of ' + CONVERT(VARCHAR, @statsThreshold) + ' percent' ELSE ' a calculated threshold similar to TF2371' END + 
++ ' on tables ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL THEN 'with a min of ' + CONVERT(VARCHAR, @statsMinRows) + ' rows.' ELSE IF @statsMinRows IS NOT NULL THEN ' of any size.' ELSE '.' END + 		
 CHAR(10) + 'Statistics will be updated with Incremental property (if any) ' + CASE WHEN @statsIncremental = 1 THEN 'as ON' WHEN @statsIncremental = 0 THEN 'as OFF' ELSE 'not changed from current setting' END + '.' +
 CHAR(10) + 'Defragmentation will use ' + CASE WHEN @editionCheck = 0 OR @maxDopRestriction IS NULL THEN 'system defaults for processors;'
 ELSE CAST(@maxDopRestriction AS VARCHAR(2)) + ' processors;' END +
@@ -2255,13 +2274,15 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				If the cardinality for a table is greater than 500, update statistics when (500 + 20 percent of the table) changes have occurred.
 				Reference: http://support.microsoft.com/kb/195565
 				*/
-				IF (
-					(@record_count BETWEEN 6 AND 500 AND @rowmodctr >= 500) OR -- like the default
-					(@record_count BETWEEN 501 AND 10000 AND (@rowmodctr >= (@record_count*20)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 20 percent or simulate TF 2371
-					(@record_count BETWEEN 10001 AND 100000 AND (@rowmodctr >= (@record_count*15)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 15 percent or simulate TF 2371
-					(@record_count BETWEEN 100001 AND 1000000 AND (@rowmodctr >= (@record_count*10)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 10 percent or simulate TF 2371
-					(@record_count >= 1000001 AND (@rowmodctr >= (@record_count*5)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) -- 500 + 5 percent or simulate TF 2371
-					)
+				IF (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NULL AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+					OR (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL AND @record_count >= @statsMinRows AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+					OR (@statsThreshold IS NULL AND (
+						(@record_count BETWEEN 6 AND 500 AND @rowmodctr >= 500) OR -- like the default
+						(@record_count BETWEEN 501 AND 10000 AND (@rowmodctr >= (@record_count*20)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 20 percent or simulate TF 2371
+						(@record_count BETWEEN 10001 AND 100000 AND (@rowmodctr >= (@record_count*15)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 15 percent or simulate TF 2371
+						(@record_count BETWEEN 100001 AND 1000000 AND (@rowmodctr >= (@record_count*10)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 10 percent or simulate TF 2371
+						(@record_count >= 1000001 AND (@rowmodctr >= (@record_count*5)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) -- 500 + 5 percent or simulate TF 2371
+					))
 				BEGIN
 					SET @sqlcommand2 = N'UPDATE STATISTICS ' + @dbName + N'.'+ @schemaName + N'.' + @objectName + N' (' + @statsName + N')'
 					IF UPPER(@statsSample) = 'FULLSCAN' AND (@partitionNumber = 1 OR @partitionNumber = @maxpartitionNumber)
@@ -2521,13 +2542,15 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				If the cardinality for a table is greater than 6, but less than or equal to 500, update status every 500 modifications.
 				If the cardinality for a table is greater than 500, update statistics when (500 + 20 percent of the table) changes have occurred.
 				*/
-				IF (
-					(@record_count BETWEEN 6 AND 500 AND @rowmodctr >= 500) OR -- like the default
-					(@record_count BETWEEN 501 AND 10000 AND (@rowmodctr >= (@record_count*20)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 20 percent or simulate TF 2371
-					(@record_count BETWEEN 10001 AND 100000 AND (@rowmodctr >= (@record_count*15)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 15 percent or simulate TF 2371
-					(@record_count BETWEEN 100001 AND 1000000 AND (@rowmodctr >= (@record_count*10)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 10 percent or simulate TF 2371
-					(@record_count >= 1000001 AND (@rowmodctr >= (@record_count*5)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) -- 500 + 5 percent or simulate TF 2371
-					)
+				IF (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NULL AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+					OR (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL AND @record_count >= @statsMinRows AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+					OR (@statsThreshold IS NULL AND (
+						(@record_count BETWEEN 6 AND 500 AND @rowmodctr >= 500) OR -- like the default
+						(@record_count BETWEEN 501 AND 10000 AND (@rowmodctr >= (@record_count*20)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 20 percent or simulate TF 2371
+						(@record_count BETWEEN 10001 AND 100000 AND (@rowmodctr >= (@record_count*15)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 15 percent or simulate TF 2371
+						(@record_count BETWEEN 100001 AND 1000000 AND (@rowmodctr >= (@record_count*10)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 10 percent or simulate TF 2371
+						(@record_count >= 1000001 AND (@rowmodctr >= (@record_count*5)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) -- 500 + 5 percent or simulate TF 2371
+					))
 				BEGIN	
 					SET @sqlcommand2 = N'UPDATE STATISTICS ' + @dbName + N'.' + @statsschemaName + N'.' + @statsobjectName + N' (' + @statsName + N')'
 					IF UPPER(@statsSample) = 'FULLSCAN'	AND (@partitionNumber = 1 OR @partitionNumber = @maxpartitionNumber)
