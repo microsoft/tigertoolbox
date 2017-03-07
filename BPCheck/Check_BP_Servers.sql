@@ -3767,6 +3767,11 @@ else
 				ORDER BY t1.[volfrag]
 				OPTION (RECOMPILE);
 			END;
+			SELECT [Category], [Check],[Deviation]
+			FROM #bpdeviationoutput
+			WHERE [Category] = 'Server_checks'
+			AND [Check] ='Disk_Fragmentation'
+			ORDER BY id ASC
 		END
 		ELSE
 		BEGIN
@@ -3858,13 +3863,14 @@ BEGIN
 
 				IF EXISTS (SELECT TOP 1 [Output] FROM #xp_cmdshell_CluOutput WHERE [Output] LIKE '%Majority%' OR [Output] LIKE '%Disk%')
 				BEGIN
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 					SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 
 						CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @winver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndDiskMajority' AND @CntVotes % 2 = 1 THEN '[WARNING: The current quorum model is not recommended for a cluster with ODD number of node votes]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeMajority' AND @CntVotes % 2 = 0 THEN '[WARNING: The current quorum model is not recommended for a cluster with EVEN number of node votes]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndFileShareMajority' THEN '[INFORMATION: The current quorum model is recommended for clusters with special configurations]'
 							ELSE '[OK]' END AS [Deviation], 
-						QUOTENAME(REPLACE([Output], CHAR(9), '')) AS QuorumModel 
+						'[QuorumModel]: ' + CONVERT(VARCHAR,QUOTENAME(REPLACE([Output], CHAR(9), '')))
 					FROM #xp_cmdshell_CluOutput WHERE [Output] IS NOT NULL 
 				END
 			END
@@ -3877,8 +3883,6 @@ BEGIN
 			BEGIN
 				EXEC sp_configure 'show advanced options', 0; RECONFIGURE WITH OVERRIDE;
 			END
-			
-			
 		END
 		ELSE
 		BEGIN
@@ -3900,8 +3904,12 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 'NOT_CLUSTERED' AS [Deviation]
 END;
+
+
+			
 
 IF @IsHadrEnabled = 1
 BEGIN
@@ -3914,13 +3922,18 @@ SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Cluster_Quorum'' AS [Check], 
 		WHEN quorum_type = 1 AND @CntNodes % 2 = 1 THEN ''[WARNING: The current quorum model is not recommended for a cluster with ODD number of nodes]''
 		WHEN quorum_type = 0 AND @CntNodes % 2 = 0 THEN ''[WARNING: The current quorum model is not recommended for a cluster with EVEN number of nodes]''
 		WHEN quorum_type = 2 THEN ''[INFORMATION: The current quorum model is recommended for clusters with special configurations]''
-		ELSE ''[OK]'' END AS [Deviation], 
-	QUOTENAME(quorum_type_desc) AS QuorumModel
+		ELSE ''[OK]'' END AS [Deviation], ''[QuorumModel]: '' + 
+	CONVERT(VARCHAR,QUOTENAME(quorum_type_desc)) AS [Detail]
 FROM sys.dm_hadr_cluster;'
-
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	EXECUTE sp_executesql @sqlcmd
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Server_checks'
+AND [Check] LIKE '%Cluster_Quorum'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Cluster NIC Binding order subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -4115,6 +4128,7 @@ Write-Output $allnics
 		
 			IF @clunic < @maxnic OR @clunic IS NULL --http://support2.microsoft.com/kb/955963
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Server_checks' AS [Category], 'Cluster_NIC_Binding' AS [Check], '[WARNING: The Microsoft Failover Cluster Virtual Adapter is not in the correct binding order. Should be the lowest of all present NICs]' AS [Deviation]
 				SELECT 'Server_checks' AS [Category], 'Cluster_NIC_Binding' AS [Information], nicid AS NIC_ID, nicname AS NIC_Name
 				FROM @output_hw_format_nics t1
@@ -4123,10 +4137,12 @@ Write-Output $allnics
 			END
 			ELSE IF @clunic = @maxnic
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Server_checks' AS [Category], 'Cluster_NIC_Binding' AS [Check], '[OK]' AS [Deviation]
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Server_checks' AS [Category], 'Cluster_NIC_Binding' AS [Check], '[WARNING: Could not gather information on NIC binding order]' AS [Deviation]
 			END;
 		END
@@ -4145,9 +4161,14 @@ Write-Output $allnics
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Server_checks' AS [Category], 'Cluster_NIC_Binding' AS [Check], 'NOT_CLUSTERED' AS [Deviation]
 END;
-
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Server_checks'
+AND [Check] ='Cluster_NIC_Binding'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Cluster QFE node equality subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -4225,12 +4246,14 @@ BEGIN
 			BEGIN
 				IF (SELECT COUNT(*) FROM #xp_cmdshell_QFEFinal t1 WHERE t1.[QFE] NOT IN (SELECT DISTINCT t2.[QFE] FROM #xp_cmdshell_QFEFinal t2 WHERE t2.NodeName <> t1.NodeName)) > 0
 				BEGIN
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 					SELECT 'Server_checks' AS [Category], 'Cluster_QFE_Equality' AS [Check], '[WARNING: Missing updates found in some of the nodes]' AS [Deviation]
 					SELECT t1.NodeName, t1.[QFE] AS MissingUpdates FROM #xp_cmdshell_QFEFinal t1
 					WHERE t1.[QFE] NOT IN (SELECT DISTINCT t2.[QFE] FROM #xp_cmdshell_QFEFinal t2 WHERE t2.NodeName <> t1.NodeName);
 				END
 				ELSE
 				BEGIN
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 					SELECT 'Server_checks' AS [Category], 'Cluster_QFE_Equality' AS [Check], '[OK]' AS [Deviation];
 					SELECT DISTINCT t1.[QFE] AS InstalledUpdates FROM #xp_cmdshell_QFEFinal t1;
 				END
@@ -4264,8 +4287,15 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Server_checks' AS [Category], 'Cluster_QFE_Equality' AS [Check], 'NOT_CLUSTERED' AS [Deviation]
 END;
+
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Server_checks'
+AND [Check] ='Cluster_QFE_Equality'
+ORDER BY id ASC
 
 RAISERROR (N'|-Starting Service Accounts Checks', 10, 1) WITH NOWAIT
 --------------------------------------------------------------------------------------------------------------------------------
@@ -4602,8 +4632,9 @@ BEGIN
 		SELECT @ErrorMessage = 'Service Accounts and Status subsection - Error raised in TRY block 10. ' + ERROR_MESSAGE()
 		RAISERROR (@ErrorMessage, 16, 1);
 	END CATCH
-	
-	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server' AS [Service], @statussqlservice AS [Status], @accntsqlservice AS [Account],
+
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check],
 		CASE WHEN @statussqlservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 			WHEN @statussqlservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntsqlservice IS NULL THEN '[WARNING: Could not detect account for check]' 
@@ -4618,8 +4649,10 @@ BEGIN
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
-	UNION ALL
-	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server_Agent' AS [Service], @statussqlagentservice AS [Status], @accntsqlagentservice AS [Account],
+		, '[Service]: SQL_Server; [Status]:' + CONVERT(VARCHAR, ISNULL(@statussqlservice, 'Not Installed')) + '; [Account]: ' + CONVERT(VARCHAR,ISNULL(@accntsqlservice,'')) [Detail]
+
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check],
 		CASE WHEN @statussqlagentservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 			WHEN @statussqlagentservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntsqlagentservice IS NULL THEN '[WARNING: Could not detect account for check]' 
@@ -4634,8 +4667,10 @@ BEGIN
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
-	UNION ALL
-	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server_Analysis_Services' AS [Service], @statusolapservice AS [Status], @accntolapservice AS [Account],
+		, '[Service]: SQL_Server_Agent; [Status]:' + CONVERT(VARCHAR,  ISNULL(@statussqlagentservice, 'Not Installed')) + '; [Account]: ' + CONVERT(VARCHAR, ISNULL(@accntsqlagentservice,'')) [Detail]
+	
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check],
 		CASE WHEN @statusolapservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 			WHEN @statusolapservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntolapservice IS NULL THEN '[WARNING: Could not detect account for check]' 
@@ -4647,8 +4682,10 @@ BEGIN
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
-	UNION ALL
-	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server_Integration_Services' AS [Service], @statusdtsservice AS [Status], @accntdtsservice AS [Account],
+		, '[Service]: SQL_Server_Analysis_Services; [Status]:' + CONVERT(VARCHAR,  ISNULL(@statusolapservice, 'Not Installed')) + '; [Account]: ' + CONVERT(VARCHAR, ISNULL(@accntolapservice,'')) [Detail]
+	
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check],
 		CASE WHEN @statusdtsservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 			WHEN @statusdtsservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntdtsservice IS NULL THEN '[WARNING: Could not detect account for check]' 
@@ -4659,8 +4696,10 @@ BEGIN
 			WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
-	UNION ALL
-	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server_Reporting_Services' AS [Service], @statusrsservice AS [Status], @accntrsservice AS [Account],
+		, '[Service]: SQL_Server_Integration_Services; [Status]:' + CONVERT(VARCHAR,  ISNULL(@statusdtsservice, 'Not Installed')) + '; [Account]: ' + CONVERT(VARCHAR, ISNULL(@accntdtsservice,'')) [Detail]
+	
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check],
 		CASE WHEN @statusrsservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 			WHEN @statusrsservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntrsservice IS NULL THEN '[WARNING: Could not detect account for check]' 
@@ -4672,8 +4711,10 @@ BEGIN
 			WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
-	UNION ALL
-	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'Full-Text' AS [Service], ISNULL(@statusftservice, 'Not Installed') AS [Status], ISNULL(@accntftservice,'') AS [Account], 
+		, '[Service]: SQL_Server_Reporting_Services; [Status]:' + CONVERT(VARCHAR,  ISNULL(@statusrsservice, 'Not Installed')) + '; [Account]: ' + CONVERT(VARCHAR, ISNULL(@accntrsservice,'')) [Detail]
+	
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 
 		CASE WHEN (SELECT ISNULL(FULLTEXTSERVICEPROPERTY('IsFulltextInstalled'),0)) = 1 THEN 
 			CASE WHEN @statusftservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 				WHEN @statusftservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
@@ -4689,8 +4730,10 @@ BEGIN
 			ELSE '[OK]' END 
 		ELSE '[INFORMATION: Service is not installed]' 
 		END AS [Deviation]
-	UNION ALL
-	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server_Browser' AS [Service], @statusbrowservice AS [Status], @accntbrowservice AS [Account],
+		, '[Service]: Full-Text; [Status]:' + CONVERT(VARCHAR, ISNULL(@statusftservice, 'Not Installed')) + '; [Account]: ' + CONVERT(VARCHAR,ISNULL(@accntftservice,'')) [Detail]
+	
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+	SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check],
 		CASE WHEN @statusbrowservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 			WHEN @statusbrowservice LIKE 'Stopped%' AND @instancename IS NOT NULL THEN '[WARNING: Service is stopped on a named instance]'
 			WHEN @statusbrowservice LIKE 'Stopped%' AND @instancename IS NULL THEN '[WARNING: Service is stopped]'
@@ -4698,7 +4741,8 @@ BEGIN
 			WHEN @accntbrowservice = @accntsqlservice THEN '[WARNING: Running SQL Server Browser under the same account as SQL Server is not recommended]' 
 			WHEN @accntbrowservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: SQL Server Browser is not running with the default account]'
 			ELSE '[OK]' 
-		END AS [Deviation];
+		END AS [Deviation]
+		, '[Service]: SQL_Server_Browser; [Status]:' + CONVERT(VARCHAR, ISNULL(@statusbrowservice, 'Not Installed')) + '; [Account]: ' + CONVERT(VARCHAR,ISNULL(@accntbrowservice,'')) [Detail];
 END
 ELSE
 BEGIN
@@ -4790,38 +4834,54 @@ BEGIN
 			BEGIN				
 				IF EXISTS (SELECT [Output] FROM #xp_cmdshell_AcctSPNoutput WHERE [Output] LIKE '%MSSQLSvc%' AND [Output] LIKE @SPNMachine)
 				BEGIN
-					SELECT 'Service_Account_checks' AS [Category], 'MSSQLSvc_SPNs_SvcAcct_CurrServer' AS [Check], '[OK]' AS [Deviation], QUOTENAME(REPLACE([Output], CHAR(9), '')) AS SPN FROM #xp_cmdshell_AcctSPNoutput WHERE [Output] LIKE @SPNMachine
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+					SELECT 'Service_Account_checks' AS [Category], 'MSSQLSvc_SPNs_SvcAcct_CurrServer' AS [Check], '[OK]' AS [Deviation]
+					, '[SPN]: ' + CONVERT(VARCHAR,QUOTENAME(REPLACE([Output], CHAR(9), ''))) [Detail]
+					FROM #xp_cmdshell_AcctSPNoutput WHERE [Output] LIKE @SPNMachine
 				END
 				ELSE
 				BEGIN
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 					SELECT 'Service_Account_checks' AS [Category], 'MSSQLSvc_SPNs_SvcAcct_CurrServer' AS [Check], '[WARNING: There is no registered MSSQLSvc SPN for the current service account in the scoped server name, preventing the use of Kerberos authentication]' AS [Deviation];
 				END
 
 				IF EXISTS (SELECT [Output] FROM #xp_cmdshell_AcctSPNoutput WHERE [Output] LIKE '%MSSQLSvc%' AND [Output] NOT LIKE @SPNMachine)
 				BEGIN
-					SELECT 'Service_Account_checks' AS [Category], 'MSSQLSvc_SPNs_SvcAcct' AS [Check], '[INFORMATION: There are other MSSQLSvc SPNs registered for the current service account]' AS [Deviation], QUOTENAME(REPLACE([Output], CHAR(9), '')) AS SPN FROM #xp_cmdshell_AcctSPNoutput WHERE [Output] LIKE '%MSSQLSvc%' AND [Output] NOT LIKE @SPNMachine
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+					SELECT 'Service_Account_checks' AS [Category], 'MSSQLSvc_SPNs_SvcAcct' AS [Check], '[INFORMATION: There are other MSSQLSvc SPNs registered for the current service account]' AS [Deviation]
+					, '[SPN]: ' + CONVERT(VARCHAR,QUOTENAME(REPLACE([Output], CHAR(9), ''))) [Detail] 
+					FROM #xp_cmdshell_AcctSPNoutput WHERE [Output] LIKE '%MSSQLSvc%' AND [Output] NOT LIKE @SPNMachine
 				END
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Service_Account_checks' AS [Category], 'MSSQLSvc_SPNs_SvcAcct' AS [Check], '[WARNING: There is no registered MSSQLSvc SPN for the current service account, preventing the use of Kerberos authentication]' AS [Deviation];
 			END
 
 			IF (SELECT COUNT(*) FROM #ScopedDupSPN) > 0
 			BEGIN
-				SELECT 'Service_Account_checks' AS [Category], 'Dup_MSSQLSvc_SPNs_Acct_CurrServer' AS [Check], '[WARNING: There are duplicate registered MSSQLSvc SPNs in the domain, for the SPN in the scoped server name]' AS [Deviation], REPLACE([SPN], CHAR(9), ''), [Accounts] AS [Information] FROM #ScopedDupSPN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+				SELECT 'Service_Account_checks' AS [Category], 'Dup_MSSQLSvc_SPNs_Acct_CurrServer' AS [Check], '[WARNING: There are duplicate registered MSSQLSvc SPNs in the domain, for the SPN in the scoped server name]' AS [Deviation]
+				, '[SPN]: ' + CONVERT(VARCHAR,REPLACE([SPN], CHAR(9), '')) + '; [Information]: ' + CONVERT(VARCHAR, [Accounts]) [Detail] 
+				FROM #ScopedDupSPN
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Service_Account_checks' AS [Category], 'Dup_MSSQLSvc_SPNs_Acct_CurrServer' AS [Check], '[OK]' AS [Deviation];
 			END
 
 			IF (SELECT COUNT(*) FROM #FinalDupSPN) > 0
 			BEGIN
-				SELECT 'Service_Account_checks' AS [Category], 'Dup_MSSQLSvc_SPNs_Acct' AS [Check], '[WARNING: There are duplicate registered MSSQLSvc SPNs in the domain]' AS [Deviation], [SPN], [Accounts] FROM #FinalDupSPN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
+				SELECT 'Service_Account_checks' AS [Category], 'Dup_MSSQLSvc_SPNs_Acct' AS [Check], '[WARNING: There are duplicate registered MSSQLSvc SPNs in the domain]' AS [Deviation]
+				, '[SPN]: '+  CONVERT(VARCHAR,[SPN]) + '; [Accounts]: ' + CONVERT(VARCHAR, [Accounts] ) [Detail]
+				FROM #FinalDupSPN
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Service_Account_checks' AS [Category], 'Dup_MSSQLSvc_SPNs_Acct' AS [Check], '[OK]' AS [Deviation];
 			END
 		END TRY
@@ -4846,6 +4906,9 @@ BEGIN
 		RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: xp_cmdshell. Bypassing check]', 16, 1, N'extended_sprocs')
 		--RETURN
 	END
+
+
+
 END
 ELSE
 BEGIN
@@ -4853,11 +4916,18 @@ BEGIN
 	--RETURN
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Service_Account_checks'
+ORDER BY id ASC
+
 RAISERROR (N'|-Starting Instance Checks', 10, 1) WITH NOWAIT
 --------------------------------------------------------------------------------------------------------------------------------
 -- Recommended build check subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Recommended build check', 10, 1) WITH NOWAIT
+
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation], [Detail])
 SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN (@sqlmajorver = 9 AND @sqlbuild < 5000)
 			OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild < 6000)
@@ -4867,18 +4937,24 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 			OR (@sqlmajorver = 13 AND @sqlbuild < 4000)
 		THEN '[WARNING: current service pack has been superseded in the current SQL Server version. Install the latest service pack as soon as possible.]'
 		ELSE '[OK]'
-	END AS [Deviation], 
+	END AS [Deviation], '[Product_Major_Version]: ' + CONVERT(VARCHAR,
 	CASE WHEN @sqlmajorver = 9 THEN '2005'
 		WHEN @sqlmajorver = 10 AND @sqlminorver = 0 THEN '2008'
 		WHEN @sqlmajorver = 10 AND @sqlminorver = 50 THEN '2008R2'
 		WHEN @sqlmajorver = 11 THEN '2012'
 		WHEN @sqlmajorver = 12 THEN '2014'
 		WHEN @sqlmajorver = 13 THEN '2016'
-	END AS [Product_Major_Version],
-	CONVERT(VARCHAR(128), SERVERPROPERTY('ProductLevel')) AS Product_Level,
-	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductBuildType')) ELSE 'NA' END AS Product_Build_Type,
-	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateLevel')) ELSE 'NA' END AS Product_Update_Level,
-	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateReference')) ELSE 'NA' END AS Product_Update_Ref_KB;
+	END) 
+	+ '; [Product_Level]: ' + CONVERT(VARCHAR(128), SERVERPROPERTY('ProductLevel')) 
+	+ '; [Product_Build_Type]: ' + CONVERT(VARCHAR, CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductBuildType')) ELSE 'NA' END )
+	+ '; [Product_Update_Level]: ' + CONVERT(VARCHAR, CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateLevel')) ELSE 'NA' END)
+	+ '; [Product_Update_Ref_KB]: ' + CONVERT(VARCHAR, CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateReference')) ELSE 'NA' END) [Detail];
+
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='Recommended_Build'
+ORDER BY id ASC
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Backup checks subsection
@@ -4962,6 +5038,7 @@ FROM cteLogBcks2;
 
 IF @nobck > 0 OR @neverbck > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Check], '[WARNING: Some databases do not have any Full backups, or the last Full backup is over 7 days]' AS [Deviation]
 	-- No full backups in last 7 days
 	SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Full_Backup
@@ -4988,11 +5065,19 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Check], '[OK]' AS [Deviation]
 END;
 
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='No_Full_Backups'
+ORDER BY id ASC
+
 IF @nolog > 0 OR @neverlog > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Check], '[WARNING: Some databases in Full or Bulk-Logged recovery model do not have any corresponding transaction Log backups since the last Full or Differential backup]' AS [Deviation]
 	;WITH Bck AS (SELECT database_name, MAX(backup_finish_date) AS backup_finish_date
 					FROM msdb.dbo.backupset (NOLOCK) b
@@ -5035,11 +5120,18 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Check], '[OK]' AS [Deviation]
 END;
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='No_Log_Bcks_since_LstFullorDiff'
+ORDER BY id ASC
 
 IF @nolog24h > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Check], '[WARNING: Some databases in Full or Bulk-Logged recovery model have their latest log backup older than 24H]' AS [Deviation]
 	SELECT DISTINCT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Log_Backup
 	FROM msdb.dbo.backupset b (NOLOCK)
@@ -5057,9 +5149,15 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Check], '[OK]' AS [Deviation]
 END;
 
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='Log_Bcks_since_LstFullorDiff_are_older_than_24H'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Global trace flags subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -5124,6 +5222,7 @@ END;
 
 IF (SELECT COUNT(TraceFlag) FROM @tracestatus WHERE [Global]=1) = 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], '[There are no Global Trace Flags active]' AS [Deviation]
 END;
 
@@ -5133,45 +5232,50 @@ IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1)
 BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 634)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: TF634 disables the background columnstore compression task]' 
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 634
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 652)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: TF652 disables read-aheads during scans]' --http://support.microsoft.com/en-us/kb/920093
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 634
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 661)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: TF661 disables the ghost cleanup background task]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 661
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 834)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 11
 				AND @has_colstrix > 0
 				THEN '[WARNING: TF834 (Large Page Support for BP) is discouraged when Columnstore Indexes are used]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus
 		WHERE [Global] = 1 AND TraceFlag = 834
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 845)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			CASE WHEN SERVERPROPERTY('EngineEdition') = 2 --Standard SKU
 					AND ((@sqlmajorver = 10 AND ((@sqlminorver = 0 AND @sqlbuild >= 2714) OR @sqlminorver = 50)) 
@@ -5181,130 +5285,143 @@ BEGIN
 					AND @sqlmajorver = 11
 					THEN '[WARNING: TF845 is not needed in SQL 2012 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 845
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 902)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[WARNING: TF902 Bypasses execution of database upgrade script when installing a Cumulative Update or Service Pack]' 
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 902
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1117)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: TF1117 autogrows all files at the same time and affects all databases]' 
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1117
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF1118 forces uniform extent allocations instead of mixed page allocations]'
-			AS [Deviation], TraceFlag
+			AS [Deviation],  '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1118
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1204)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF1204 returns the resources and types of locks participating in a deadlock and also the current command affected]' 
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1204
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1211)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[WARNING: TF1211 disables lock escalation based on memory pressure, or based on number of locks, increasing the amount of locks held]'
-			AS [Deviation], TraceFlag
+			AS [Deviation],  '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1211
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1222)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF1222 returns the resources and types of locks participating in a deadlock and also the current command affected]' 
-			AS [Deviation], TraceFlag
+			AS [Deviation],  '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1222
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1224)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[WARNING: TF1224 disables lock escalation based on the number of locks, and only escalates locks under memory pressure, increasing the amount of locks held]'
-			AS [Deviation], TraceFlag
+			AS [Deviation],  '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1224
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1229)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[WARNING: TF1229 disables lock partitioning, which is a locking mechanism optimization on 16+ CPU servers]' --http://blogs.msdn.com/b/psssql/archive/2012/08/31/strange-sch-s-sch-m-deadlock-on-machines-with-16-or-more-schedulers.aspx
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1229
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1236)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			CASE WHEN @sqlmajorver = 9 OR @sqlmajorver = 10 OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 4100)
 					THEN '[INFORMATION: TF1236 enables database lock partitioning]'
 				WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver = 13
 					THEN '[WARNING: TF1236 is not needed in SQL 2012 SP3, SQL Server 2014 SP1 and above]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1236
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1462)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[WARNING: TF1462 disables log stream compression for asynchronous availability groups]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1462
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2312)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 12
 				THEN '[INFORMATION: TF2312 enables New CE model, SQL Server 2014 version]' 
 			WHEN @sqlmajorver = 13
 				THEN '[INFORMATION: TF2312 enables New CE model to SQL Server 2014 or SQL Server 2016 versions, dependent of the compatibility level of the database]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2312
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2330)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 9
 				THEN '[INFORMATION: TF2330 supresses data collection into sys.dm_db_index_usage_stats, which can lead to a non-yielding condition in SQL 2005]' --http://support.microsoft.com/default.aspx?scid=kb;en-US;2003031
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2330
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2335)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 9
 				AND @maxservermem >= 100000 * 1024 -- 100GB
@@ -5315,7 +5432,7 @@ BEGIN
 				AND @maxservermem <> 2147483647
 				THEN '[WARNING: TF2335 should not be set on servers with less than 100GB of memory]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2335
 	END;
@@ -5325,6 +5442,7 @@ BEGIN
 		AND @maxservermem >= 100000 * 1024 -- 100GB
 		AND @maxservermem <> 2147483647
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF2335 to use a fixed amount of memory is available during query optimization. Recommended when server has more than 100GB of memory]' --http://support.microsoft.com/kb/2413549/en-us
 			AS [Deviation]
@@ -5332,6 +5450,7 @@ BEGIN
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2340)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF2340 causes SQL Server not to use a sort operation (batch sort) for optimized nested loop joins when generating a plan]' 
 			AS [Deviation], TraceFlag
@@ -5341,13 +5460,14 @@ BEGIN
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver >= 11
 				THEN '[INFORMATION: TF2371 changes the fixed rate of the 20pct threshold for update statistics into a dynamic percentage rate]'
 			WHEN @sqlmajorver = 13
 				THEN '[WARNING: TF2371 is not needed in SQL 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2371
 	END;
@@ -5355,6 +5475,7 @@ BEGIN
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
 		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver >= 11)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF2371 to change the 20pct fixed rate threshold for update statistics into a dynamic percentage rate]' --http://blogs.msdn.com/b/saponsqlserver/archive/2011/09/07/changes-to-automatic-update-statistics-in-sql-server-traceflag-2371.aspx
 			AS [Deviation]
@@ -5362,90 +5483,100 @@ BEGIN
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2389)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF2389 enables automatically generated quick statistics for ascending keys (histogram amendment)]' 
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2389
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2528)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF2528 disables parallel checking of objects by DBCC CHECKDB, DBCC CHECKFILEGROUP, and DBCC CHECKTABLE]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2528
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2549)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF2549 runs the DBCC CHECKDB command assuming each database file is on a unique disk drive]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2549
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2562)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF2562 runs the DBCC CHECKDB command in a single batch regardless of the number of indexes in the database]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2562
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2566)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF2566 runs the DBCC CHECKDB command without data purity check unless DATA_PURITY option is specified]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2566
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 3023)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF3023 enables CHECKSUM option as default for BACKUP command]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 3023
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 3042)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF3042 bypasses the default backup compression pre-allocation algorithm to allow the backup file to grow only as needed to reach its final size]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 3042
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 3226)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF3226 prevents SQL Server from recording an entry to Errorlog on every successful backup operation]'
-			AS [Deviation], TraceFlag
+			AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 3226
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4135)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1818 AND 1835)
 					OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 1702)
 				THEN '[WARNING: TF4199 should be used instead of TF4135 in this SQL build]'
 			ELSE '[INFORMATION: TF4135 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4135
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4136)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 9 AND @sqlbuild >= 4294)
 					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild >= 2766)
@@ -5454,13 +5585,14 @@ BEGIN
 					OR @sqlmajorver >= 12
 				THEN '[INFORMATION: TF4136 disables parameter sniffing unless OPTION(RECOMPILE), WITH RECOMPILE or OPTIMIZE FOR value is used]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4136
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4137)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild >= 5794)
 					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 4326 AND 4371)
@@ -5469,13 +5601,14 @@ BEGIN
 					OR @sqlmajorver >= 12
 				THEN '[INFORMATION: TF4137 causes SQL Server to generate a plan using minimum selectivity when estimating AND predicates for filters to account for correlation, under the Legacy CE]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4137
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4138)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4260)
 					OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 2817 AND 2881)
@@ -5483,39 +5616,42 @@ BEGIN
 					OR @sqlmajorver >= 12
 				THEN '[INFORMATION: TF4138 causes SQL Server to generate a plan that does not use row goal adjustments with queries that contain TOP, OPTION (FAST N), IN, or EXISTS keywords]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4138
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4139)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 11 AND @sqlbuild >= 5532)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 3431 AND @sqlbuild < 5058)
 					OR @sqlmajorver >= 12
 				THEN '[INFORMATION: TF4139 enables automatically generated quick statistics (histogram amendment) regardless of key column status]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4139
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4199)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
 					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
 					OR (@sqlmajorver >= 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
 				THEN '[WARNING: TF4135 should be used instead of TF4199 in this SQL build]'
 			ELSE '[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation],'[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4199
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6498)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 4416)
 					OR (@sqlmajorver = 12 AND @sqlbuild BETWEEN 2480 AND 2474)
@@ -5523,13 +5659,14 @@ BEGIN
 			WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 				THEN '[WARNING: TF6498 is not needed in SQL 2014 SP2, SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 6498
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (6532,6533))
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
@@ -5537,49 +5674,53 @@ BEGIN
 			WHEN @sqlmajorver = 13
 				THEN '[WARNING: TF6532 and TF 6533 are not needed in SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag IN (6532,6533)
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6534)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
 					OR @sqlmajorver = 13
 				THEN '[INFORMATION: TF6534 enables performance improvement of query operations with spatial data types]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 6534
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 8015)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 11 AND @sqlbuild >= 3349)
 					OR @sqlmajorver >= 12
 				THEN '[WARNING: TF8015 disables auto-detection and NUMA setup]' --http://blogs.msdn.com/b/psssql/archive/2010/04/02/how-it-works-soft-numa-i-o-completion-thread-lazy-writer-workers-and-memory-nodes.aspx
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 8015
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 8032)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 10
 				THEN '[WARNING: TF8032 reverts the cache limit parameters to the SQL Server 2005 RTM setting but can cause poor performance if large caches make less memory available for other memory consumers like BP]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 8032
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 8048)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild < 4100)
 					OR (@sqlmajorver BETWEEN 9 AND 11))
@@ -5588,7 +5729,7 @@ BEGIN
 			WHEN (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver >= 13
 				THEN '[WARNING: TF8048 is not needed in SQL Server 2014 SP2, SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 8048
 	END;
@@ -5598,6 +5739,7 @@ BEGIN
 		OR (@sqlmajorver BETWEEN 9 AND 11))
 		AND (@cpucount/@numa) > 8
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: Consider enabling TF8048 to convert NUMA partitioned memory objects into CPU partitioned. Look in dm_os_wait_stats and dm_os_spin_stats for wait types (CMEMTHREAD and SOS_SUSPEND_QUEUE). Microsoft CSS usually sees the spins jump into the trillions and the waits become a hot spot]' --http://blogs.msdn.com/b/psssql/archive/2011/09/01/sql-server-2008-2008-r2-on-newer-machines-with-more-than-8-cpus-presented-per-numa-node-may-need-trace-flag-8048.aspx
 			AS [Deviation];
@@ -5634,17 +5776,19 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 8744)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 12 THEN
 				'[INFORMATION: TF8744 disables pre-fetching for the Nested Loop operator]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 8744
 	END;	
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 9024)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild < 4100)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 3349 AND @sqlbuild < 6020))
@@ -5653,73 +5797,79 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 			WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) OR @sqlmajorver > 12
 				THEN '[WARNING: TF9024 is not needed in SQL Server 2012 SP3, SQL Server 2014 SP1 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 9024
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 9347)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 13 THEN
 				'[INFORMATION: TF9347 disables batch mode for sort operator]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 9347
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 9349)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 13 THEN
 				'[INFORMATION: TF9349 disables batch mode for top N sort operator]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 9349
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 9389)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 13 THEN
 				'[INFORMATION: TF9389 enables dynamic memory grant for batch mode operators]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 9389
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 9476)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 13 THEN
 				'[INFORMATION: TF9476 causes SQL Server to generate a plan using the Simple Containment instead of the default Base Containment under New CE]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 9476
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 9481)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 12
 				THEN '[INFORMATION: TF9481 enables Legacy CE model, irrespective of the compatibility level of the database]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 9481
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 10204)
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 13
 				THEN '[INFORMATION: TF10204 disables merge/recompress during columnstore index reorganization]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
-			END AS [Deviation], TraceFlag
+			END AS [Deviation], '[TraceFlag]: ' + CONVERT(VARCHAR,TraceFlag) [Detail]
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 10204
 	END;
@@ -5727,6 +5877,7 @@ END;
 		
 IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (4135,4199))
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 		CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
 				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
@@ -5739,7 +5890,12 @@ BEGIN
 			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
 		END AS [Deviation]
 END;
-	
+
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='Global_Trace_Flags'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- System configurations subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -5797,62 +5953,64 @@ SELECT @qtimeout = CONVERT(int, [value]) FROM sys.configurations WHERE [Name] = 
 SELECT @ssp = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'scan for startup procs';
 SELECT @cmdshell = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'xp_cmdshell';
 
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Allow updates' AS [Setting], @allowupd AS [Current Value], CASE WHEN @allowupd = 0 THEN '[OK]' ELSE '[WARNING: Microsoft does not support direct catalog updates]' END AS [Deviation], '' AS [Comment]
+INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Detail], [Deviation])
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Allow updates: '+ CONVERT(VARCHAR, @allowupd) , CASE WHEN @allowupd = 0 THEN '[OK]' ELSE '[WARNING: Microsoft does not support direct catalog updates]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Ad Hoc Distributed Queries' AS [Setting], @adhocqry AS [Current Value], CASE WHEN @adhocqry = 0 THEN '[OK]' ELSE '[WARNING: Ad Hoc Distributed Queries are enabled]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Ad Hoc Distributed Queries: ' + CONVERT(VARCHAR, @adhocqry), CASE WHEN @adhocqry = 0 THEN '[OK]' ELSE '[WARNING: Ad Hoc Distributed Queries are enabled]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Auto Soft NUMA Enabled' AS [Setting], @autoNUMA AS [Current Value], CASE WHEN @sqlmajorver >= 13 AND @autoNUMA = 0 THEN '[WARNING: Auto Soft NUMA is not enabled]' WHEN @sqlmajorver < 13 THEN '[NA]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Auto Soft NUMA Enabled: ' + CONVERT(VARCHAR, @autoNUMA), CASE WHEN @sqlmajorver >= 13 AND @autoNUMA = 0 THEN '[WARNING: Auto Soft NUMA is not enabled]' WHEN @sqlmajorver < 13 THEN '[NA]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Affinity Mask' AS [Setting], @affin AS [Current Value], CASE WHEN (@affin & @affinIO <> 0) OR (@affin & @affinIO <> 0 AND @affin64 & @affin64IO <> 0) THEN '[WARNING: Current Affinity Mask and Affinity I/O Mask are overlaping]' ELSE '[OK]' END AS [Deviation], '[INFORMATION: Configured values for AffinityMask = ' + CONVERT(VARCHAR(10), @affin) + '; Affinity64Mask = ' + CONVERT(VARCHAR(10), @affin64) + '; AffinityIOMask = ' + CONVERT(VARCHAR(10), @affinIO) + '; Affinity64IOMask = ' + CONVERT(VARCHAR(10), @affin64IO) + ']' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Affinity Mask: '+ CONVERT(VARCHAR, @affin) + '; [INFORMATION: Configured values for AffinityMask = ' + CONVERT(VARCHAR(10), @affin) + '; Affinity64Mask = ' + CONVERT(VARCHAR(10), @affin64) + '; AffinityIOMask = ' + CONVERT(VARCHAR(10), @affinIO) + '; Affinity64IOMask = ' + CONVERT(VARCHAR(10), @affin64IO) + ']' , CASE WHEN (@affin & @affinIO <> 0) OR (@affin & @affinIO <> 0 AND @affin64 & @affin64IO <> 0) THEN '[WARNING: Current Affinity Mask and Affinity I/O Mask are overlaping]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Affinity I/O Mask' AS [Setting], @affinIO AS [Current Value], CASE WHEN (@affin & @affinIO <> 0) OR (@affin & @affinIO <> 0 AND @affin64 & @affin64IO <> 0) THEN '[WARNING: Current Affinity Mask and Affinity I/O Mask are overlaping]' ELSE '[OK]' END AS [Deviation], '[INFORMATION: Configured values for AffinityMask = ' + CONVERT(VARCHAR(10), @affin) + '; Affinity64Mask = ' + CONVERT(VARCHAR(10), @affin64) + '; AffinityIOMask = ' + CONVERT(VARCHAR(10), @affinIO) + '; Affinity64IOMask = ' + CONVERT(VARCHAR(10), @affin64IO) + ']' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Affinity I/O Mask: ' + CONVERT(VARCHAR, @affinIO ) + '; [INFORMATION: Configured values for AffinityMask = ' + CONVERT(VARCHAR(10), @affin) + '; Affinity64Mask = ' + CONVERT(VARCHAR(10), @affin64) + '; AffinityIOMask = ' + CONVERT(VARCHAR(10), @affinIO) + '; Affinity64IOMask = ' + CONVERT(VARCHAR(10), @affin64IO) + ']', CASE WHEN (@affin & @affinIO <> 0) OR (@affin & @affinIO <> 0 AND @affin64 & @affin64IO <> 0) THEN '[WARNING: Current Affinity Mask and Affinity I/O Mask are overlaping]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'AWE' AS [Setting], @awe AS [Current Value], CASE WHEN @sqlmajorver < 11 AND @arch = 32 AND @systemmem >= 4000 AND @awe = 0 THEN '[WARNING: Current AWE setting is not optimal for this configuration]' WHEN @sqlmajorver < 11 AND @arch IS NULL THEN '[WARNING: Could not determine architecture needed for check]' WHEN @sqlmajorver > 10 THEN '[INFORMATION: AWE is not used from SQL Server 2012 onwards]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'AWE: ' + CONVERT(VARCHAR, @awe), CASE WHEN @sqlmajorver < 11 AND @arch = 32 AND @systemmem >= 4000 AND @awe = 0 THEN '[WARNING: Current AWE setting is not optimal for this configuration]' WHEN @sqlmajorver < 11 AND @arch IS NULL THEN '[WARNING: Could not determine architecture needed for check]' WHEN @sqlmajorver > 10 THEN '[INFORMATION: AWE is not used from SQL Server 2012 onwards]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Backup Compression' AS [Setting], @bckcomp AS [Current Value], CASE WHEN @sqlmajorver > 9 AND @bckcomp = 0 THEN '[INFORMATION: Backup compression setting is not the recommended value]' WHEN @sqlmajorver < 10 THEN '[NA]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Backup Compression: '+ CONVERT(VARCHAR, @bckcomp), CASE WHEN @sqlmajorver > 9 AND @bckcomp = 0 THEN '[INFORMATION: Backup compression setting is not the recommended value]' WHEN @sqlmajorver < 10 THEN '[NA]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Blocked Process Threshold' AS [Setting], @block_threshold AS [Current Value], CASE WHEN @block_threshold > 0 AND @block_threshold < 5 THEN '[WARNING: Blocked Process Threshold setting is not the recommended value. If not disabled, value should be higher than 4]' WHEN @block_threshold >= 5 THEN '[INFORMATION: Blocked Process Threshold setting is not the default value]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Blocked Process Threshold: ' + CONVERT(VARCHAR, @block_threshold), CASE WHEN @block_threshold > 0 AND @block_threshold < 5 THEN '[WARNING: Blocked Process Threshold setting is not the recommended value. If not disabled, value should be higher than 4]' WHEN @block_threshold >= 5 THEN '[INFORMATION: Blocked Process Threshold setting is not the default value]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'CLR' AS [Setting], @clr AS [Current Value], CASE WHEN @clr = 1 THEN '[INFORMATION: CLR user code execution setting is enabled]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'CLR: ' + CONVERT(VARCHAR, @clr), CASE WHEN @clr = 1 THEN '[INFORMATION: CLR user code execution setting is enabled]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Cost threshold for Parallelism' AS [Setting], @costparallel AS [Current Value], CASE WHEN @costparallel = 5 THEN '[OK]' ELSE '[WARNING: Cost threshold for Parallelism setting is not the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Cost threshold for Parallelism: '+ CONVERT(VARCHAR, @costparallel), CASE WHEN @costparallel = 5 THEN '[OK]' ELSE '[WARNING: Cost threshold for Parallelism setting is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Cross DB ownership Chaining' AS [Setting], @chain AS [Current Value], CASE WHEN @chain = 1 THEN '[WARNING: Cross DB ownership chaining setting is not the recommended value]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Cross DB ownership Chaining: ' + CONVERT(VARCHAR, @chain), CASE WHEN @chain = 1 THEN '[WARNING: Cross DB ownership chaining setting is not the recommended value]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Default trace' AS [Setting], @deftrace AS [Current Value], CASE WHEN @deftrace = 0 THEN '[WARNING: Default trace setting is NOT enabled]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Default trace: ' + CONVERT(VARCHAR,  @deftrace), CASE WHEN @deftrace = 0 THEN '[WARNING: Default trace setting is NOT enabled]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Index create memory (KB)' AS [Setting], @ixmem AS [Current Value], CASE WHEN @ixmem = 0 THEN '[OK]' WHEN @ixmem > 0 AND @ixmem < @minmemqry THEN '[WARNING: Index create memory should not be less than Min memory per query]' ELSE '[WARNING: Index create memory is not the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Index create memory (KB): '+ CONVERT(VARCHAR, @ixmem), CASE WHEN @ixmem = 0 THEN '[OK]' WHEN @ixmem > 0 AND @ixmem < @minmemqry THEN '[WARNING: Index create memory should not be less than Min memory per query]' ELSE '[WARNING: Index create memory is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Lightweight pooling' AS [Setting], @lpooling AS [Current Value], CASE WHEN @lpooling = 1 THEN '[WARNING: Lightweight pooling setting is not the recommended value]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Lightweight pooling: '+ CONVERT(VARCHAR, @lpooling ), CASE WHEN @lpooling = 1 THEN '[WARNING: Lightweight pooling setting is not the recommended value]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Locks' AS [Setting], @locks AS [Current Value], CASE WHEN @locks = 0 THEN '[OK]' ELSE '[WARNING: Locks option is not set with the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Locks: ' + CONVERT(VARCHAR, @locks), CASE WHEN @locks = 0 THEN '[OK]' ELSE '[WARNING: Locks option is not set with the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Max worker threads' AS [Setting], @mwthreads AS [Current Value], CASE WHEN @mwthreads = 0 THEN '[OK]' WHEN @mwthreads > 2048 AND @arch = 64 THEN '[WARNING: Max worker threads is larger than 2048 on a x64 system]' WHEN @mwthreads > 1024 AND @arch = 32 THEN '[WARNING: Max worker threads is larger than 1024 on a x86 system]' ELSE '[WARNING: Max worker threads is not the default value]' END AS [Deviation], CASE WHEN @mwthreads = 0 THEN '[INFORMATION: Configured workers = ' + CONVERT(VARCHAR(10),@mwthreads_count) + ']' ELSE '' END AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Max worker threads: '+ CONVERT(VARCHAR, @mwthreads) + '; '+  CASE WHEN @mwthreads = 0 THEN '[INFORMATION: Configured workers = ' + CONVERT(VARCHAR(10),@mwthreads_count) + ']' ELSE '' END AS [Comment], CASE WHEN @mwthreads = 0 THEN '[OK]' WHEN @mwthreads > 2048 AND @arch = 64 THEN '[WARNING: Max worker threads is larger than 2048 on a x64 system]' WHEN @mwthreads > 1024 AND @arch = 32 THEN '[WARNING: Max worker threads is larger than 1024 on a x86 system]' ELSE '[WARNING: Max worker threads is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Min memory per query (KB)' AS [Setting], @minmemqry AS [Current Value], CASE WHEN @minmemqry = 1024 THEN '[OK]' ELSE '[WARNING: Min memory per query (KB) setting is not the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Min memory per query (KB): '+ CONVERT(VARCHAR, @minmemqry), CASE WHEN @minmemqry = 1024 THEN '[OK]' ELSE '[WARNING: Min memory per query (KB) setting is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Network packet size (B)' AS [Setting], @netsize AS [Current Value], CASE WHEN @netsize = 4096 THEN '[OK]' ELSE '[WARNING: Network packet size is not the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Network packet size (B): ' + CONVERT(VARCHAR, @netsize), CASE WHEN @netsize = 4096 THEN '[OK]' ELSE '[WARNING: Network packet size is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Ole Automation Procedures' AS [Setting], @oleauto AS [Current Value], CASE WHEN @oleauto = 1 THEN '[WARNING: Ole Automation Procedures setting is not the recommended value]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Ole Automation Procedures: ' + CONVERT(VARCHAR,  @oleauto), CASE WHEN @oleauto = 1 THEN '[WARNING: Ole Automation Procedures setting is not the recommended value]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Optimize for ad-hoc workloads' AS [Setting], @adhoc AS [Current Value], CASE WHEN @sqlmajorver > 9 AND @adhoc = 0 THEN '[INFORMATION: Consider enabling the Optimize for ad hoc workloads setting on heavy OLTP ad-hoc workloads to conserve resources]' WHEN @sqlmajorver < 10 THEN '[NA]' ELSE '[OK]' END AS [Deviation], CASE WHEN @sqlmajorver > 9 AND @adhoc = 0 THEN '[INFORMATION: Should be ON if SQL Server 2008 or higher and OLTP workload]' ELSE '' END AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Optimize for ad-hoc workloads: ' + CONVERT(VARCHAR,  @adhoc) +  '; ' + CASE WHEN @sqlmajorver > 9 AND @adhoc = 0 THEN '[INFORMATION: Should be ON if SQL Server 2008 or higher and OLTP workload]' ELSE '' END AS [Comment], CASE WHEN @sqlmajorver > 9 AND @adhoc = 0 THEN '[INFORMATION: Consider enabling the Optimize for ad hoc workloads setting on heavy OLTP ad-hoc workloads to conserve resources]' WHEN @sqlmajorver < 10 THEN '[NA]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Priority Boost' AS [Setting], @pboost AS [Current Value], CASE WHEN @pboost = 1 THEN '[CRITICAL: Priority boost setting is not the recommended value]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Priority Boost: ' + CONVERT(VARCHAR,  @pboost), CASE WHEN @pboost = 1 THEN '[CRITICAL: Priority boost setting is not the recommended value]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Query wait (s)' AS [Setting], @qrywait AS [Current Value], CASE WHEN @qrywait = -1 THEN '[OK]' ELSE '[CRITICAL: Query wait is not the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Query wait (s): ' + CONVERT(VARCHAR,  @qrywait), CASE WHEN @qrywait = -1 THEN '[OK]' ELSE '[CRITICAL: Query wait is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Recovery Interval (min)' AS [Setting], @recinterval AS [Current Value], CASE WHEN @recinterval = 0 THEN '[OK]' ELSE '[WARNING: Recovery interval is not the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Recovery Interval (min): ' + CONVERT(VARCHAR,  @recinterval), CASE WHEN @recinterval = 0 THEN '[OK]' ELSE '[WARNING: Recovery interval is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Remote Admin Connections' AS [Setting], @remote AS [Current Value], CASE WHEN @remote = 0 AND @clustered = 1 THEN '[WARNING: Consider enabling the DAC listener to access a remote connections on a clustered configuration]' WHEN @remote = 0 AND @clustered = 0 THEN '[INFORMATION: Consider enabling remote connections access to the DAC listener on a stand-alone configuration, should local resources be exhausted]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Remote Admin Connections: ' + CONVERT(VARCHAR,  @remote ), CASE WHEN @remote = 0 AND @clustered = 1 THEN '[WARNING: Consider enabling the DAC listener to access a remote connections on a clustered configuration]' WHEN @remote = 0 AND @clustered = 0 THEN '[INFORMATION: Consider enabling remote connections access to the DAC listener on a stand-alone configuration, should local resources be exhausted]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Remote query timeout' AS [Setting], @qtimeout AS [Current Value], CASE WHEN @qtimeout = 600 THEN '[OK]' ELSE '[WARNING: Remote query timeout is not the default value]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Remote query timeout: ' + CONVERT(VARCHAR,  @qtimeout), CASE WHEN @qtimeout = 600 THEN '[OK]' ELSE '[WARNING: Remote query timeout is not the default value]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Startup Stored Procedures' AS [Setting], @ssp AS [Current Value], CASE WHEN @ssp = 1 AND (@replication IS NULL OR @replication = 0) THEN '[WARNING: Scanning for startup stored procedures setting is not the recommended value]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Startup Stored Procedures: ' + CONVERT(VARCHAR, @ssp), CASE WHEN @ssp = 1 AND (@replication IS NULL OR @replication = 0) THEN '[WARNING: Scanning for startup stored procedures setting is not the recommended value]' ELSE '[OK]' END AS [Deviation]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'xp_cmdshell' AS [Setting], @cmdshell AS [Current Value], CASE WHEN @cmdshell = 1 THEN '[WARNING: xp_cmdshell setting is enabled]' ELSE '[OK]' END AS [Deviation], '' AS [Comment];
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'xp_cmdshell: '+ CONVERT(VARCHAR,  @cmdshell), CASE WHEN @cmdshell = 1 THEN '[WARNING: xp_cmdshell setting is enabled]' ELSE '[OK]' END AS [Deviation];
 
 IF (SELECT COUNT([Name]) FROM master.sys.configurations WHERE [value] <> [value_in_use] AND [is_dynamic] = 0) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Check], '[WARNING: There are system configurations with differences between running and configured values]' AS [Deviation]
 	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Information], [Name] AS [Setting],
 		[value] AS 'Config_Value',
@@ -5862,8 +6020,15 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Check], '[OK]' AS [Deviation]
 END;
+
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] LIKE 'System_Configurations%'
+ORDER BY id ASC
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- IFI subsection
@@ -5900,11 +6065,13 @@ BEGIN
 				
 				IF EXISTS (SELECT * FROM @xp_cmdshell_output2 WHERE [Output] LIKE '%SeManageVolumePrivilege%')
 				BEGIN
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 					SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[OK]' AS [Deviation];
 					SET @ifi = 1;
 				END
 				ELSE
 				BEGIN
+					INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 					SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[WARNING: Instant File Initialization is disabled. This can impact data file autogrowth times]' AS [Deviation];
 					SET @ifi = 0
 				END
@@ -5936,6 +6103,8 @@ BEGIN
 		RAISERROR('  |- [INFORMATION: "Instant Initialization" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
 		--RETURN
 	END
+
+
 END
 ELSE IF ((@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13)
 BEGIN
@@ -5944,15 +6113,24 @@ BEGIN
 	EXECUTE sp_executesql @sqlcmd, @params, @IFIStatusOUT=@IFIStatus OUTPUT;
 	IF @IFIStatus = 'Y'
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[OK]' AS [Deviation];
 		SET @ifi = 1;
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Instant_Initialization' AS [Check], '[WARNING: Instant File Initialization is disabled. This can impact data file autogrowth times]' AS [Deviation];
 		SET @ifi = 0
 	END
 END;
+
+
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='Instant_Initialization'
+ORDER BY id ASC
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Full Text Configurations subsection
@@ -6009,6 +6187,7 @@ BEGIN
 	
 	IF @sqlmajorver <= 9 AND (SELECT FullText_ResourceUsage FROM @FullTextDetails) <> 3
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Full_Text' AS [Check], '[INFORMATION: FullText Resource usage setting is not default]' AS [Deviation],
 			CASE WHEN FullText_ResourceUsage < 3 THEN '[Least Aggressive Usage Level]'
 					WHEN FullText_ResourceUsage = 4 THEN '[More Aggressive Usage Level]'
@@ -6019,18 +6198,21 @@ BEGIN
 	END
 	IF @sqlmajorver >= 9 AND (SELECT [AllowUnsignedBinaries] FROM @FullTextDetails) = 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Full_Text' AS [Check], '[WARNING: FullText Binaries verification setting is not default]' AS [Deviation], 
 			'[Do not verify whether or not binaries are signed]' AS [Comment];
 		SET @fterr = @fterr + 1
 	END
 	IF @sqlmajorver >= 9 AND (SELECT [LoadOSResourcesEnabled] FROM @FullTextDetails) = 1
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Full_Text' AS [Check], '[WARNING: FullText OS Resource utilization setting is not default]' AS [Deviation], 
 			'[Load OS filters and word breakers]' AS [Comment];
 		SET @fterr = @fterr + 1
 	END
 	IF @fterr = 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'Full_Text' AS [Check], '[OK]' AS [Deviation], 
 			'[All FullText settings are aligned with defaults]' AS [Comment];
 	END
@@ -6038,9 +6220,15 @@ END;
 
 IF (SELECT ISNULL(FULLTEXTSERVICEPROPERTY('IsFulltextInstalled'),0)) = 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 	SELECT 'Instance_checks' AS [Category], 'Full_Text' AS [Check], NULL AS [Deviation], '[FullText search is not installed]' AS [Comment];
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='Full_Text'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Deprecated features subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6049,6 +6237,7 @@ BEGIN
 	RAISERROR (N'  |-Starting Deprecated features', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(instance_name) FROM sys.dm_os_performance_counters WHERE [object_name] = 'SQLServer:Deprecated Features' AND cntr_value > 0) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Check], '[WARNING: Deprecated features are being used. These features are scheduled to be removed in a future release of SQL Server]' AS [Deviation]
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Information], instance_name, cntr_value AS [Times_used_since_startup]
 		FROM sys.dm_os_performance_counters (NOLOCK)
@@ -6057,29 +6246,39 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Check], '[OK]' AS [Deviation]
 	END;
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] ='Deprecated_features'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Default data collections subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting default data collections', 10, 1) WITH NOWAIT
 IF EXISTS (SELECT TOP 1 id FROM sys.traces WHERE is_default = 1 AND status = 1)
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'Default_Trace' AS [Check], '[OK]' AS [Deviation]
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 	SELECT 'Instance_checks' AS [Category], 'Default_Trace' AS [Information], '[WARNING: No default trace was found or is not active]' AS [Deviation], '[Default trace provides troubleshooting assistance to database administrators by ensuring that they have the log data necessary to diagnose problems the first time they occur]' AS [Comment]
 END;
 
 IF EXISTS (SELECT TOP 1 id FROM sys.traces WHERE [path] LIKE '%blackbox%.trc' AND status = 1)
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 	SELECT 'Instance_checks' AS [Category], 'Blackbox_Trace' AS [Check], '[WARNING: Blackbox trace is configured and running]' AS [Deviation], '[This trace is designed to behave similarly to an airplane black box, to help you diagnose intermittent server crashes. It is quite a bit heavier than the default trace]' AS [Comment]
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Instance_checks' AS [Category], 'Blackbox_Trace' AS [Information], '[OK]' AS [Deviation]
 END;
 
@@ -6090,23 +6289,33 @@ BEGIN
 	WHERE (is_default = 1 OR [path] LIKE '%blackbox%.trc') AND status = 1
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] IN ('Default_Trace','Blackbox_Trace')
+ORDER BY id ASC
+
 IF @sqlmajorver > 10
 BEGIN
 	IF EXISTS (SELECT TOP 1 name FROM sys.dm_xe_sessions WHERE [name] = 'system_health')
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'xEvent_Session_SystemHealth' AS [Check], '[OK]' AS [Deviation]
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'xEvent_Session_SystemHealth' AS [Information], '[WARNING: The system_health xEvent session is not active]' AS [Deviation], '[This session starts automatically when the SQL Server Database Engine starts, and runs without any noticeable performance effects. The session collects system data that you can use to help troubleshoot performance issues in the Database Engine]' AS [Comment]
 	END;
 
 	IF EXISTS (SELECT TOP 1 name FROM sys.dm_xe_sessions WHERE [name] = 'sp_server_diagnostics session')
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'xEvent_Session_sp_server_diagnostics' AS [Check], '[OK]' AS [Deviation]
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation],[Detail])
 		SELECT 'Instance_checks' AS [Category], 'xEvent_Session_sp_server_diagnostics' AS [Information], '[WARNING: The sp_server_diagnostics xEvent session is not active]' AS [Deviation], '[This session starts automatically when the SQL Server Database Engine starts, and runs without any noticeable performance effects. The session collects system data that you can use to help troubleshoot performance issues in the Database Engine]' AS [Comment]
 	END;
 
@@ -6118,6 +6327,11 @@ BEGIN
 		WHERE [name] IN ('system_health', 'sp_server_diagnostics session')
 	END;
 END;
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Instance_checks'
+AND [Check] LIKE 'xEvent_Session_%'
+ORDER BY id ASC
 
 
 RAISERROR (N'|-Starting Database and tempDB Checks', 10, 1) WITH NOWAIT
@@ -6128,6 +6342,7 @@ RAISERROR (N'|-Starting Database and tempDB Checks', 10, 1) WITH NOWAIT
 RAISERROR (N'  |-Starting User Objects in master DB', 10, 1) WITH NOWAIT
 IF (SELECT COUNT(name) FROM master.sys.all_objects WHERE is_ms_shipped = 0 AND [type] IN ('AF','FN','P','IF','PC','TF','TR','T','V')) >= 1
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'User_Objects_in_master' AS [Check], '[WARNING: User objects are created in the master database]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'User_Objects_in_master' AS [Information], ss.name AS [Schema_Name], sao.name AS [Object_Name], sao.[type_desc] AS [Object_Type], sao.create_date, sao.modify_date 
 	FROM master.sys.all_objects sao
@@ -6138,9 +6353,15 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'User_Objects_in_master' AS [Check], '[OK]' AS [Deviation]
 END;
 
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='User_Objects_in_master'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- DBs with collation <> master subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6151,6 +6372,7 @@ SELECT @dif_collate = COUNT(collation_name) FROM master.sys.databases (NOLOCK) W
 
 IF @dif_collate >= 1
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Collations' AS [Check], '[WARNING: Some user databases collation differ from the master Database_Collation]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Collations' AS [Information], name AS [Database_Name], collation_name AS [Database_Collation], @master_collate AS [Master_Collation]
 	FROM master.sys.databases (NOLOCK)
@@ -6158,9 +6380,14 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Collations' AS [Check], '[OK]' AS [Deviation]
 END;
-
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='Collations'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- DBs with skewed compatibility level subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6170,6 +6397,7 @@ SELECT @dif_compat = COUNT([compatibility_level]) FROM master.sys.databases (NOL
 
 IF @dif_compat >= 1
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Compatibility_Level' AS [Check], '[WARNING: Some user databases have a non-optimal compatibility level]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Compatibility_Level' AS [Information], name AS [Database_Name], [compatibility_level] AS [Compatibility_Level]
 	FROM master.sys.databases (NOLOCK)
@@ -6177,9 +6405,14 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Compatibility_Level' AS [Check], '[OK]' AS [Deviation]
 END;
-
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='Compatibility_Level'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- User DBs with non-default options subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6255,6 +6488,7 @@ END
 
 IF @is_auto_close_on = 1 OR @is_auto_shrink_on = 1 OR @page_verify_option = 1 OR @is_auto_create_stats_on = 1 OR @is_auto_update_stats_on = 1 OR @is_db_chaining_on = 1 OR @is_auto_create_stats_incremental_on = 0 --OR @is_indirect_checkpoint_on = 1
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Database_Options' AS [Check], '[WARNING: Some user databases may have Non-optimal_Settings]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Database_Options' AS [Information],
 		name AS [Database_Name],
@@ -6286,19 +6520,33 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Database_Options' AS [Check], '[OK]' AS [Deviation]
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='Database_Options'
+ORDER BY id ASC
+
 IF (SELECT COUNT(*) FROM master.sys.databases (NOLOCK) WHERE is_auto_update_stats_on = 0 AND is_auto_update_stats_async_on = 1) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Database_Options_Disabled_Async_AutoUpdate' AS [Check], '[WARNING: Some databases have Auto_Update_Statistics_Asynchronously ENABLED while Auto_Update_Statistics is DISABLED. If asynch auto statistics update is intended, also enable Auto_Update_Statistics]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Database_Options_Disabled_Async_AutoUpdate' AS [Check], [name] FROM master.sys.databases (NOLOCK) WHERE is_auto_update_stats_on = 0 AND is_auto_update_stats_async_on = 1
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Database_Options_Disabled_Async_AutoUpdate' AS [Check], '[OK]' AS [Deviation]
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='Database_Options_Disabled_Async_AutoUpdate'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- DBs with Sparse files subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6307,6 +6555,7 @@ RAISERROR (N'  |-Starting DBs with Sparse files', 10, 1) WITH NOWAIT
 -- http://blogs.msdn.com/b/jorgepc/archive/2010/11/25/what-are-sparse-files-and-why-should-i-care-as-sql-server-dba.aspx
 IF (SELECT COUNT(sd.database_id) FROM sys.databases sd INNER JOIN sys.master_files smf ON sd.database_id = smf.database_id WHERE sd.source_database_id IS NULL AND smf.is_sparse = 1) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'DB_nonSnap_Sparse' AS [Check], '[WARNING: Sparse files were detected that do not belong to a Database Snapshot. You might also notice unexplained performance degradation when query data from these files]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'DB_nonSnap_Sparse' AS [Information], DB_NAME(sd.database_id) AS database_name, smf.name, smf.physical_name
 	FROM sys.databases sd 
@@ -6315,15 +6564,22 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'DB_nonSnap_Sparse' AS [Check], '[OK]' AS [Deviation]
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='DB_nonSnap_Sparse'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- DBs Autogrow in percentage subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting DBs Autogrow in percentage', 10, 1) WITH NOWAIT
 IF (SELECT COUNT(is_percent_growth) FROM sys.master_files WHERE is_percent_growth = 1) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Percent_Autogrows' AS [Check], '[WARNING: Some database files have a growth ratio set in percentage. Over time, this could lead to uncontrolled disk space allocation and extended time to perform these growths]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Percent_Autogrows' AS [Information], database_id,
 		DB_NAME(database_id) AS [Database_Name], 
@@ -6347,8 +6603,14 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Percent_Autogrows' AS [Check], '[OK]' AS [Deviation]
 END;
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='Percent_Autogrows'
+ORDER BY id ASC
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled) subsection
@@ -6360,6 +6622,7 @@ IF (SELECT COUNT(growth) FROM sys.master_files (NOLOCK)
 		AND ((is_percent_growth = 1 AND ((CONVERT(bigint,size)*8)*growth)/100 > 1048576) 
 		OR (is_percent_growth = 0 AND growth*8 > 1048576))) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Large_Autogrows' AS [Check], '[WARNING: Some database files have set growth over 1GB. This could lead to extended growth times, slowing down your system]' AS [Deviation]
 	SELECT 'Database_checks' AS [Category], 'Large_Autogrows' AS [Information], database_id,
 		DB_NAME(database_id) AS [Database_Name], 
@@ -6386,9 +6649,14 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Database_checks' AS [Category], 'Large_Autogrows' AS [Check], '[OK]' AS [Deviation]
 END;
-
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='Large_Autogrows'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- VLF subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6584,6 +6852,7 @@ BEGIN
 
 	IF (SELECT COUNT(dbname) FROM #log_info1 WHERE Current_VLFs >= 50) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Database_checks' AS [Category], 'Virtual_Log_Files' AS [Check], '[WARNING: Some user databases have many VLFs. Please review these]' AS [Deviation]
 		SELECT 'Database_checks' AS [Category], 'Virtual_Log_Files' AS [Information], dbname AS [Database_Name], Current_log_size_MB, Used_Log_size_MB,
 			Potential_log_size_MB, Current_VLFs, Used_VLFs, Potential_VLFs, Growth_iterations, Log_Initial_size_MB, File_autogrow_MB
@@ -6606,6 +6875,7 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Database_checks' AS [Category], 'Virtual_Log_Files' AS [Check], '[OK]' AS [Deviation]
 
 		/*
@@ -6630,6 +6900,11 @@ BEGIN
 	--RETURN
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Database_checks'
+AND [Check] ='Virtual_Log_Files'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Data files and Logs / tempDB and user Databases / Backups and Database files in same volume (Mountpoint aware) subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6898,6 +7173,7 @@ Windows PowerShell has four different execution policies:
 
 			IF @ctr > 0
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Check], '[WARNING: Some user databases have Data and Log files in the same physical volume]' AS [Deviation]
 				SELECT DISTINCT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Information], DB_NAME(mf.[database_id]) AS [Database_Name], type_desc AS [Type], mf.physical_name
 				FROM sys.master_files mf (NOLOCK) INNER JOIN @filetbl t1 ON mf.database_id = t1.database_id AND mf.physical_name = t1.physical_name
@@ -6909,8 +7185,15 @@ Windows PowerShell has four different execution policies:
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Check], '[OK]' AS [Deviation]
 			END;
+
+			SELECT [Category], [Check],[Deviation], [Detail]
+			FROM #bpdeviationoutput
+			WHERE [Category] = 'Database_checks'
+			AND [Check] ='Data_and_Log_locations'
+			ORDER BY id ASC
 
 			-- select backup mountpoints only
 			DECLARE @interbcktbl TABLE (physical_device_name nvarchar(260))
@@ -6938,6 +7221,7 @@ Windows PowerShell has four different execution policies:
 
 			IF @ctr4 > 0
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Database_checks' AS [Category], 'Backup_and_Database_locations' AS [Check], '[WARNING: Some backups and database files are in the same physical volume]' AS [Deviation]
 				SELECT DISTINCT 'Database_checks' AS [Category], 'Backup_and_Database_locations' AS [Information], physical_device_name AS [Backup_Location], HD_Volume AS [Volume_with_DB_Files]
 				FROM @bcktbl
@@ -6945,8 +7229,15 @@ Windows PowerShell has four different execution policies:
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'Database_checks' AS [Category], 'Backup_and_Database_locations' AS [Check], '[OK]' AS [Deviation]
 			END;
+
+			SELECT [Category], [Check],[Deviation], [Detail]
+			FROM #bpdeviationoutput
+			WHERE [Category] = 'Database_checks'
+			AND [Check] ='Backup_and_Database_locations'
+			ORDER BY id ASC
 
 			-- select tempDB mountpoints only
 			DECLARE @intertbl2 TABLE (physical_name nvarchar(260))
@@ -6992,14 +7283,17 @@ Windows PowerShell has four different execution policies:
 
 			IF @ctr3 > 0
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'tempDB_checks' AS [Category], 'tempDB_location' AS [Check], '[WARNING: tempDB is on the same physical volume as user databases]' AS [Deviation];
 			END
 			ELSE IF @ctr2 > 0
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'tempDB_checks' AS [Category], 'tempDB_location' AS [Check], '[WARNING: tempDB is on C: drive]' AS [Deviation]
 			END
 			ELSE
 			BEGIN
+				INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 				SELECT 'tempDB_checks' AS [Category], 'tempDB_location' AS [Check], '[OK]' AS [Deviation]
 			END;
 			
@@ -7016,7 +7310,10 @@ Windows PowerShell has four different execution policies:
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Check], '[WARNING: Could not gather information on file locations]' AS [Deviation]
+			SELECT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Check], '[WARNING: Could not gather information on file locations]' AS [Deviation]
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'tempDB_checks' AS [Category], 'tempDB_location' AS [Check], '[WARNING: Could not gather information on file locations]' AS [Deviation]
 		END
 	END
@@ -7033,6 +7330,12 @@ BEGIN
 	--RETURN
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'tempDB_checks'
+AND [Check] ='tempDB_location'
+ORDER BY id ASC
+
 --------------------------------------------------------------------------------------------------------------------------------
 -- tempDB data file configurations subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -7045,6 +7348,7 @@ SELECT @filesizes = COUNT(DISTINCT size) FROM tempdb.sys.database_files WHERE [t
 IF (SELECT CASE WHEN @filesizes = 1 AND ((@tdb_files >= 4 AND @tdb_files <= 8 AND @tdb_files % 4 = 0) /*OR (@tdb_files >= 8 AND @tdb_files % 4 = 0)*/ 
 	OR (@tdb_files >= (@online_count / 2) AND @tdb_files >= 8 AND @tdb_files % 4 = 0)) THEN 0 ELSE 1 END) = 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Check], '[OK]' AS [Deviation]
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Information], physical_name AS [tempDB_Files], CAST((size*8)/1024.0 AS DECIMAL(18,2)) AS [File_Size_MB]
 	FROM tempdb.sys.database_files (NOLOCK)
@@ -7052,6 +7356,7 @@ BEGIN
 END
 ELSE 
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Check], 
 		CASE WHEN @tdb_files < 4 THEN '[WARNING: tempDB has only ' + CONVERT(VARCHAR(10), @tdb_files) + ' file(s). Consider creating between 4 and 8 tempDB data files, 1 per each 2 cores, of the same size]'
 			WHEN @filesizes = 1 AND @tdb_files < (@online_count / 2) AND @tdb_files >= 8 AND @tdb_files % 4 = 0 THEN '[INFORMATION: Number of Data files to Scheduler ratio might not be Optimal. Consider creating 1 data file per each 2 cores, in multiples of 4, all of the same size]'
@@ -7064,6 +7369,11 @@ BEGIN
 	WHERE type = 0;
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'tempDB_checks'
+AND [Check] ='tempDB_files'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- tempDB data files autogrow of equal size subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -7071,6 +7381,7 @@ RAISERROR (N'  |-Starting tempDB Files autogrow of equal size', 10, 1) WITH NOWA
 IF (SELECT COUNT(DISTINCT growth) FROM sys.master_files WHERE [database_id] = 2 AND [type] = 0) > 1
 	OR (SELECT COUNT(DISTINCT is_percent_growth) FROM sys.master_files WHERE [database_id] = 2 AND [type] = 0) > 1
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files_Autogrow' AS [Check], '[WARNING: Some tempDB data files have different growth settings]' AS [Deviation]
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files_Autogrow' AS [Information], 
 		DB_NAME(2) AS [Database_Name], 
@@ -7092,12 +7403,18 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files_Autogrow' AS [Check], '[OK]' AS [Deviation]
 END;
 
 IF @ptochecks = 1
 RAISERROR (N'|-Starting Performance Checks', 10, 1) WITH NOWAIT
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'tempDB_checks'
+AND [Check] ='tempDB_files_Autogrow'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Perf counters, Waits, Latches and Spinlocks subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -7588,6 +7905,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 				'Total Latch Wait Time (ms)','Lock Waits/sec','Number of Deadlocks/sec','Batch Requests/sec') THEN [counter_value] 
 			ELSE tempdb.dbo.fn_perfctr([counter_family],[counter_name]) END AS [counter_calculated_threshold_value]
 	FROM tempdb.dbo.tblPerfThresholds)
+	
 	SELECT 'Performance_checks' AS [Category], 'Perf_Counters' AS [Check],[counter_family],[counter_name],[counter_instance],[counter_value],[counter_calculated_threshold_value],
 		CASE WHEN [counter_name] = 'Forwarded Records/sec' AND [counter_calculated_threshold_value] > 10 THEN '[WARNING: A ratio of more than 1 forwarded record for every 10 batch requests]'
 			WHEN [counter_name] = 'FreeSpace Scans/sec' AND [counter_calculated_threshold_value] > 10 THEN '[WARNING: A ratio of more than 1 freespace scan for every 10 batch requests]'
@@ -7623,6 +7941,12 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	FROM ctectr
 	ORDER BY [counter_family],[counter_name],[counter_instance];
 	
+	SELECT [Category], [Check],[Deviation], [Detail]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Performance_checks'
+	AND [Check] ='Perf_Counters'
+	ORDER BY id ASC
+
 	IF @sqlmajorver >= 11
 	BEGIN
 		SELECT 'Performance_checks' AS [Category], 'Perf_Counters' AS [Information], [counter_name] AS Counter_name, "CPU Time:Total(ms)", "CPU Time:Requests", "Elapsed Time:Total(ms)", "Elapsed Time:Requests"
@@ -7927,18 +8251,30 @@ BEGIN
 
 	IF @avgtskcnt <= 2 AND @workqcnt > 1
 	BEGIN
-		SELECT 'Performance_checks' AS [Category], 'Worker_thread_exhaustion' AS [Check], '[WARNING: Possible worker thread exhaustion (schedulers work queue count is ' + CONVERT(NVARCHAR(10), @workqcnt) + '). Because overall runnable tasks count is ' + CONVERT(NVARCHAR(10), @avgtskcnt) + ' (<= 2), indicating the server might not be CPU bound, there might be room to increase max_worker_threads]' AS [Deviation], '[Configured workers = ' + CONVERT(VARCHAR(10),@mwthreads_count) + ']' AS [Comment]
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation], [Detail])
+		SELECT 'Performance_checks' AS [Category], 'Worker_thread_exhaustion' AS [Check]
+		, '[WARNING: Possible worker thread exhaustion (schedulers work queue count is ' + CONVERT(NVARCHAR(10), @workqcnt) + '). Because overall runnable tasks count is ' + CONVERT(NVARCHAR(10), @avgtskcnt) + ' (<= 2), indicating the server might not be CPU bound, there might be room to increase max_worker_threads]' AS [Deviation]
+		, '[Configured workers = ' + CONVERT(VARCHAR(10),@mwthreads_count) + ']' AS [Comment]
 	END
 	ELSE IF @avgtskcnt > 2 AND @workqcnt > 1
 	BEGIN
-		SELECT 'Performance_checks' AS [Category], 'Worker_thread_exhaustion' AS [Check], '[WARNING: Possible worker thread exhaustion (schedulers work queue count is ' + CONVERT(NVARCHAR(10), @workqcnt) + '). Overall runnable tasks count is ' + CONVERT(NVARCHAR(10), @avgtskcnt) + ' (> 2), also indicating the server might be CPU bound]' AS [Deviation], '[Configured workers = ' + CONVERT(VARCHAR(10),@mwthreads_count) + ']' AS [Comment]
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation], [Detail])
+		SELECT 'Performance_checks' AS [Category], 'Worker_thread_exhaustion' AS [Check]
+		, '[WARNING: Possible worker thread exhaustion (schedulers work queue count is ' + CONVERT(NVARCHAR(10), @workqcnt) + '). Overall runnable tasks count is ' + CONVERT(NVARCHAR(10), @avgtskcnt) + ' (> 2), also indicating the server might be CPU bound]' AS [Deviation]
+		, '[Configured workers = ' + CONVERT(VARCHAR(10),@mwthreads_count) + ']' AS [Comment]
 	END
 	ELSE
 	BEGIN
-		SELECT 'Performance_checks' AS [Category], 'Worker_thread_exhaustion' AS [Check], '[OK]' AS [Deviation], '' AS [Comment]
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
+		SELECT 'Performance_checks' AS [Category], 'Worker_thread_exhaustion' AS [Check], '[OK]' AS [Deviation]
 	END
 END;
 
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Performance_checks'
+AND [Check] ='Worker_thread_exhaustion'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Blocking Chains subsection
 -- Checks for blocking chains taking over 5s.
@@ -8088,6 +8424,7 @@ BEGIN
 		
 	IF (SELECT COUNT(blocked_spid) FROM #tblBlkChains WHERE CONVERT(VARCHAR(max), blocked_batch) <> 'sp_server_diagnostics') > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'Blocking_Chains_over_5s' AS [Check], '[WARNING: Blocking chains in excess of 5s were found.]' AS [Deviation]
 		SELECT 'Performance_checks' AS [Category], 'Blocking_Chains_over_5s' AS [Information],[blocked_spid],[blocked_spid_status],[blocked_task_status],
 			[blocked_spid_wait_type],[blocked_spid_wait_time_ms],[blocked_spid_res_desc],[blocked_pageid],[blocked_spid_res_type],
@@ -8099,9 +8436,15 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'Blocking_Chains_over_5s' AS [Check], '[OK]' AS [Deviation]
 	END;
 END;
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Performance_checks'
+AND [Check] ='Blocking_Chains_over_5s'
+ORDER BY id ASC
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Plan use ratio subsection
@@ -8118,12 +8461,20 @@ BEGIN
 		FROM sys.dm_exec_cached_plans (NOLOCK)
 		WHERE cacheobjtype LIKE '%Plan%' AND usecounts > 1)
 	BEGIN
-		SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Check], '[WARNING: Amount of single use plans in cache is high]' AS [Deviation], CASE WHEN @sqlmajorver > 9 AND @adhoc = 0 THEN '[Consider enabling the Optimize for ad hoc workloads setting on heavy OLTP ad-hoc workloads to conserve resources]' ELSE '' END AS [Comment]
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation], [Detail])
+		SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Check], '[WARNING: Amount of single use plans in cache is high]' AS [Deviation]
+		, CASE WHEN @sqlmajorver > 9 AND @adhoc = 0 THEN '[Consider enabling the Optimize for ad hoc workloads setting on heavy OLTP ad-hoc workloads to conserve resources]' ELSE '' END AS [Comment]
 	END
 	ELSE
 	BEGIN
-		SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Check], '[OK]' AS [Deviation], '' AS [Comment]
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
+		SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation], [Detail]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Performance_checks'
+	AND [Check] ='Plan_use_ratio'
+	ORDER BY id ASC
 
 	--High number of cached plans with usecounts = 1.
 	SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Information], objtype, cacheobjtype, AVG(CAST(usecounts AS bigint)) AS Avg_UseCount_perPlan, SUM(refcounts) AS AllRefObjects, SUM(CAST(size_in_bytes AS bigint))/1024/1024 AS Size_MB
@@ -8203,7 +8554,7 @@ WHERE sm.[definition] LIKE ''%FORCE ORDER%''
 				WHERE [dbid] = @dbid
 			END
 		END;
-
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'Hints_usage' AS [Check], '[WARNING: Hints are being used. These can hinder the QO ability to optimize queries]' AS [Deviation]
 		SELECT 'Performance_checks' AS [Category], 'Hints_usage' AS [Information], CASE WHEN [counter] = 'order hint' THEN '[FORCE ORDER Hint]' WHEN [counter] = 'join hint' THEN '[JOIN Hint]' END AS [Hint], occurrence
 		FROM sys.dm_exec_query_optimizer_info (NOLOCK)
@@ -8225,10 +8576,15 @@ WHERE sm.[definition] LIKE ''%FORCE ORDER%''
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'Hints_usage' AS [Check], '[OK]' AS [Deviation]
 	END
 END;
-
+SELECT [Category], [Check],[Deviation], [Detail]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Performance_checks'
+AND [Check] ='Hints_usage'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Cached Query Plans issues subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -8824,12 +9180,19 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 
 	IF (SELECT COUNT(*) FROM #qpwarnings) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'Query_Plan_Warnings' AS [Check], '[WARNING: Top resource-intensive queries issued plan level warnings]' AS [Deviation]
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'Query_Plan_Warnings' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Performance_checks'
+	AND [Check] ='Query_Plan_Warnings'
+	ORDER BY id ASC
 
 	IF (SELECT COUNT(*) FROM #qpwarnings) > 0
 	BEGIN
@@ -8953,6 +9316,7 @@ ORDER BY mst.name, [constraint_name];'
 
 	IF (SELECT COUNT(*) FROM #tblDRI) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'DRI_UntrustedConstraints' AS [Check], '[WARNING: Some constraints are not trusted for referential integrity. It is recommended to revise these due to possible performance issues]' AS [Deviation]
 		SELECT 'Performance_checks' AS [Category], 'DRI_UntrustedConstraints' AS [Information], [database_name] AS [Database_Name], constraint_name AS [Constraint_Name],
 			[schema_name] AS [Schema_Name], table_name AS [Table_Name], [constraint_type] AS [Constraint_Type]
@@ -8984,9 +9348,16 @@ ORDER BY mst.name, [constraint_name];'
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Performance_checks' AS [Category], 'DRI_UntrustedConstraints' AS [Check], '[OK]' AS [Deviation]
 	END;
 END;
+
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Performance_checks'
+AND [Check] ='DRI_UntrustedConstraints'
+ORDER BY id ASC
 
 IF @ptochecks = 1
 RAISERROR (N'|-Starting Indexes and Statistics Checks', 10, 1) WITH NOWAIT
@@ -9076,6 +9447,7 @@ HAVING SUM(p.[rows]) > 0
 	BEGIN
 	IF (SELECT COUNT(*) FROM master.sys.databases (NOLOCK) WHERE is_auto_update_stats_on = 0) > 0 AND (SELECT COUNT(*) FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd (NOLOCK) ON su.[databaseID] = sd.[database_id] WHERE sd.is_auto_update_stats_on = 0) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Check], '[WARNING: Some databases have Auto_Update_Statistics DISABLED and statistics that might need to be updated]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [tableName] AS [Table_Name], [stats_id] AS [statsID], [stat_name] AS [Statistic_Name],
 			last_updated, [rows], modification_counter, CAST((su.modification_counter*1.00/(su.[rows]*1.00))*100.0 AS DECIMAL(18,2)) AS [RowMod_Pct],
@@ -9092,6 +9464,7 @@ HAVING SUM(p.[rows]) > 0
 
 	IF (SELECT COUNT(*) FROM #tblStatsUpd AS su INNER JOIN master.sys.databases AS sd (NOLOCK) ON su.[databaseID] = sd.[database_id] WHERE sd.is_auto_update_stats_on = 1) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Check], '[WARNING: Some databases have Auto_Update_Statistics ENABLED and statistics that might need to be updated]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [tableName] AS [Table_Name], [stats_id] AS [statsID], [stat_name] AS [Statistic_Name],
 			last_updated, [rows], modification_counter, CAST((su.modification_counter*1.00/(su.[rows]*1.00))*100.0 AS DECIMAL(18,2)) AS [RowMod_Pct],
@@ -9108,10 +9481,15 @@ HAVING SUM(p.[rows]) > 0
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_to_update' AS [Check], '[OK]' AS [Deviation]
 	END;
 END;
-
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Index_and_Stats_checks'
+AND [Check] ='Statistics_to_update'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Statistics sampling subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -9176,6 +9554,7 @@ WHERE sp.[rows] > 0
 
 		IF (SELECT COUNT(*) FROM #tblStatsSamp) > 0
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Check], '[WARNING: Some statistics have sampling rates less than 25 pct, consider updating with a larger sample or fullscan]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [tableName] AS [Table_Name], [stats_id] AS [statsID], [stat_name] AS [Statistic_Name], 
 				last_updated, [rows], rows_sampled, CAST((rows_sampled/([rows]*1.00))*100.0 AS DECIMAL(5,2)) AS [Sample_Pct],
@@ -9190,11 +9569,16 @@ WHERE sp.[rows] > 0
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Check], '[OK]' AS [Deviation]
 		END;
 	END;
 END;
-
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Index_and_Stats_checks'
+AND [Check] ='Statistics_sampling_lt_25pct'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Hypothetical objects subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -9260,6 +9644,7 @@ AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 
 	IF (SELECT COUNT([Object]) FROM #tblHypObj) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Check], '[WARNING: Some databases have indexes or statistics that are marked as hypothetical. It is recommended to drop these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Information], DBName AS [Database_Name], [Table] AS [Table_Name], [Object] AS [Object_Name], [Type] AS [Object_Type]
 		FROM #tblHypObj
@@ -9291,10 +9676,15 @@ AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Check], '[OK]' AS [Deviation]
 	END;
 END;
-
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Index_and_Stats_checks'
+AND [Check] ='Hypothetical_objects'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- Index Health Analysis subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -9525,6 +9915,7 @@ OPTION (MAXDOP 2)'
 	IF (SELECT COUNT(*) FROM #tmpIPS WHERE fragmentation > 5 AND [page_count] > 8) > 0
 		OR (SELECT COUNT(*) FROM #tmpIPS_CI WHERE fragmentation > 5 AND [state] = 3) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Index_Fragmentation' AS [Check], '[WARNING: Some databases have fragmented indexes. It is recommended to remove fragmentation on a regular basis to maintain performance]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Index_Fragmentation' AS [Check], wk.database_name, wk.[schema_name], wk.[object_name], wk.index_name, wk.type_desc AS index_type, ips.partition_number, ips.fragmentation, 
 			ips.page_count, ips.[size_MB], ips.record_count, ips.forwarded_record_count, -- for heaps
@@ -9543,8 +9934,15 @@ OPTION (MAXDOP 2)'
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Index_Fragmentation' AS [Check], '[OK]' AS [Deviation]
 	END;
+
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Index_Fragmentation'
+	ORDER BY id ASC
 
 	IF @sqlmajorver >= 12
 	BEGIN
@@ -9552,6 +9950,7 @@ OPTION (MAXDOP 2)'
 		-- http://blogs.technet.com/b/dataplatforminsider/archive/2014/01/30/in-memory-oltp-index-troubleshooting-part-ii.aspx
 		IF (SELECT COUNT(*) FROM #tmpXIS WHERE FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) > 50 AND [avg_chain_length] > 5) > 0
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], '[WARNING: Some databases have high avg chain lenght (>5) and high empty buckets count (>50 pct). Verify if there are many rows with duplicate index key values or there is a skew in the key values]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
 				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
@@ -9562,11 +9961,19 @@ OPTION (MAXDOP 2)'
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], '[OK]' AS [Deviation]
 		END;
+
+		SELECT [Category], [Check],[Deviation]
+		FROM #bpdeviationoutput
+		WHERE [Category] = 'Index_and_Stats_checks'
+		AND [Check] ='XTP_HashIX_Health_AvgChain_EmptyBuckets'
+		ORDER BY id ASC
 		
 		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count > distinctCnt) > 0
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], '[WARNING: Some databases have a total bucket count larger than the number of distinct rows in the table, which is wasting memory and marginally slowing down full table scans]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
 				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
@@ -9577,11 +9984,18 @@ OPTION (MAXDOP 2)'
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], '[OK]' AS [Deviation]
 		END;
+		SELECT [Category], [Check],[Deviation]
+		FROM #bpdeviationoutput
+		WHERE [Category] = 'Index_and_Stats_checks'
+		AND [Check] ='XTP_HashIX_Health_TooManyBuckets'
+		ORDER BY id ASC
 
 		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count < distinctCnt) > 0
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], '[WARNING: Some databases have a total bucket count smaller than the number of distinct rows in the table, which leads to chaining records]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
 				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
@@ -9592,8 +10006,15 @@ OPTION (MAXDOP 2)'
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], '[OK]' AS [Deviation]
 		END;
+		SELECT [Category], [Check],[Deviation]
+		FROM #bpdeviationoutput
+		WHERE [Category] = 'Index_and_Stats_checks'
+		AND [Check] ='XTP_HashIX_Health_TooFewBuckets'
+		ORDER BY id ASC
+
 
 		-- For the below values, your mileage may vary. Assuming more than 5 percent retries requires investigation	.
 		-- https://msdn.microsoft.com/en-us/library/dn645468.aspx		
@@ -9605,6 +10026,7 @@ OPTION (MAXDOP 2)'
 			OR FLOOR((CAST(key_merge_retry_count AS FLOAT)/CASE WHEN key_merge_count = 0 THEN 1 ELSE key_merge_count END) * 100) > 5
 			) > 0
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_RangeIX_Health' AS [Check], '[WARNING: Some databases have retry count over 5 percent of total, indicating possible concurrency issues]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_RangeIX_Health' AS [Category], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
 				delta_pages, internal_pages, leaf_pages, 
@@ -9623,6 +10045,11 @@ OPTION (MAXDOP 2)'
 				OR FLOOR((CAST(key_merge_retry_count AS FLOAT)/CASE WHEN key_merge_count = 0 THEN 1 ELSE key_merge_count END) * 100) > 5
 			ORDER BY [database_name], [schema_name], table_name, [leaf_pages] DESC;
 		END;
+		SELECT [Category], [Check],[Deviation]
+		FROM #bpdeviationoutput
+		WHERE [Category] = 'Index_and_Stats_checks'
+		AND [Check] ='XTP_RangeIX_Health'
+		ORDER BY id ASC
 	END;
 END
 ELSE
@@ -9730,6 +10157,8 @@ OPTION (MAXDOP 2);'
 		AND I.[KeyCols] = I2.[KeyCols] AND (I.IncludedCols = I2.IncludedCols OR (I.IncludedCols IS NULL AND I2.IncludedCols IS NULL))
 		AND ((I.filter_definition = I2.filter_definition) OR (I.filter_definition IS NULL AND I2.filter_definition IS NULL))) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes' AS [Check], '[WARNING: Some databases have duplicate indexes. It is recommended to revise the need to maintain all these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes' AS [Check], '[WARNING: Some databases have duplicate indexes. It is recommended to revise the need to maintain all these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], 
 			I.[indexID], I.[indexName] AS [Index_Name], I.is_primary_key, I.is_unique_constraint, I.is_unique, I.fill_factor, I.is_padded, I.has_filter, I.filter_definition,
@@ -9871,6 +10300,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + '%'''
 
 		IF (SELECT COUNT(*) FROM #tblCode) > 0
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes_HardCoded' AS [Check], '[WARNING: Some sql modules have references to these duplicate indexes. Fix these references to be able to drop duplicate indexes]' AS [Deviation]
 			SELECT [DatabaseName],[schemaName],[objectName] AS [referedIn_objectName], indexName AS [referenced_indexName], type_desc AS [refered_objectType]
 			FROM #tblCode
@@ -9878,13 +10308,20 @@ WHERE sm.[definition] LIKE ''%' + @indexName + '%'''
 		END
 		ELSE
 		BEGIN
+			INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes_HardCoded' AS [Check], '[OK]' AS [Deviation]
 		END
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Duplicate_Indexes'
+	ORDER BY id ASC
 
 	IF (SELECT COUNT(*) FROM #tblIxs1 I INNER JOIN #tblIxs1 I2 ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID] 
 		AND (I.[KeyCols] <> I2.[KeyCols] OR I.IncludedCols <> I2.IncludedCols)
@@ -9906,6 +10343,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + '%'''
 			AND I2.is_unique_constraint = 0	-- no unique constraints
 		) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Redundant_Indexes' AS [Check], '[WARNING: Some databases have possibly redundant indexes. It is recommended to revise the need to maintain all these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Redundant_Indexes' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name],
 			I.[indexID], I.[indexName] AS [Index_Name], I.is_unique, I.fill_factor, I.is_padded, I.has_filter, I.filter_definition,
@@ -9933,8 +10371,14 @@ WHERE sm.[definition] LIKE ''%' + @indexName + '%'''
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Redundant_Indexes' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Redundant_Indexes'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10049,6 +10493,7 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 
 	IF (SELECT COUNT(*) FROM #tblIxs2 WHERE [Hits] = 0 /*AND is_disabled = 0*/) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Unused_Indexes' AS [Check], '[WARNING: Some databases have unused indexes. It is recommended to revise the need to maintain all these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Unused_Indexes_With_Updates' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name], [indexID], [indexName] AS [Index_Name], is_unique, 
 		[Hits], CONVERT(NVARCHAR,[Reads_Ratio]) COLLATE database_default + '/' + CONVERT(NVARCHAR,[Writes_Ratio]) COLLATE database_default AS [R/W_Ratio],
@@ -10113,11 +10558,20 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Unused_Indexes' AS [Check], '[OK]' AS [Deviation]
 	END;
 
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Unused_Indexes'
+	ORDER BY id ASC
+
+
 	IF (SELECT COUNT(*) FROM #tblIxs2 WHERE [Hits] > 0 AND [Reads_Ratio] < 5 AND type IN (1,2,5,6) AND is_primary_key = 0 AND is_unique_constraint = 0 /*AND is_disabled = 0*/) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Rarely_Used_Indexes' AS [Check], '[WARNING: Some databases have rarely used indexes. It is recommended to revise the need to maintain all these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Rarely_Used_Indexes' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name], [indexID], [indexName] AS [Index_Name], is_unique, 
 		[Hits], CONVERT(NVARCHAR,[Reads_Ratio]) COLLATE database_default + '/' + CONVERT(NVARCHAR,[Writes_Ratio]) COLLATE database_default AS [R/W_Ratio],
@@ -10151,8 +10605,14 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Rarely_Used_Indexes' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Index_and_Stats_checks'
+AND [Check] ='Rarely_Used_Indexes'
+ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10163,6 +10623,7 @@ BEGIN
 	RAISERROR (N'  |-Starting Indexes with large keys (> 900 bytes)', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE [KeyCols_data_length_bytes] > 900) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], '[WARNING: Some indexes have keys larger than 900 bytes. It is recommended to revise these]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], 
 			I.KeyCols, [KeyCols_data_length_bytes]
@@ -10172,8 +10633,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Large_Index_Key'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10184,6 +10651,7 @@ BEGIN
 	RAISERROR (N'  |-Starting Indexes with fill factor < 80 pct', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE [fill_factor] BETWEEN 1 AND 79) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Low_Fill_Factor' AS [Check], '[WARNING: Some indexes have a fill factor lower than 80 percent. Revise the need to maintain such a low value]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Low_Fill_Factor' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], 
 			[fill_factor], I.KeyCols, I.IncludedCols, CASE WHEN I.IncludedCols IS NULL THEN I.[KeyCols] ELSE I.[KeyCols] + ',' + I.IncludedCols END AS [AllColsOrdered]
@@ -10193,8 +10661,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Low_Fill_Factor' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Low_Fill_Factor'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10205,6 +10679,7 @@ BEGIN
 	RAISERROR (N'  |-Starting Disabled indexes', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE [is_disabled] = 1) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Disabled_IXs' AS [Check], '[WARNING: Some indexes are disabled. Revise the need to maintain these]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Disabled_IXs' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], 
 			CASE WHEN [indexType] = 1 THEN 'Clustered' 
@@ -10218,8 +10693,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Disabled_IXs' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Disabled_IXs'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10230,6 +10711,7 @@ BEGIN
 	RAISERROR (N'  |-Starting Non-unique clustered indexes', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE [is_unique] = 0 AND indexID = 1) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'NonUnique_CIXs' AS [Check], '[WARNING: Some clustered indexes are non-unique. Revise the need to have non-unique clustering keys to which a uniquefier is added]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'NonUnique_CIXs' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], I.[KeyCols]
 		FROM #tblIxs1 I
@@ -10238,8 +10720,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'NonUnique_CIXs' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='NonUnique_CIXs'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10315,6 +10803,7 @@ OPTION (MAXDOP 2);'
 
 	IF (SELECT COUNT(*) FROM #tblIxs6 WHERE [Key_has_GUID] > 0) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Index_Key_GUID' AS [Check], '[WARNING: Some clustered indexes have GUIDs in the key. It is recommended to revise these]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Index_Key_GUID' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], I.KeyCols
 		FROM #tblIxs6 I
@@ -10323,8 +10812,14 @@ OPTION (MAXDOP 2);'
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Index_Key_GUID' AS [Check], '[OK]' AS [Deviation]
 	END
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Index_Key_GUID'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10418,6 +10913,7 @@ WHERE NOT EXISTS (SELECT 1 FROM cteIndexCols ict
 	
 	IF (SELECT COUNT(*) FROM #tblFK) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'FK_no_Index' AS [Check], '[WARNING: Some Foreign Key constraints are not supported by an Index. It is recommended to revise these]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'FK_no_Index' AS [Information], FK.[DatabaseName] AS [Database_Name], constraint_name AS [Constraint_Name],
 			FK.parent_schema_name AS [Schema_Name], FK.parent_table_name AS [Table_Name],
@@ -10450,8 +10946,14 @@ WHERE NOT EXISTS (SELECT 1 FROM cteIndexCols ict
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'FK_no_Index' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='FK_no_Index'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10561,43 +11063,72 @@ WHERE t.[type] = ''U''
 
 	IF (SELECT COUNT(*) FROM #tblIxs3 WHERE [Operation] = 1) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_Indexes' AS [Check], '[WARNING: Some tables do not have indexes]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_Indexes' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name] FROM #tblIxs3 WHERE [Operation] = 1
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_Indexes' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Tables_with_no_Indexes'
+	ORDER BY id ASC
 
 	IF (SELECT COUNT(*) FROM #tblIxs3 WHERE [Operation] = 2) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_CL_Index' AS [Check], '[WARNING: Some tables do not have a clustered index, but have non-clustered index(es)]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_CL_Index' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name] FROM #tblIxs3 WHERE [Operation] = 2
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_CL_Index' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Tables_with_no_CL_Index'
+	ORDER BY id ASC
 
 	IF (SELECT COUNT(*) FROM #tblIxs4 WHERE [CntCols] < [CntIxs]) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_more_Indexes_than_Cols' AS [Check], '[WARNING: Some tables have more indexes than columns]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_more_Indexes_than_Cols' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name], [CntCols] AS [Cnt_Columns], [CntIxs] AS [Cnt_Indexes] FROM #tblIxs4 WHERE [CntCols] < [CntIxs]
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_more_Indexes_than_Cols' AS [Check], '[OK]' AS [Deviation]
 	END;
-	
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Tables_with_more_Indexes_than_Cols'
+	ORDER BY id ASC
+
 	IF (SELECT COUNT(*) FROM #tblIxs5) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_partition_misaligned_Indexes' AS [Check], '[WARNING: Some partitioned tables have indexes that are not aligned with the partition schema]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_partition_misaligned_Indexes' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name], [indexName] AS [Index_Name], [indexLocation] FROM #tblIxs5
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_partition_misaligned_Indexes' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Tables_with_partition_misaligned_Indexes'
+	ORDER BY id ASC
+
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10768,6 +11299,7 @@ END'')
 
 	IF (SELECT COUNT(*) FROM #IndexCreation WHERE [Score] >= 100000) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Missing_Indexes' AS [Check], '[INFORMATION: Potentially missing indexes were found. It may be important to revise these]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Missing_Indexes' AS [Information], IC.DBName AS [Database_Name], IC.[Table] AS [Table_Name], CONVERT(bigint,[Score]) AS [Score], [User_Hits_on_Missing_Index], 
 			[Estimated_Improvement_Percent], [Avg_Total_User_Cost], [Unique_Compiles], IC.[KeyCols], IC.[IncludedCols], IC.[Ix_Name] AS [Index_Name],
@@ -10878,8 +11410,14 @@ END'')
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Missing_Indexes' AS [Check], '[OK]' AS [Deviation]
 	END
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Index_and_Stats_checks'
+	AND [Check] ='Missing_Indexes'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -11383,10 +11921,12 @@ WHERE [type] IN ('FN','FS','TF','IF') AND [Object] LIKE 'fn[_]%'
 	
 IF (SELECT COUNT(*) FROM #tmpfinalobjectnames) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Naming_checks' AS [Category], 'Object_Naming_Convention' AS [Check], '[WARNING: Reserved words or special characters have been found in object names]' AS [Deviation]
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Naming_checks' AS [Category], 'Object_Naming_Convention' AS [Check], '[OK]' AS [Deviation]
 END;
 
@@ -11466,6 +12006,7 @@ ORDER BY [Deviation], [Name]
 
 IF (SELECT COUNT([Deviation]) FROM @passwords) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Security_checks' AS [Category], 'Password_checks' AS [Check], '[WARNING: Some user logins have weak passwords. Please review these as soon as possible]' AS [Deviation]
 	SELECT 'Security_checks' AS [Category], 'Password_checks' AS [Information], [Deviation], [Name], [CreateDate]
 	FROM @passwords
@@ -11473,8 +12014,14 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Security_checks' AS [Category], 'Password_checks' AS [Check], '[OK]' AS [Deviation]
 END;
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Security_checks'
+AND [Check] ='Password_checks'
+ORDER BY id ASC
 
 RAISERROR (N'|-Starting Maintenance and Monitoring Checks', 10, 1) WITH NOWAIT
 
@@ -11489,6 +12036,7 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Agent_Alerts_Severity_10' AS [Check], CASE WHEN COUNT([name]) > 0 THEN '[OK]' ELSE '[WARNING: Important errors (825,833,855,856,3452,3619,17179,17883,17884,17887,17888,17890,28036) are not raising alerts. Please review the need to create these]' END AS [Deviation]
 	FROM msdb.dbo.sysalerts
 	WHERE [message_id] IN (825,833,855,856,3452,3619,17179,17883,17884,17887,17888,17890,28036) OR severity = 10
@@ -11524,6 +12072,8 @@ BEGIN
 	SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Agent_Alerts_Severity_24' AS [Check], CASE WHEN COUNT([name]) > 0 THEN '[OK]' ELSE '[WARNING: Important errors (823,824,832) are not raising alerts. Please review the need to create these]' END AS [Deviation]
 	FROM msdb.dbo.sysalerts
 	WHERE [message_id] IN (823,824,832) OR severity = 24
+
+	
 		
 	IF (SELECT COUNT([name]) FROM msdb.dbo.sysalerts WHERE ([message_id] IN (825,833,855,856,3452,3619,17179,17883,17884,17887,17888,17890,28036, -- Sev 10
 			610,2508,2511,3271,5228,5229,5242,5243,5250,5901,8621,17065,17066,17067,17130,17300, -- Sev 16 
@@ -11551,6 +12101,11 @@ BEGIN
 	END
 END;
 
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Maintenance_Monitoring_checks'
+AND [Check] LIKE '%Alerts%'
+ORDER BY id ASC
 --------------------------------------------------------------------------------------------------------------------------------
 -- DBCC CHECKDB, Direct Catalog Updates and Data Purity subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -11616,6 +12171,7 @@ BEGIN
 
 	IF @dbcc = 1
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'DBCC_CHECKDB' AS [Check], '[WARNING: database integrity checks have not been executed for over 7 days on some or all databases. It is recommended to run DBCC CHECKDB on these databases as soon as possible]' AS [Deviation]
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'DBCC_CHECKDB' AS [Information], [name] AS [Database_Name], MAX(lst_known_checkdb) AS Last_Known_CHECKDB
 		FROM master.sys.databases (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
@@ -11626,11 +12182,18 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'DBCC_CHECKDB' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Maintenance_Monitoring_checks'
+	AND [Check] LIKE 'DBCC_CHECKDB'
+	ORDER BY id ASC
 
 	IF @catupd = 1
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Direct_Catalog_Updates' AS [Check], '[WARNING: Microsoft does not support direct catalog updates to databases.]' AS [Deviation]
 		SELECT DISTINCT 'Instance_checks' AS [Category], 'Direct_Catalog_Updates' AS [Information], [name] AS [Database_Name], MAX(updSysCatalog) AS Last_Direct_Catalog_Update
 		FROM master.sys.databases (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
@@ -11641,13 +12204,20 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Instance_checks' AS [Category], 'Direct_Catalog_Updates' AS [Check], '[OK]' AS [Deviation]
 	END;
-	
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Instance_checks'
+	AND [Check] LIKE 'Direct_Catalog_Updates'
+	ORDER BY id ASC
+
 	-- http://support.microsoft.com/kb/923247/en-us
 	-- http://www.sqlskills.com/blogs/paul/checkdb-from-every-angle-how-to-tell-if-data-purity-checks-will-be-run
 	IF @purity = 1
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Databases_need_data_purity_check' AS [Check], '[WARNING: Databases were found that need to run data purity checks.]' AS [Deviation]
 		SELECT DISTINCT 'Maintenance_Monitoring_checks' AS [Category], 'Databases_need_data_purity_check' AS [Information], [name] AS [Database_Name], dbi_dbccFlags AS Needs_Data_Purity_Checks
 		FROM master.sys.databases (NOLOCK) LEFT JOIN #dbinfo tmpdbi ON name = tmpdbi.dbname
@@ -11656,8 +12226,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Databases_need_data_purity_check' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Maintenance_Monitoring_checks'
+	AND [Check] LIKE 'Databases_need_data_purity_check'
+	ORDER BY id ASC
 END
 ELSE
 BEGIN
@@ -11707,6 +12283,7 @@ BEGIN
 	IF (SELECT COUNT(*) FROM sys.dm_db_mirroring_auto_page_repair (NOLOCK)) > 0
 		OR @HadrRep > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Auto_Page_repairs' AS [Check], '[WARNING: Page repairs have been found. Check for suspect pages]' AS [Deviation]
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Auto_Page_repairs' AS [Information], dbname AS [Database_Name],
 			[file_id] AS [File_ID],
@@ -11730,8 +12307,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
-		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Auto_Page_repairs' AS [Check], '[None]' AS [Deviation], '' AS [Source] 
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
+		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Auto_Page_repairs' AS [Check], '[None]' AS [Deviation]
 	END
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Maintenance_Monitoring_checks'
+	AND [Check] ='Auto_Page_repairs'
+	ORDER BY id ASC
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -11741,6 +12324,7 @@ END;
 RAISERROR (N'  |-Starting Suspect pages', 10, 1) WITH NOWAIT
 IF (SELECT COUNT(*) FROM msdb.dbo.suspect_pages WHERE (event_type = 1 OR event_type = 2 OR event_type = 3)) > 0
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Suspect_Pages' AS [Check], '[WARNING: Suspect pages have been found. Run DBCC CHECKDB to verify affected databases]' AS [Deviation]
 	SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Suspect_Pages' AS [Information], DB_NAME(database_id) AS [Database_Name],
 		[file_id] AS [File_ID],
@@ -11759,8 +12343,15 @@ BEGIN
 END
 ELSE
 BEGIN
+	INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 	SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Suspect_Pages' AS [Check], '[None]' AS [Deviation]
 END;
+
+SELECT [Category], [Check],[Deviation]
+FROM #bpdeviationoutput
+WHERE [Category] = 'Maintenance_Monitoring_checks'
+AND [Check] ='Suspect_Pages'
+ORDER BY id ASC
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Replication Errors subsection
@@ -11773,6 +12364,7 @@ BEGIN
 		INNER JOIN distribution.dbo.MSdistribution_agents AS msa ON msh.agent_id = msa.id
 		WHERE mse.time >= DATEADD(hh, - 24, GETDATE())) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Repl_Errors_Lst_24H' AS [Check], '[WARNING: Replication Errors have been found in the last 24 hours]' AS [Deviation]
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Repl_Errors_Lst_24H' AS [Information], 
 			msa.[name] AS [Distribution_Agent], msa.publisher_db AS [Publisher_DB], 
@@ -11795,8 +12387,16 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Repl_Errors_Lst_24H' AS [Check], '[None]' AS [Deviation]
 	END
+
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Maintenance_Monitoring_checks'
+	AND [Check] ='Repl_Errors_Lst_24H'
+	ORDER BY id ASC
+
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -11910,6 +12510,7 @@ BEGIN
 
 	IF (SELECT COUNT([rowid]) FROM #dbcc) > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Errorlog' AS [Check], '[WARNING: Errorlog contains important messages.]' AS [Deviation];
 
 		;WITH cte_dbcc (err, errcnt, logdate, logmsg) 
@@ -12043,8 +12644,14 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Errorlog' AS [Check], '[OK]' AS [Deviation]
 	END;
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Maintenance_Monitoring_checks'
+	AND [Check] ='Errorlog'
+	ORDER BY id ASC
 END
 ELSE
 BEGIN
@@ -12074,6 +12681,7 @@ BEGIN
 	
 	IF (SELECT COUNT(*) FROM #SystemHealthSessionData a WHERE CONVERT(VARCHAR(max), target_data) LIKE '%error_reported%') > 0
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'SystemHealth_Errors' AS [Check], '[WARNING: System Health Session contains important messages.]' AS [Deviation];
 
 		-- Get statistical information about all the errors reported
@@ -12120,9 +12728,29 @@ BEGIN
 	END
 	ELSE
 	BEGIN
+		INSERT INTO #bpdeviationoutput ([Category] , [Check] , [Deviation])
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'SystemHealth_Errors' AS [Check], '[OK]' AS [Deviation]
 	END;
+
+	SELECT [Category], [Check],[Deviation]
+	FROM #bpdeviationoutput
+	WHERE [Category] = 'Maintenance_Monitoring_checks'
+	AND [Check] ='SystemHealth_Errors'
+	ORDER BY id ASC
+
 END;
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+-- Select all deviations 
+--------------------------------------------------------------------------------------------------------------------------------
+IF @deviation_table = 1
+BEGIN 
+	SELECT [Category], [Check],[Deviation], [Detail]
+	FROM #bpdeviationoutput
+	ORDER BY id ASC
+END
+
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Clean up temp objects 
