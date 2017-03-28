@@ -383,6 +383,7 @@ v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQ
 v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
 v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information section;
 						Fixed conversion error when multiple TCP ports.
+v2.1.5.4 - 3/28/2017 - Fixed collation issues.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -952,37 +953,20 @@ END;
 RAISERROR (N'|-Starting Linked servers info', 10, 1) WITH NOWAIT
 IF (SELECT COUNT(*) FROM sys.servers AS s INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id WHERE s.is_linked = 1) > 0
 BEGIN
-	IF @sqlmajorver > 9
-	BEGIN
-		EXEC ('SELECT ''Information'' AS [Category], ''Linked_servers'' AS [Information], s.name, s.product, 
+	SET @sqlcmd = 'SELECT ''Information'' AS [Category], ''Linked_servers'' AS [Information], s.name, s.product, 
 	s.provider, s.data_source, s.location, s.provider_string, s.catalog, s.connect_timeout, 
 	s.query_timeout, s.is_linked, s.is_remote_login_enabled, s.is_rpc_out_enabled, 
 	s.is_data_access_enabled, s.is_collation_compatible, s.uses_remote_collation, s.collation_name, 
 	s.lazy_schema_validation, s.is_system, s.is_publisher, s.is_subscriber, s.is_distributor, 
-	s.is_nonsql_subscriber, s.is_remote_proc_transaction_promotion_enabled, 
+	s.is_nonsql_subscriber' + CASE WHEN @sqlmajorver > 9 THEN ', s.is_remote_proc_transaction_promotion_enabled' ELSE '' END + ',
 	s.modify_date, CASE WHEN l.local_principal_id = 0 THEN ''local or wildcard'' ELSE p.name END AS [local_principal], 
 	CASE WHEN l.uses_self_credential = 0 THEN ''use own credentials'' ELSE ''use supplied username and pwd'' END AS uses_self_credential, 
 	l.remote_name, l.modify_date AS [linked_login_modify_date]
 FROM sys.servers AS s (NOLOCK)
 INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id
 INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
-WHERE s.is_linked = 1')
-	END
-	ELSE 
-	BEGIN
-		EXEC ('SELECT ''Information'' AS [Category], ''Linked_servers'' AS [Information], s.name, s.product, 
-	s.provider, s.data_source, s.location, s.provider_string, s.catalog, s.connect_timeout, 
-	s.query_timeout, s.is_linked, s.is_remote_login_enabled, s.is_rpc_out_enabled, 
-	s.is_data_access_enabled, s.is_collation_compatible, s.uses_remote_collation, s.collation_name, 
-	s.lazy_schema_validation, s.is_system, s.is_publisher, s.is_subscriber, s.is_distributor, 
-	s.is_nonsql_subscriber, s.modify_date, CASE WHEN l.local_principal_id = 0 THEN ''local or wildcard'' ELSE p.name END AS [local_principal], 
-	CASE WHEN l.uses_self_credential = 0 THEN ''use own credentials'' ELSE ''use supplied username and pwd'' END AS uses_self_credential, 
-	l.remote_name, l.modify_date AS [linked_login_modify_date]
-FROM sys.servers AS s (NOLOCK)
-INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id
-INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
-WHERE s.is_linked = 1')
-	END
+WHERE s.is_linked = 1'
+	EXECUTE sp_executesql @sqlcmd
 END
 ELSE
 BEGIN
@@ -1299,8 +1283,7 @@ BEGIN
 	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
 	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
 	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
-	db.target_recovery_time_in_seconds, 
-	db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
 FROM master.sys.databases AS db (NOLOCK)
 INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
 INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
@@ -1636,7 +1619,7 @@ SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sk
 	IF (@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13
 	BEGIN
 		DELETE FROM #tblPerSku
-		WHERE feature_name IN ('ColumnStoreIndex','InMemoryOLTP')
+		WHERE Feature_Name IN ('ColumnStoreIndex','InMemoryOLTP')
 	END;
 	
 	IF (SELECT COUNT([Feature_Name]) FROM #tblPerSku) > 0
@@ -4494,7 +4477,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlservice = 'LocalSystem' THEN '[WARNING: Running SQL Server under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server under this account is not recommended]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4510,7 +4493,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
 			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4521,9 +4504,9 @@ BEGIN
 			WHEN @accntolapservice = @accntsqlservice THEN '[WARNING: Running SQL Server Analysis Services under the same account as SQL Server is not recommended]' 
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND @winver <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2005 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4546,7 +4529,7 @@ BEGIN
 			WHEN @accntrsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Reporting Services under the same account as SQL Server is not recommended]' 
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @sqlmajorver >= 11 AND @winver <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
 			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			ELSE '[OK]' 
@@ -7867,8 +7850,8 @@ BEGIN
 			FOR XML PATH(''), TYPE) AS [blocked_batch],
 		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			SUBSTRING(qt2.text, 
-			(CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END),
-			(CASE WHEN er.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er.statement_end_offset/2 END - (CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END))),
+			1+(CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END),
+			1+(CASE WHEN er.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er.statement_end_offset/2 END - (CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END))),
 			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er.sql_handle, ec.most_recent_sql_handle)) AS qt2
@@ -7900,8 +7883,8 @@ BEGIN
 			FOR XML PATH(''), TYPE) AS [blocker_batch],
 		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			SUBSTRING(qt2.text, 
-			(CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END),
-			(CASE WHEN er2.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er2.statement_end_offset/2 END - (CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END))),
+			1+(CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END),
+			1+(CASE WHEN er2.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er2.statement_end_offset/2 END - (CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END))),
 			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er2.sql_handle, ec2.most_recent_sql_handle)) AS qt2 
@@ -9336,7 +9319,7 @@ WHERE o.[type] = ''U'''
 			EXECUTE sp_executesql @sqlcmd, @params, @distinctCntOUT=@distinctCnt OUTPUT, @OptimBucketCntOUT=@OptimBucketCnt OUTPUT;
 			
 			UPDATE #tmpXIS
-			SET distinctCnt = @distinctCnt, OptimBucketCnt = @OptimBucketCnt, isdone = 1
+			SET DistinctCnt = @distinctCnt, OptimBucketCnt = @OptimBucketCnt, isdone = 1
 			WHERE database_id = @dbid AND [object_id] = @objectid AND [index_id] = @indexid;
 		END;
 	END;
@@ -9433,7 +9416,7 @@ OPTION (MAXDOP 2)'
 		BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], '[WARNING: Some databases have high avg chain lenght (>5) and high empty buckets count (>50 pct). Verify if there are many rows with duplicate index key values or there is a skew in the key values]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
-				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
+				DistinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
 				FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) AS [empty_bucket_pct], avg_chain_length, max_chain_length
 			FROM #tmpXIS
 			WHERE FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) > 50 AND [avg_chain_length] > 5
@@ -9444,14 +9427,14 @@ OPTION (MAXDOP 2)'
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], '[OK]' AS [Deviation]
 		END;
 		
-		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count > distinctCnt) > 0
+		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count > DistinctCnt) > 0
 		BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], '[WARNING: Some databases have a total bucket count larger than the number of distinct rows in the table, which is wasting memory and marginally slowing down full table scans]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
-				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
+				DistinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
 				FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) AS [empty_bucket_pct], avg_chain_length, max_chain_length
 			FROM #tmpXIS
-			WHERE total_bucket_count > distinctCnt
+			WHERE total_bucket_count > DistinctCnt
 			ORDER BY [database_name], [schema_name], table_name, [total_bucket_count] DESC;
 		END
 		ELSE
@@ -9459,14 +9442,14 @@ OPTION (MAXDOP 2)'
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], '[OK]' AS [Deviation]
 		END;
 
-		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count < distinctCnt) > 0
+		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count < DistinctCnt) > 0
 		BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], '[WARNING: Some databases have a total bucket count smaller than the number of distinct rows in the table, which leads to chaining records]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
-				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
+				DistinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
 				FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) AS [empty_bucket_pct], avg_chain_length, max_chain_length
 			FROM #tmpXIS
-			WHERE total_bucket_count < distinctCnt
+			WHERE total_bucket_count < DistinctCnt
 			ORDER BY [database_name], [schema_name], table_name, [total_bucket_count] DESC;
 		END
 		ELSE
