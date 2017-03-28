@@ -32,11 +32,11 @@ Function Check-Sqlncli
         # SQL Server 2008 R2
         elseif ($cli.DisplayVersion.Split(".")[2] -lt 6537 -and ($cli.DisplayVersion.Split(".")[1] -eq 50 -or $cli.DisplayVersion.Split(".")[1] -eq 51) -and $cli.DisplayVersion.Split(".")[0] -eq 10)
         {
-            Write-Host $cli.DisplayName "with version" $cli.Version " needs to be updated to use TLS 1.2" -ForegroundColor Red
+            Write-Host $cli.DisplayName "with version" $cli.DisplayVersion " needs to be updated to use TLS 1.2" -ForegroundColor Red
         }
         else
         {
-            Write-Host $cli.DisplayName "with version" $cli.Version " supports TLS 1.2" -ForegroundColor Green
+            Write-Host $cli.DisplayName "with version" $cli.DisplayVersion " supports TLS 1.2" -ForegroundColor Green
         }
     }
 }
