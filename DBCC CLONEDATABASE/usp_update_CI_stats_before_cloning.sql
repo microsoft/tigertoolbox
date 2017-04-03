@@ -1,5 +1,5 @@
 SET NOCOUNT ON
-Use db1
+Use <source database to be cloned>
 go
 
 --IF EXISTS(select * from sys.databases where name='db2')
@@ -45,4 +45,4 @@ BEGIN
 	+ ', rowcount = ' + convert(nvarchar(max), rows) + ', pagecount = '  + convert(nvarchar(max), pages)
 	from @out
 END
-dbcc clonedatabase('db1','db2')
+dbcc clonedatabase('source database','target clone database')
