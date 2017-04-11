@@ -384,6 +384,7 @@ v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
 v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information section;
 						Fixed conversion error when multiple TCP ports.
 v2.1.5.4 - 3/28/2017 - Fixed collation issues.
+v2.1.6 - 4/11/2017 - Changed port discovery method for SQL Server 2012 and above.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1004,12 +1005,23 @@ END
 ELSE
 BEGIN
 	BEGIN TRY
+		/*
 		SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(VARCHAR(15),value_data)) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpPort%'' AND CONVERT(float,value_data) > 0;';
 		SET @params = N'@portOUT VARCHAR(15) OUTPUT';
 		EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
 		IF @port IS NULL
 		BEGIN
 			SET @sqlcmd = N'SELECT @portOUT = CONVERT(VARCHAR(15),value_data) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpDynamicPort%'' AND CONVERT(float,value_data) > 0;';
+			SET @params = N'@portOUT VARCHAR(15) OUTPUT';
+			EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
+		END
+		*/
+		SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(VARCHAR(15),port)) FROM sys.dm_tcp_listener_states WHERE is_ipv4 = 1 AND [type] = 0 AND ip_address <> ''127.0.0.1'';';
+		SET @params = N'@portOUT VARCHAR(15) OUTPUT';
+		EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
+		IF @port IS NULL
+		BEGIN
+			SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(VARCHAR(15),port)) FROM sys.dm_tcp_listener_states WHERE is_ipv4 = 0 AND [type] = 0 AND ip_address <> ''127.0.0.1'';';
 			SET @params = N'@portOUT VARCHAR(15) OUTPUT';
 			EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
 		END
