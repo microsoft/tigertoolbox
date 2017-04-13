@@ -438,7 +438,7 @@ CREATE PROCEDURE dbo.usp_AdaptiveIndexDefrag
 	, @statsSample NCHAR(8)	= NULL
 		/* Valid options are: NULL, FULLSCAN, and RESAMPLE */
 	, @statsThreshold float	= NULL
-		/* Valid options are: NULL to use default stats sample method (same as TF2371), float number greater or equal to 0.0001 and less than 100 to use custom stats sample */
+		/* Valid options are: NULL to use default stats sample method (same as TF2371), float number greater or equal to 0.001 and less than 100 to use custom stats sample */
 	, @statsMinRows bigint = NULL
 		/* Valid options are: NULL , integer number that sets the min number of rows a table has to have to be considered for @statsThreshold use */
 	, @ix_statsnorecompute bit = 0
@@ -706,7 +706,7 @@ ALL parameters are optional. If not specified, the defaults for each parameter a
 					
 @statsThreshold		Custom threshold of changes needed to trigger update statistics, overriding default handling;
 					NULL = assume default handling which is similar to TF2371;
-					A float number greater or equal to 0.0001 and less than 100 to use custom stats sample
+					A float number greater or equal to 0.001 and less than 100 to use custom stats sample
 					
 @statsMinRows 		Sets the min number of rows a table has to have to be considered for @statsThreshold use;
 					NULL = use @statsThreshold (if set) for any size table;
@@ -825,7 +825,7 @@ BEGIN
 		IF @rebuildThreshold_cs IS NULL OR @rebuildThreshold_cs NOT BETWEEN 0.00 AND 100.0
 		SET @rebuildThreshold_cs = 10.0;
 		
-		IF @statsThreshold IS NOT NULL AND @statsThreshold NOT BETWEEN 0.0001 AND 100.0
+		IF @statsThreshold IS NOT NULL AND @statsThreshold NOT BETWEEN 0.001 AND 100.0
 		SET @statsThreshold = NULL;
 
 		IF @timeLimit IS NULL
@@ -1219,7 +1219,7 @@ Only the right-most populated partitions will be considered if greater than ' + 
 ELSE CHAR(10) + 'All partitions will be considered;' END +
 CHAR(10) + 'Statistics ' + CASE WHEN @updateStats = 1 THEN 'WILL' ELSE 'WILL NOT' END + ' be updated ' + CASE WHEN @updateStatsWhere = 1 THEN 'on reorganized indexes;' ELSE 'on all stats belonging to parent table;' END +		
 CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL THEN CHAR(10) + 'Statistics will be updated with ' + @statsSample + '.' ELSE '' END +
-CHAR(10) + 'Statistics will be updated using ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.0001 AND 100.0 THEN 'a threshold of ' + CONVERT(VARCHAR, @statsThreshold) + ' percent' ELSE ' a calculated threshold similar to TF2371' END + 
+CHAR(10) + 'Statistics will be updated using ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 THEN 'a threshold of ' + CONVERT(VARCHAR, @statsThreshold) + ' percent' ELSE ' a calculated threshold similar to TF2371' END + 
 + ' on tables ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL THEN 'with a min of ' + CONVERT(VARCHAR, @statsMinRows) + ' rows.' ELSE IF @statsMinRows IS NOT NULL THEN ' of any size.' ELSE '.' END + 		
 CHAR(10) + 'Statistics will be updated with Incremental property (if any) ' + CASE WHEN @statsIncremental = 1 THEN 'as ON' WHEN @statsIncremental = 0 THEN 'as OFF' ELSE 'not changed from current setting' END + '.' +
 CHAR(10) + 'Defragmentation will use ' + CASE WHEN @editionCheck = 0 OR @maxDopRestriction IS NULL THEN 'system defaults for processors;'
@@ -2275,8 +2275,8 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				If the cardinality for a table is greater than 500, update statistics when (500 + 20 percent of the table) changes have occurred.
 				Reference: http://support.microsoft.com/kb/195565
 				*/
-				IF (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.0001 AND 100.0 AND @statsMinRows IS NULL AND (@rowmodctr*100)/@record_count >= @statsThreshold)
-					OR (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.0001 AND 100.0 AND @statsMinRows IS NOT NULL AND @record_count >= @statsMinRows AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+				IF (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 AND @statsMinRows IS NULL AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+					OR (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 AND @statsMinRows IS NOT NULL AND @record_count >= @statsMinRows AND (@rowmodctr*100)/@record_count >= @statsThreshold)
 					OR (@statsThreshold IS NULL AND (
 						(@record_count BETWEEN 6 AND 500 AND @rowmodctr >= 500) OR -- like the default
 						(@record_count BETWEEN 501 AND 10000 AND (@rowmodctr >= (@record_count*20)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 20 percent or simulate TF 2371
@@ -2543,8 +2543,8 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				If the cardinality for a table is greater than 6, but less than or equal to 500, update status every 500 modifications.
 				If the cardinality for a table is greater than 500, update statistics when (500 + 20 percent of the table) changes have occurred.
 				*/
-				IF (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.0001 AND 100.0 AND @statsMinRows IS NULL AND (@rowmodctr*100)/@record_count >= @statsThreshold)
-					OR (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.0001 AND 100.0 AND @statsMinRows IS NOT NULL AND @record_count >= @statsMinRows AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+				IF (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 AND @statsMinRows IS NULL AND (@rowmodctr*100)/@record_count >= @statsThreshold)
+					OR (@statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 AND @statsMinRows IS NOT NULL AND @record_count >= @statsMinRows AND (@rowmodctr*100)/@record_count >= @statsThreshold)
 					OR (@statsThreshold IS NULL AND (
 						(@record_count BETWEEN 6 AND 500 AND @rowmodctr >= 500) OR -- like the default
 						(@record_count BETWEEN 501 AND 10000 AND (@rowmodctr >= (@record_count*20)/100 + 500 OR @rowmodctr >= SQRT(@record_count*1000))) OR -- 500 + 20 percent or simulate TF 2371
