@@ -328,3 +328,4 @@ v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information 
 v2.1.5.4 - 3/28/2017 - Fixed collation issues.
 v2.1.6 - 4/11/2017 - Changed port discovery method for SQL Server 2012 and above.
 v2.1.6.1 - 4/30/2017 - Enhanced wait and latches report section.
+v2.1.7 - 5/10/2017 - Added database size details to Database Information section.
