@@ -119,3 +119,5 @@ v1.6.5 - 2/18/2017 - Fixed empty columnstore indexes being picked up;
 			Fixed insert error into tbl_AdaptiveIndexDefrag_Stats_log table.
 v1.6.5.1 - 3/3/2017 - Added custom threshold parameter for percent of changes needed to trigger statistics update, overriding default handling;
 			Added parameter for min rows to be considered with custom threshold parameter.
+v1.6.5.2 - 4/13/2017 - Lowered min threshold for @statsThreshold setting.
+v1.6.5.3 - 4/30/2017 - Fixed error in debug summary.

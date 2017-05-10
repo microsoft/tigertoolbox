@@ -385,6 +385,7 @@ v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information 
 						Fixed conversion error when multiple TCP ports.
 v2.1.5.4 - 3/28/2017 - Fixed collation issues.
 v2.1.6 - 4/11/2017 - Changed port discovery method for SQL Server 2012 and above.
+v2.1.6.1 - 4/30/2017 - Enhanced wait and latches report section.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -7533,8 +7534,8 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch'
 			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch'
 			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO'
-			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'AlwaysOn - Secondary Synch' 
-			WHEN W1.wait_type LIKE N'HADR_%' THEN N'AlwaysOn'
+			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
+			WHEN W1.wait_type LIKE N'HADR_%' THEN N'Always On'
 			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
 			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' -- Used to indicate a worker is running code that is not under the SQLOS Scheduling;
 			WHEN W1.wait_type IN (N'IO_COMPLETION', N'ASYNC_IO_COMPLETION', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'DISKIO_SUSPEND') THEN N'Other IO'
@@ -7554,6 +7555,8 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
 			WHEN W1.wait_type LIKE N'FT_%' THEN N'Full Text'
 			WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
+			WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
+			WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
 		ELSE N'Other' END AS 'wait_category'
 	FROM #tblFinalWaits AS W1 INNER JOIN #tblFinalWaits AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.wait_type, W1.wait_time_s, W1.pct, W1.signal_wait_time_s, W1.resource_wait_time_s, W1.signal_wait_pct, W1.resource_wait_pct
@@ -7575,7 +7578,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		,'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
 		'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
 		'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
-		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP') 
+		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'XTP_HOST_WAIT') 
 			AND wait_type NOT LIKE N'SLEEP_%'
 		GROUP BY wait_type, wait_time_ms, signal_wait_time_ms)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Waits' AS [Information], W1.wait_type, 
@@ -7596,8 +7599,8 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch'
 			-- PAGEIOLATCH = indicates IO problems, or BP pressure.
 			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO'
-			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'AlwaysOn - Secondary Synch' 
-			WHEN W1.wait_type LIKE N'HADR_%' THEN N'AlwaysOn'
+			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
+			WHEN W1.wait_type LIKE N'HADR_%' THEN N'Always On'
 			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
 			-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
 			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' -- Used to indicate a worker is running code that is not under the SQLOS Scheduling;
@@ -7637,6 +7640,10 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
 			WHEN W1.wait_type LIKE N'FT_%' THEN N'Full Text'
 			WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
+			WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
+			WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
+			WHEN W1.wait_type LIKE N'PARALLEL_REDO%' THEN N'Parallel Redo'
+			WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 		ELSE N'Other' END AS 'wait_category'
 	FROM Waits AS W1 INNER JOIN Waits AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.wait_type, W1.wait_time_s, W1.pct, W1.signal_wait_time_s, W1.resource_wait_time_s, W1.signal_wait_pct, W1.resource_wait_pct
@@ -7666,13 +7673,13 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			OR W1.latch_class LIKE N'ACCESS_METHODS_HOBT_VIRTUAL_ROOT' THEN N'[HoBT - Metadata]'
 		WHEN W1.latch_class LIKE N'ACCESS_METHODS_DATASET_PARENT' 
 			OR W1.latch_class LIKE N'ACCESS_METHODS_SCAN_RANGE_GENERATOR' 
-			OR W1.latch_class LIKE N'NESTING_TRANSACTION_FULL' THEN N'[Parallelism]'
-		WHEN W1.latch_class LIKE N'LOG_MANAGER' THEN N'[IO - Log]'
+			OR W1.latch_class LIKE N'NESTING_TRANSACTION%' THEN N'[Parallelism]'
+		WHEN W1.latch_class LIKE N'LOG_MANAGER' THEN N'[Log IO]'
 		WHEN W1.latch_class LIKE N'TRACE_CONTROLLER' THEN N'[Trace]'
 		WHEN W1.latch_class LIKE N'DBCC_MULTIOBJECT_SCANNER' THEN N'[Parallelism - DBCC CHECK_]'
-		WHEN W1.latch_class LIKE N'FGCB_ADD_REMOVE' THEN N'[IO Operations]'
+		WHEN W1.latch_class LIKE N'FGCB_ADD_REMOVE' THEN N'[Other IO]'
 		WHEN W1.latch_class LIKE N'DATABASE_MIRRORING_CONNECTION' THEN N'[Mirroring - Busy]'
-		WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool - PAGELATCH or PAGEIOLATCH]'
+		WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool]'
 		ELSE N'[Other]' END AS 'latch_category'
 	FROM #tblFinalLatches AS W1 INNER JOIN #tblFinalLatches AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, W1.pct

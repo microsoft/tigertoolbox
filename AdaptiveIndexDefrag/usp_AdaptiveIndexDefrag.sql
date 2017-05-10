@@ -609,6 +609,7 @@ v1.6.5 - 2/18/2017 - Fixed empty columnstore indexes being picked up;
 v1.6.5.1 - 3/3/2017 - Added custom threshold parameter for percent of changes needed to trigger statistics update, overriding default handling;
 						Added parameter for min rows to be considered with custom threshold parameter.
 v1.6.5.2 - 4/13/2017 - Lowered min threshold for @statsThreshold setting.
+v1.6.5.3 - 4/30/2017 - Fixed error in debug summary.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1133,7 +1134,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @rows_sampled bigint
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5.2';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5.3';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1220,7 +1221,7 @@ ELSE CHAR(10) + 'All partitions will be considered;' END +
 CHAR(10) + 'Statistics ' + CASE WHEN @updateStats = 1 THEN 'WILL' ELSE 'WILL NOT' END + ' be updated ' + CASE WHEN @updateStatsWhere = 1 THEN 'on reorganized indexes;' ELSE 'on all stats belonging to parent table;' END +		
 CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL THEN CHAR(10) + 'Statistics will be updated with ' + @statsSample + '.' ELSE '' END +
 CHAR(10) + 'Statistics will be updated using ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 THEN 'a threshold of ' + CONVERT(VARCHAR, @statsThreshold) + ' percent' ELSE ' a calculated threshold similar to TF2371' END + 
-+ ' on tables ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL THEN 'with a min of ' + CONVERT(VARCHAR, @statsMinRows) + ' rows.' ELSE IF @statsMinRows IS NOT NULL THEN ' of any size.' ELSE '.' END + 		
++ ' on tables ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL THEN 'with a min of ' + CONVERT(VARCHAR, @statsMinRows) + ' rows.' WHEN @statsMinRows IS NOT NULL THEN ' of any size.' ELSE '.' END + 		
 CHAR(10) + 'Statistics will be updated with Incremental property (if any) ' + CASE WHEN @statsIncremental = 1 THEN 'as ON' WHEN @statsIncremental = 0 THEN 'as OFF' ELSE 'not changed from current setting' END + '.' +
 CHAR(10) + 'Defragmentation will use ' + CASE WHEN @editionCheck = 0 OR @maxDopRestriction IS NULL THEN 'system defaults for processors;'
 ELSE CAST(@maxDopRestriction AS VARCHAR(2)) + ' processors;' END +
