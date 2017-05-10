@@ -1454,7 +1454,6 @@ ORDER BY [Database_Name]
 OPTION (RECOMPILE)'
 END
 
-select * from ##tmpdbsizes
 EXECUTE sp_executesql @sqlcmd;
 	
 SELECT 'Information' AS [Category], 'Database_Files' AS [Information], DB_NAME(database_id) AS [Database_Name], [file_id], type_desc, data_space_id AS [Filegroup], name, physical_name,
