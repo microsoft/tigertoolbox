@@ -535,6 +535,11 @@ IF  NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[spGetPe
 -- Update: Guilaumme Kierfer
 -- Update date: 2017/04/18
 -- Description: Update to handle named instance 
+-- Update: Dirk Hondong
+-- Update date: 2017/05/10
+-- Description: instead of converting to varchar(20)
+--              converting to money again (like initial solution)
+--              but with replacement of '','' to ''.''
 -- =============================================
 CREATE PROCEDURE [dbo].[spGetPerfCountersFromPowerShell]
 AS
@@ -557,7 +562,7 @@ declare @networkname sysname
 if (select CHARINDEX(''\'',@@SERVERNAME)) = 0
 	begin
 	INSERT [dba_local].[dbo].[PerformanceCounter] (CounterName, CounterValue, DateSampled)
-	SELECT  REPLACE(REPLACE(REPLACE(ct.[output],''\\''+@@SERVERNAME+''\'',''''),'' :'',''''),''sqlserver:'','''')[CounterName] , CONVERT(varchar(20),ct2.[output]) [CounterValue], GETDATE() [DateSampled]
+	SELECT  REPLACE(REPLACE(REPLACE(ct.[output],''\\''+@@SERVERNAME+''\'',''''),'' :'',''''),''sqlserver:'','''')[CounterName], CONVERT( MONEY, replace([ct2].[output], '','', ''.'')) [CounterValue], GETDATE() [DateSampled]
 	FROM @syscountertable ct
 	LEFT OUTER JOIN (
 	SELECT id - 1 [id], [output]
@@ -573,7 +578,7 @@ if (select CHARINDEX(''\'',@@SERVERNAME)) = 0
 	select @networkname=RTRIM(left(@@SERVERNAME, CHARINDEX(''\'', @@SERVERNAME) - 1))
 	select @sqlnamedinstance=RIGHT(@@SERVERNAME,CHARINDEX(''\'',REVERSE(@@SERVERNAME))-1)
 	INSERT [dba_local].[dbo].[PerformanceCounter] (CounterName, CounterValue, DateSampled)
-	SELECT  REPLACE(REPLACE(REPLACE(ct.[output],''\\''+@networkname+''\'',''''),'' :'',''''),''mssql$''+@sqlnamedinstance+'':'','''')[CounterName] , CONVERT(varchar(20),ct2.[output]) [CounterValue], GETDATE() [DateSampled]
+	SELECT  REPLACE(REPLACE(REPLACE(ct.[output],''\\''+@networkname+''\'',''''),'' :'',''''),''mssql$''+@sqlnamedinstance+'':'','''')[CounterName], CONVERT( MONEY, replace([ct2].[output], '','', ''.'')) [CounterValue], GETDATE() [DateSampled]
 	FROM @syscountertable ct
 	LEFT OUTER JOIN (
 	SELECT id - 1 [id], [output]
