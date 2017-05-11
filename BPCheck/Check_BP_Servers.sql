@@ -1336,7 +1336,7 @@ WHERE dbsize.[type_desc] = ''ROWS''
 	AND dbfssize.[type_desc] = ''FILESTREAM''
 	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
 ORDER BY [Database_Name]	
 OPTION (RECOMPILE)'
 END
@@ -1363,7 +1363,7 @@ LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.databas
 WHERE dbsize.[type_desc] = ''ROWS''
 	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
 ORDER BY [Database_Name]	
 OPTION (RECOMPILE)'
 END
@@ -1390,7 +1390,7 @@ LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.databas
 WHERE dbsize.[type_desc] = ''ROWS''
 	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
 ORDER BY [Database_Name]	
 OPTION (RECOMPILE)'
 END
@@ -1418,7 +1418,7 @@ LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.databas
 WHERE dbsize.[type_desc] = ''ROWS''
 	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
 ORDER BY [Database_Name]	
 OPTION (RECOMPILE)'
 END
@@ -1448,7 +1448,7 @@ LEFT JOIN sys.dm_tran_version_store_space_usage AS ssu (NOLOCK) ON db.database_i
 WHERE dbsize.[type_desc] = ''ROWS''
 	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
 	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
 ORDER BY [Database_Name]	
 OPTION (RECOMPILE)'
 END
