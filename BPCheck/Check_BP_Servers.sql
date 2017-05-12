@@ -386,6 +386,7 @@ v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information 
 v2.1.5.4 - 3/28/2017 - Fixed collation issues.
 v2.1.6 - 4/11/2017 - Changed port discovery method for SQL Server 2012 and above.
 v2.1.6.1 - 4/30/2017 - Enhanced wait and latches report section.
+v2.1.7 - 5/10/2017 - Added database size details to Database Information section.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1227,24 +1228,31 @@ CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000),
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 DROP TABLE #tmpdbfiledetail;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
-CREATE TABLE #tmpdbfiledetail([database_id] [int] NOT NULL, [file_id] int, [type_desc] NVARCHAR(60), [data_space_id] int,[name] sysname, [physical_name] NVARCHAR(260), [state_desc] NVARCHAR(60), [size] int, [max_size] int, [is_percent_growth] bit, [growth] int, [is_media_read_only] bit, [is_read_only] bit, [is_sparse] bit, [is_name_reserved] bit)
+CREATE TABLE #tmpdbfiledetail([database_id] [int] NOT NULL, [file_id] int, [type_desc] NVARCHAR(60), [data_space_id] int, [name] sysname, [physical_name] NVARCHAR(260), [state_desc] NVARCHAR(60), [size] bigint, [max_size] bigint, [is_percent_growth] bit, [growth] int, [is_media_read_only] bit, [is_read_only] bit, [is_sparse] bit, [is_name_reserved] bit)
+
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmpdbsizes'))
+DROP TABLE ##tmpdbsizes;
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmpdbsizes'))
+CREATE TABLE ##tmpdbsizes([database_id] [int] NOT NULL, [size] bigint, [type_desc] NVARCHAR(60))
 
 IF @sqlmajorver < 11
 BEGIN
+	SET @sqlcmd = 'SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0 FROM master.sys.databases (NOLOCK)'
 	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], [isdone])
-	SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0 FROM master.sys.databases (NOLOCK)
+	EXEC sp_executesql @sqlcmd;
 END;
 
 IF @sqlmajorver > 10
 BEGIN
+	SET @sqlcmd = 'SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, 0 
+	FROM master.sys.databases (NOLOCK) sd
+		LEFT JOIN sys.dm_hadr_database_replica_states (NOLOCK) d ON sd.database_id = d.database_id
+		LEFT JOIN sys.availability_replicas ar (NOLOCK) ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
+		LEFT JOIN sys.dm_hadr_availability_replica_states (NOLOCK) ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
+		LEFT JOIN sys.dm_hadr_database_replica_cluster_states (NOLOCK) rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
+	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;'
 	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, [isdone])
-	SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, 0 
-	FROM master.sys.databases sd (NOLOCK) 
-		LEFT JOIN sys.dm_hadr_database_replica_states d ON sd.database_id = d.database_id
-		LEFT JOIN sys.availability_replicas ar ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
-		LEFT JOIN sys.dm_hadr_availability_replica_states ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
-		LEFT JOIN sys.dm_hadr_database_replica_cluster_states rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
-	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;
+	EXEC sp_executesql @sqlcmd;
 END;
 
 /* Validate if database scope is set */
@@ -1261,101 +1269,7 @@ BEGIN
 	EXEC sp_executesql @sqlcmd;
 END;
 
-IF @sqlmajorver < 11
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
-	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
-	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, ''NA'' AS [is_indirect_checkpoint_on], 
-	db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-ELSE IF @sqlmajorver = 11
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
-	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
-	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
-	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
-	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-ELSE IF @sqlmajorver = 12
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
-	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
-	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on,
-	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
-	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-ELSE IF @sqlmajorver >= 13
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
-	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
-	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
-	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
-	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced, 
-	db.is_memory_optimized_elevate_to_snapshot_on, db.is_remote_data_archive_enabled, db.is_mixed_page_allocation_on
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-
-EXECUTE sp_executesql @sqlcmd;
-
+/* Populate data file info*/
 WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 BEGIN
 	SELECT TOP 1 @curdbname = [dbname], @curdbid = [dbid], @currole = [role], @state = [state], @cursecondary_role_allow_connections = secondary_role_allow_connections FROM #tmpdbs0 WHERE isdone = 0
@@ -1385,6 +1299,161 @@ FROM sys.database_files (NOLOCK)'
 	SET isdone = 1
 	WHERE [dbid] = @curdbid
 END;
+
+BEGIN TRY
+	INSERT INTO ##tmpdbsizes([database_id], [size], [type_desc])
+	SELECT [database_id], SUM([size]) AS [size], [type_desc]
+	FROM #tmpdbfiledetail
+	WHERE [type_desc] <> 'LOG'
+	GROUP BY [database_id], [type_desc]
+END TRY
+BEGIN CATCH
+	SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+	SELECT @ErrorMessage = 'Database Information subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+	RAISERROR (@ErrorMessage, 16, 1);
+END CATCH
+
+IF @sqlmajorver < 11
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
+	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
+	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, ''NA'' AS [is_indirect_checkpoint_on], 
+	db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND dbfssize.[type_desc] = ''FILESTREAM''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver = 11
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
+	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
+	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver = 12
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
+	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
+	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on,
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver = 13
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
+	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
+	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced, 
+	db.is_memory_optimized_elevate_to_snapshot_on, db.is_remote_data_archive_enabled, db.is_mixed_page_allocation_on
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver = 14
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct],
+	CASE WHEN ssu.reserved_space_kb>0 THEN ssu.reserved_space_kb/1024 ELSE 0 END AS [Version_Store_Size_MB],
+	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
+	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
+	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced, 
+	db.is_memory_optimized_elevate_to_snapshot_on, db.is_remote_data_archive_enabled, db.is_mixed_page_allocation_on
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+LEFT JOIN sys.dm_tran_version_store_space_usage AS ssu (NOLOCK) ON db.database_id = ssu.database_id
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+
+EXECUTE sp_executesql @sqlcmd;
 	
 SELECT 'Information' AS [Category], 'Database_Files' AS [Information], DB_NAME(database_id) AS [Database_Name], [file_id], type_desc, data_space_id AS [Filegroup], name, physical_name,
 	state_desc, (size * 8) / 1024 AS size_MB, CASE max_size WHEN -1 THEN 'Unlimited' ELSE CONVERT(VARCHAR(10), max_size) END AS max_size,
@@ -12142,6 +12211,8 @@ IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id]
 DROP TABLE #tmpXNCIS;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
 DROP TABLE #tmpIPS_CI;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmpdbsizes'))
+DROP TABLE ##tmpdbsizes;
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
