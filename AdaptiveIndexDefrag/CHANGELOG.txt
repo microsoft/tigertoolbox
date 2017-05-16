@@ -112,3 +112,4 @@ v1.6.3.2 - 11/4/2016 - Fixed DISABLE index applying to NCCI.
 v1.6.3.3 - 11/7/2016 - Rolled back previously reported issue with REORGANIZE and database names.
 v1.6.4 - 11/10/2016 - Fixed support for incremental statistics  in SQL Server 2016 RTM.
 v1.6.4.1 - 11/16/2016 - Added support for incremental statistics in SQL Server 2016 SP1.
+v1.6.4.2 - 1/20/2017 - Fixed support for incremental statistics introduced error 4104.

@@ -40,8 +40,9 @@ EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Get Perf
 		@on_fail_step_id=0, 
 		@retry_attempts=0, 
 		@retry_interval=0, 
-		@os_run_priority=0, @subsystem=N'CmdExec', 
-		@command=N'C:\WINDOWS\system32\WindowsPowerShell\v1.0\powershell.exe C:\Scripts\Get-SQLPerfCounters.ps1 -S $(ESCAPE_NONE(SRVR))', 
+		@os_run_priority=0, @subsystem=N'TSQL', 
+		@command=N'EXEC spGetPerfCountersFromPowerShell', 
+		@database_name=N'dba_local', 
 		@flags=32
 IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
 EXEC @ReturnCode = msdb.dbo.sp_update_job @job_id = @jobId, @start_step_id = 1
