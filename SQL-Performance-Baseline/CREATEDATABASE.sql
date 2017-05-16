@@ -1,11 +1,14 @@
 USE [master]
 GO
 
-/****** Object:  Database [dba_local]    Script Date: 12/10/2014 2:12:24 PM ******/
-CREATE DATABASE [dba_local] ON  PRIMARY 
-( NAME = N'dba_local', FILENAME = N'C:\Program Files\Microsoft SQL Server\MSSQL11.MSSQLSERVER\MSSQL\DATA\dba_local.mdf' , SIZE = 10240MB , MAXSIZE = UNLIMITED, FILEGROWTH = 0)
- LOG ON 
-( NAME = N'dba_local_log', FILENAME = N'C:\Program Files\Microsoft SQL Server\MSSQL11.MSSQLSERVER\MSSQL\DATA\dba_local_log.LDF' , SIZE = 1024MB , MAXSIZE = 2048GB , FILEGROWTH = 0)
+/* Create database in default location*/
+CREATE DATABASE [dba_local]  
+GO
+
+ALTER DATABASE [dba_local] MODIFY FILE
+	( NAME = N'dba_local',  SIZE = 10240MB , MAXSIZE = UNLIMITED, FILEGROWTH = 0)
+ALTER DATABASE [dba_local] MODIFY FILE
+	( NAME = N'dba_local_log', SIZE = 1024MB , MAXSIZE = 2048GB , FILEGROWTH = 0)
 GO
 
 ALTER DATABASE [dba_local] SET COMPATIBILITY_LEVEL = 100
