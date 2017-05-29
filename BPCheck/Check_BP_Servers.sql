@@ -2457,7 +2457,7 @@ ORDER BY SUM(mcch.removed_all_rounds_count) DESC, mcch.[type];'
 		SET @sqlcmd = 'SELECT ''Memory_checks'' AS [Category], ''Buffer_Pool_Consumers'' AS [Information], 
 	COUNT_BIG(DISTINCT page_id)*8/1024 AS total_pages_MB, 
 	CASE database_id WHEN 32767 THEN ''ResourceDB'' ELSE DB_NAME(database_id) END AS database_name,
-	SUM(row_count)/COUNT_BIG(DISTINCT page_id) AS avg_row_count_per_page, 
+	SUM(CONVERT(BIGINT,row_count))/COUNT_BIG(DISTINCT page_id) AS avg_row_count_per_page, 
 	SUM(CONVERT(BIGINT, free_space_in_bytes))/COUNT_BIG(DISTINCT page_id) AS avg_free_space_bytes_per_page
 	' + CASE WHEN @sqlmajorver >= 12 THEN ',is_in_bpool_extension' ELSE '' END + '
 	' + CASE WHEN @sqlmajorver = 10 THEN ',numa_node' ELSE '' END + '
