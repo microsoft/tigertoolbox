@@ -6294,8 +6294,8 @@ AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 	IF (SELECT COUNT(*) FROM #tblDeprecated) > 0
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features_usage_in_Objects' AS [Information], DBName, [Schema], [Object], [Type], DeprecatedFeature, 		
-			CASE [DeprecatedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' END AS [DeprecatedIn],
-			CASE [DiscontinuedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' END AS [DiscontinuedIn],
+			CASE [DeprecatedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DeprecatedIn],
+			CASE [DiscontinuedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DiscontinuedIn],
 			'[WARNING: Deprecated or Discontinued Features are being used. Plan to review objects found using discontinued features before migrating to a higher version of SQL Server]' AS [Comment]
 		FROM #tblDeprecated (NOLOCK);
 	END
