@@ -11917,7 +11917,7 @@ BEGIN
 		ELSE
 		BEGIN
 			SET @dbname = RTRIM(LTRIM(@dbname))
-			SET @query = 'DBCC DBINFO(' + @dbname + ') WITH TABLERESULTS, NO_INFOMSGS'
+			SET @query = 'DBCC DBINFO(' + QUOTENAME(@dbname) + ') WITH TABLERESULTS, NO_INFOMSGS'
 
 			INSERT INTO #output_dbinfo
 			EXEC (@query)
