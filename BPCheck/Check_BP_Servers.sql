@@ -391,6 +391,8 @@ v2.1.8 - 6/9/2017 - Extended Deprecated and Discontinued features subsection wit
 					Extended trace flags subsection;
 					Added resilience for SQL Injection;
 					Fixed invalid object name error in SQL Server 2005.
+v2.1.8.1 - 6/11/2017 - Added information about query optimizer changes usage at DB level;
+			Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1230,7 +1232,7 @@ DECLARE @curdbname VARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary_
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
 DROP TABLE #tmpdbs0;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
-CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [compatibility_level] int, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
+CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [compatibility_level] tinyint, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 DROP TABLE #tmpdbfiledetail;
@@ -1328,7 +1330,7 @@ BEGIN
 	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
 	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
 	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
 	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
 	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
 	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
@@ -1355,7 +1357,7 @@ BEGIN
 	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
 	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
 	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
 	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
 	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
 	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
@@ -1382,7 +1384,7 @@ BEGIN
 	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
 	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
 	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
 	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
 	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
 	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
@@ -1409,7 +1411,7 @@ BEGIN
 	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
 	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
 	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
 	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
 	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
 	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
@@ -1438,7 +1440,7 @@ BEGIN
 	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
 	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct],
 	CASE WHEN ssu.reserved_space_kb>0 THEN ssu.reserved_space_kb/1024 ELSE 0 END AS [Version_Store_Size_MB],
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
 	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
 	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
 	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
@@ -5677,7 +5679,14 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 			ELSE '[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
-		WHERE [Global] = 1 AND TraceFlag = 4199
+		WHERE [Global] = 1 AND TraceFlag = 4199;
+		
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			[name] AS [DBName], sd.compatibility_level, 'On' AS [TF_4199],
+			'Enabled' AS 'QO_changes_from_previous_DB_compat_levels',
+			'Enabled' AS 'QO_changes_for_current_version_post_RTM'
+		FROM sys.databases sd
+		INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
 	END;
 END;
 		
@@ -5688,13 +5697,20 @@ BEGIN
 				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
 				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild >= 2766)
 				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
-			THEN '[INFORMATION: Consider enabling TF4135 to support fixes and enhancements on the query optimizer. Please ensure that you thoroughly test this option, before rolling it into a production environment]'
+			THEN '[INFORMATION: Consider enabling TF4135 to support fixes and enhancements on the query optimizer]'
 			WHEN (@sqlmajorver = 9 AND @sqlbuild >= 4266) 
 				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1818 AND 1835)
 				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 1702) OR @sqlmajorver = 11 OR @sqlmajorver = 12
 				OR (@sqlmajorver = 13 AND @sqlbuild >= 2149) OR @sqlmajorver >= 14
-			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs. Please ensure that you thoroughly test this option, before rolling it into a production environment]'
-		END AS [Deviation]
+			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Pac]'
+		END AS [Deviation];
+		
+	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+		[name] AS [DBName], sd.compatibility_level, 'Off' AS [TF_4199],
+		CASE WHEN sd.compatibility_level < 130 THEN 'Disabled' ELSE 'Enabled' END AS 'QO_changes_from_previous_DB_compat_levels',
+		'Disabled' AS 'QO_changes_for_current_version_post_RTM'
+	FROM sys.databases sd
+	INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
 END;
 	
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6010,7 +6026,7 @@ BEGIN
 	WHERE [object_name] LIKE '%Deprecated Features%' AND cntr_value > 0
 	ORDER BY instance_name;
 	
-	RAISERROR (N'    |-Deprecated or Discontinued Features are being used - finding usage in SQL modules', 10, 1) WITH NOWAIT
+	RAISERROR (N'    |-Deprecated or Discontinued Features are being used - finding usage in SQL modules and SQL Agent jobs', 10, 1) WITH NOWAIT
 		
 	/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
 
@@ -6018,6 +6034,11 @@ BEGIN
 	DROP TABLE #tblDeprecated;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecated'))
 	CREATE TABLE #tblDeprecated ([DBName] sysname, [Schema] VARCHAR(100), [Object] VARCHAR(255), [Type] VARCHAR(100), DeprecatedFeature VARCHAR(30), DeprecatedIn tinyint, DiscontinuedIn tinyint);
+	
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecatedJobs'))
+	DROP TABLE #tblDeprecatedJobs;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecatedJobs'))
+	CREATE TABLE #tblDeprecatedJobs ([JobName] sysname, [Step] VARCHAR(100), DeprecatedFeature VARCHAR(30), DeprecatedIn tinyint, DiscontinuedIn tinyint);
 	
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tblKeywords'))
 	DROP TABLE ##tblKeywords;
@@ -6272,7 +6293,7 @@ FROM sys.sql_modules sm (NOLOCK)
 INNER JOIN sys.objects so (NOLOCK) ON sm.[object_id] = so.[object_id]
 INNER JOIN sys.schemas ss (NOLOCK) ON so.[schema_id] = ss.[schema_id]
 CROSS JOIN ##tblKeywords tk (NOLOCK)
-WHERE PATINDEX(''%'' + tk.Keyword + ''%'', sm.[definition] COLLATE DATABASE_DEFAULT) > 1
+WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sm.[definition]) COLLATE DATABASE_DEFAULT) > 1
 AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 
 			BEGIN TRY
@@ -6290,13 +6311,32 @@ AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 			WHERE [dbid] = @dbid
 		END
 	END;
+	
+	SET @sqlcmd = 'USE [msdb];
+SELECT sj.[name], sjs.step_name, tk.Keyword, tk.DeprecatedIn, tk.DiscontinuedIn
+FROM msdb.dbo.sysjobsteps sjs (NOLOCK)
+INNER JOIN msdb.dbo.sysjobs sj (NOLOCK) ON sjs.job_id = sj.job_id
+CROSS JOIN ##tblKeywords tk (NOLOCK)
+WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sjs.[command]) COLLATE DATABASE_DEFAULT) > 1
+AND sjs.[subsystem] IN (''TSQL'',''PowerShell'');'
+
+	BEGIN TRY
+		INSERT INTO #tblDeprecatedJobs
+		EXECUTE sp_executesql @sqlcmd
+	END TRY
+	BEGIN CATCH
+		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+		SELECT @ErrorMessage = 'Deprecated or Discontinued Features usage subsection - Error raised in jobs TRY block. ' + ERROR_MESSAGE()
+		RAISERROR (@ErrorMessage, 16, 1);
+	END CATCH
 
 	IF (SELECT COUNT(*) FROM #tblDeprecated) > 0
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features_usage_in_Objects' AS [Information], DBName, [Schema], [Object], [Type], DeprecatedFeature, 		
 			CASE [DeprecatedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DeprecatedIn],
 			CASE [DiscontinuedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DiscontinuedIn],
-			'[WARNING: Deprecated or Discontinued Features are being used. Plan to review objects found using discontinued features before migrating to a higher version of SQL Server]' AS [Comment]
+			CASE WHEN [DiscontinuedIn] IS NULL THEN '[INFORMATION: Deprecated Features are being used. Plan to review objects found using deprecated features and replace deprecated constructs]' 
+				ELSE '[WARNING: Discontinued Features are being used. Refactor objects found using discontinued features before migrating to a higher version of SQL Server]' END AS [Comment]
 		FROM #tblDeprecated (NOLOCK);
 	END
 	ELSE
@@ -6304,7 +6344,23 @@ AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Information], NULL AS [DBName], NULL AS [Schema], NULL AS [Object], NULL AS [Type], 
 			NULL AS [DeprecatedFeature], NULL AS [DeprecatedIn], NULL AS [DiscontinuedIn],
 			'[INFORMATION: Deprecated or Discontinued Features may be in use with ad-hoc code]' AS Comment
+	END;
+	
+	IF (SELECT COUNT(*) FROM #tblDeprecatedJobs) > 0
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features_usage_in_SQLAgent_jobs' AS [Information], JobName, [Step], DeprecatedFeature, 		
+			CASE [DeprecatedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DeprecatedIn],
+			CASE [DiscontinuedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DiscontinuedIn],
+			CASE WHEN [DiscontinuedIn] IS NULL THEN '[INFORMATION: Deprecated Features are being used in SQL Agent jobs. Plan to review job steps found using deprecated features and replace deprecated constructs]' 
+				ELSE '[WARNING: Discontinued Features are being used in SQL Agent jobs. Refactor job steps found using discontinued features before migrating to a higher version of SQL Server]' END AS [Comment]
+		FROM #tblDeprecatedJobs (NOLOCK);
 	END
+	ELSE
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Information], NULL AS [JobName], NULL AS [Step], 
+			NULL AS [DeprecatedFeature], NULL AS [DeprecatedIn], NULL AS [DiscontinuedIn],
+			'[INFORMATION: No Deprecated or Discontinued Features found in SQL Agent jobs]' AS Comment
+	END;
 END
 ELSE
 BEGIN
@@ -6692,7 +6748,7 @@ BEGIN
 				OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
 				OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
 			BEGIN
-				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(@dbname)) + ' due to potential of SQL Injection'
+				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to potential of SQL Injection'
 				RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
 			END
 			ELSE
@@ -9625,7 +9681,7 @@ BEGIN
 				OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
 				OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
 			BEGIN
-				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(@dbname)) + ' due to potential of SQL Injection'
+				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to potential of SQL Injection'
 				RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
 			END
 			ELSE
@@ -11855,7 +11911,7 @@ BEGIN
 			OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
 			OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
 		BEGIN
-			SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(@dbname)) + ' due to possible SQL Injection'
+			SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to possible SQL Injection'
 			RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
 		END
 		ELSE
@@ -12562,6 +12618,8 @@ IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id]
 DROP TABLE ##tmpdbsizes;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecated'))
 DROP TABLE #tblDeprecated;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecatedJobs'))
+DROP TABLE #tblDeprecatedJobs;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tblKeywords'))
 DROP TABLE ##tblKeywords;
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')

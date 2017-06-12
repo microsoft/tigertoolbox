@@ -333,3 +333,5 @@ v2.1.8 - 6/9/2017 - Extended Deprecated and Discontinued features subsection wit
 			Extended trace flags subsection;
 			Added resilience for SQL Injection;
 			Fixed invalid object name error in SQL Server 2005.
+v2.1.8.1 - 6/11/2017 - Added information about query optimizer changes usage at DB level;
+			Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
