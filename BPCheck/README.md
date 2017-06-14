@@ -56,7 +56,7 @@ And performs the following checks:
   - System configurations
   - IFI
   - Full Text Configurations
-  - Deprecated features *
+  - Deprecated and Discontinued feature usage
   - Default data collections (default trace, blackbox trace, SystemHealth xEvent session, spserverdiagnostics xEvent session) *
 - Database and tempDB
   - User objects in master
