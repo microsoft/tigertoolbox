@@ -1518,12 +1518,12 @@ WHERE rg.object_id = @objectID_In
 	AND rg.partition_number = @partitionNumber_In
 	AND rg.state = 3 -- Only COMPRESSED row groups
 GROUP BY rg.object_id, rg.index_id, rg.partition_number
-HAVING SUM(ISNULL(rg.size_in_bytes,1)/1024/8) >= @minPageCount
+HAVING SUM(ISNULL(rg.size_in_bytes,1)/1024/8) >= @minPageCount_In
 OPTION (MAXDOP 2)'
-							SET @ColumnStoreGetIXSQL_Param = N'@dbID_In int, @objectID_In int, @indexID_In int, @partitionNumber_In smallint';
+							SET @ColumnStoreGetIXSQL_Param = N'@dbID_In int, @objectID_In int, @indexID_In int, @partitionNumber_In smallint, @minPageCount_in int';
 
 							INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Working (dbID, dbName, objectID, indexID, partitionNumber, fragmentation, page_count, record_count, scanDate)		
-							EXECUTE sp_executesql @ColumnStoreGetIXSQL, @ColumnStoreGetIXSQL_Param, @dbID_In = @dbID, @objectID_In = @objectID, @indexID_In = @indexID, @partitionNumber_In = @partitionNumber;
+							EXECUTE sp_executesql @ColumnStoreGetIXSQL, @ColumnStoreGetIXSQL_Param, @dbID_In = @dbID, @objectID_In = @objectID, @indexID_In = @indexID, @partitionNumber_In = @partitionNumber, @minPageCount_in = @minPageCount;
 						END TRY
 						BEGIN CATCH						
 							IF @debugMode = 1
