@@ -435,8 +435,10 @@ CREATE PROCEDURE dbo.usp_AdaptiveIndexDefrag
 		/* 1 = updates stats when reorganizing; 0 = does not update stats when reorganizing */
 	, @updateStatsWhere bit = 0
 		/* 1 = updates only index related stats; 0 = updates all stats in table */
-	, @statsSample NCHAR(8)	= NULL
-		/* Valid options are: NULL, FULLSCAN, and RESAMPLE */
+	, @statsSample NVARCHAR(8) = NULL
+		/* Valid options are: NULL, <percentage>, FULLSCAN, and RESAMPLE */
+	, @persistStatsSample bit = NULL
+		/* 1 = turns ON fixed sampling rate; 0 = turns OFF fixed sampling rate; NULL = do nothing */
 	, @statsThreshold float	= NULL
 		/* Valid options are: NULL to use default stats sample method (same as TF2371), float number greater or equal to 0.001 and less than 100 to use custom stats sample */
 	, @statsMinRows bigint = NULL
@@ -610,6 +612,8 @@ v1.6.5.1 - 3/3/2017 - Added custom threshold parameter for percent of changes ne
 						Added parameter for min rows to be considered with custom threshold parameter.
 v1.6.5.2 - 4/13/2017 - Lowered min threshold for @statsThreshold setting.
 v1.6.5.3 - 4/30/2017 - Fixed error in debug summary.
+v1.6.5.4 - 8/04/2017 - Fixed error where @minPageCount wasn't getting passed into @ColumnStoreGetIXSQL (by hitzand)
+v1.6.5.5 - 8/11/2017 - Added support for fixed sampling rate for statistics.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -702,8 +706,14 @@ ALL parameters are optional. If not specified, the defaults for each parameter a
 					0 = updates all stats in entire table
 										
 @statsSample		NULL = perform a sample scan on the target table or indexed view. The database engine automatically computes the required sample size;
+					<percentage> = perform a fixed percentage scan on the target table or indexed view. Valid values are integers between 1 and 100;
 					FULLSCAN = all rows in table or view should be read to gather the statistics;
 					RESAMPLE = statistics will be gathered using an inherited sampling ratio for all existing statistics including indexes
+					
+@persistStatsSample Persist a specific statistics sampling rate (depends on version) if <percentage> or FULLSCAN needs to be used in @statsSample
+					NULL = do nothing;
+					1 = turns ON fixed sampling rate;
+					0 = turns OFF fixed sampling rate
 					
 @statsThreshold		Custom threshold of changes needed to trigger update statistics, overriding default handling;
 					NULL = assume default handling which is similar to TF2371;
@@ -810,6 +820,12 @@ SET ARITHABORT ON;
 SET CONCAT_NULL_YIELDS_NULL ON;
 SET NUMERIC_ROUNDABORT OFF;
 
+/* Find sql server version info */
+DECLARE @sqlmajorver int, @sqlminorver int, @sqlbuild int;
+SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
+SELECT @sqlminorver = CONVERT(int, (@@microsoftversion / 0x10000) & 0xff);
+SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
+
 BEGIN
 	BEGIN TRY		
 		/* Validating and normalizing options... */	
@@ -905,14 +921,13 @@ BEGIN
 		IF @ixtypeOption IS NOT NULL AND @ixtypeOption NOT IN (0,1)
 		SET @ixtypeOption = NULL;
 
-		IF @statsSample	IS NOT NULL	AND UPPER(@statsSample) NOT IN ('FULLSCAN', 'RESAMPLE')
-		SET @statsSample = NULL;
+		IF @statsSample	IS NOT NULL AND (ISNUMERIC(@statsSample) = 1 AND @statsSample NOT BETWEEN 1 AND 100)
+			OR (ISNUMERIC(@statsSample) = 0 AND UPPER(@statsSample) NOT IN ('FULLSCAN', 'RESAMPLE'))
+		SET @statsSample = NULL
 		
-		/* Find sql server version info */
-		DECLARE @sqlmajorver int, @sqlminorver int, @sqlbuild int;
-		SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
-		SELECT @sqlminorver = CONVERT(int, (@@microsoftversion / 0x10000) & 0xff);
-		SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
+		IF (@persistStatsSample IS NOT NULL AND @persistStatsSample NOT IN (0,1))
+			OR (@sqlmajorver <> 13 OR (@sqlmajorver = 13 AND @sqlbuild < 4446))
+		SET @persistStatsSample = NULL;
 
 		/* Recognize if database in scope is a Always On secondary replica */
 		IF @dbScope IS NOT NULL AND @sqlmajorver >= 11
@@ -1134,7 +1149,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @rows_sampled bigint
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5.3';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5.5';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1219,9 +1234,12 @@ WHEN @dealMaxPartition = 0 AND @editionCheck = 1 THEN '
 Only the right-most populated partitions will be considered if greater than ' + CAST(@minPageCount AS NVARCHAR(10)) + ' page(s);'
 ELSE CHAR(10) + 'All partitions will be considered;' END +
 CHAR(10) + 'Statistics ' + CASE WHEN @updateStats = 1 THEN 'WILL' ELSE 'WILL NOT' END + ' be updated ' + CASE WHEN @updateStatsWhere = 1 THEN 'on reorganized indexes;' ELSE 'on all stats belonging to parent table;' END +		
-CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL THEN CHAR(10) + 'Statistics will be updated with ' + @statsSample + '.' ELSE '' END +
-CHAR(10) + 'Statistics will be updated using ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 THEN 'a threshold of ' + CONVERT(VARCHAR, @statsThreshold) + ' percent' ELSE ' a calculated threshold similar to TF2371' END + 
-+ ' on tables ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL THEN 'with a min of ' + CONVERT(VARCHAR, @statsMinRows) + ' rows.' WHEN @statsMinRows IS NOT NULL THEN ' of any size.' ELSE '.' END + 		
+CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL AND ISNUMERIC(@statsSample) = 0 THEN CHAR(10) + 'Statistics will be updated with ' + @statsSample ELSE '' END +
+CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL AND ISNUMERIC(@statsSample) = 1 THEN CHAR(10) + 'Statistics will be updated with ' + RTRIM(@statsSample) + ' sampling rate' ELSE '' END +
+CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL AND ISNUMERIC(@statsSample) = 1 AND @persistStatsSample = 1 THEN ' and persisting specified sampling rate percent;' ELSE '' END +
+CASE WHEN @updateStats = 1 AND @statsSample IS NOT NULL AND ((ISNUMERIC(@statsSample) = 1 AND @persistStatsSample = 0) OR @persistStatsSample IS NULL) THEN ' and NOT persisting specified sampling rate percent;' ELSE '' END +
+CHAR(10) + 'Statistics will be updated using ' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.001 AND 100.0 THEN 'a threshold of ' + CONVERT(VARCHAR, @statsThreshold) + ' percent' ELSE 'a calculated threshold similar to TF2371' END + 
++ ' on tables' + CASE WHEN @statsThreshold IS NOT NULL AND @statsThreshold BETWEEN 0.01 AND 100.0 AND @statsMinRows IS NOT NULL THEN ' with a min of ' + CONVERT(VARCHAR, @statsMinRows) + ' rows.' WHEN @statsMinRows IS NOT NULL THEN ' of any size.' ELSE '.' END + 		
 CHAR(10) + 'Statistics will be updated with Incremental property (if any) ' + CASE WHEN @statsIncremental = 1 THEN 'as ON' WHEN @statsIncremental = 0 THEN 'as OFF' ELSE 'not changed from current setting' END + '.' +
 CHAR(10) + 'Defragmentation will use ' + CASE WHEN @editionCheck = 0 OR @maxDopRestriction IS NULL THEN 'system defaults for processors;'
 ELSE CAST(@maxDopRestriction AS VARCHAR(2)) + ' processors;' END +
@@ -1518,12 +1536,12 @@ WHERE rg.object_id = @objectID_In
 	AND rg.partition_number = @partitionNumber_In
 	AND rg.state = 3 -- Only COMPRESSED row groups
 GROUP BY rg.object_id, rg.index_id, rg.partition_number
-HAVING SUM(ISNULL(rg.size_in_bytes,1)/1024/8) >= @minPageCount
+HAVING SUM(ISNULL(rg.size_in_bytes,1)/1024/8) >= @minPageCount_In
 OPTION (MAXDOP 2)'
-							SET @ColumnStoreGetIXSQL_Param = N'@dbID_In int, @objectID_In int, @indexID_In int, @partitionNumber_In smallint';
+							SET @ColumnStoreGetIXSQL_Param = N'@dbID_In int, @objectID_In int, @indexID_In int, @partitionNumber_In smallint, @minPageCount_in int';
 
 							INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Working (dbID, dbName, objectID, indexID, partitionNumber, fragmentation, page_count, record_count, scanDate)		
-							EXECUTE sp_executesql @ColumnStoreGetIXSQL, @ColumnStoreGetIXSQL_Param, @dbID_In = @dbID, @objectID_In = @objectID, @indexID_In = @indexID, @partitionNumber_In = @partitionNumber;
+							EXECUTE sp_executesql @ColumnStoreGetIXSQL, @ColumnStoreGetIXSQL_Param, @dbID_In = @dbID, @objectID_In = @objectID, @indexID_In = @indexID, @partitionNumber_In = @partitionNumber, @minPageCount_in = @minPageCount;
 						END TRY
 						BEGIN CATCH						
 							IF @debugMode = 1
@@ -2234,7 +2252,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
 					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(' + CAST(@statsobjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
-				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (@stats_isincremental = 0 OR UPPER(@statsSample) = 'FULLSCAN')
+				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (@stats_isincremental = 0 OR UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1)
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties DMF...', 0, 42) WITH NOWAIT;
@@ -2288,9 +2306,18 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				BEGIN
 					SET @sqlcommand2 = N'UPDATE STATISTICS ' + @dbName + N'.'+ @schemaName + N'.' + @objectName + N' (' + @statsName + N')'
 					IF UPPER(@statsSample) = 'FULLSCAN' AND (@partitionNumber = 1 OR @partitionNumber = @maxpartitionNumber)
-					SET @sqlcommand2 = @sqlcommand2 + N' WITH FULLSCAN'	
-					ELSE IF UPPER(@statsSample) = 'RESAMPLE'
+					SET @sqlcommand2 = @sqlcommand2 + N' WITH FULLSCAN'
+					IF ISNUMERIC(@statsSample) = 1 AND (@partitionNumber = 1 OR @partitionNumber = @maxpartitionNumber)
+					SET @sqlcommand2 = @sqlcommand2 + N' WITH SAMPLE ' + @statsSample + ' PERCENT'
+					IF UPPER(@statsSample) = 'RESAMPLE'
 					SET @sqlcommand2 = @sqlcommand2 + N' WITH RESAMPLE'
+					
+					IF (UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1) AND @persistStatsSample = 1 
+						AND UPPER(@sqlcommand2) LIKE '%WITH%' AND @sqlmajorver = 13 AND @sqlbuild >= 4446
+					SET @sqlcommand2 = @sqlcommand2 + N', PERSIST_SAMPLE_PERCENT = ON'
+					IF (UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1) AND @persistStatsSample = 0 
+						AND UPPER(@sqlcommand2) LIKE '%WITH%' AND @sqlmajorver = 13 AND @sqlbuild >= 4446
+					SET @sqlcommand2 = @sqlcommand2 + N', PERSIST_SAMPLE_PERCENT = OFF'
 
 					IF @partitionCount > 1 AND @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE') AND UPPER(@sqlcommand2) LIKE '%WITH%'
 					SET @sqlcommand2 = @sqlcommand2 + N' ON PARTITIONS(' + CONVERT(NVARCHAR(10), @partitionNumber) + N');'
@@ -2502,7 +2529,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
 					SELECT @rowmodctrSQL = N'USE ' + @dbName + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(' + CAST(@statsobjectID AS NVARCHAR(10)) + ',' + CAST(@statsID AS NVARCHAR(10)) + ') WHERE partition_number = @partitionNumber_In;'
 				END
-				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (@stats_isincremental = 0 OR UPPER(@statsSample) = 'FULLSCAN')
+				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (@stats_isincremental = 0 OR UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1)
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties DMF...', 0, 42) WITH NOWAIT;
@@ -2555,11 +2582,20 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					))
 				BEGIN	
 					SET @sqlcommand2 = N'UPDATE STATISTICS ' + @dbName + N'.' + @statsschemaName + N'.' + @statsobjectName + N' (' + @statsName + N')'
-					IF UPPER(@statsSample) = 'FULLSCAN'	AND (@partitionNumber = 1 OR @partitionNumber = @maxpartitionNumber)
-					SET @sqlcommand2 = @sqlcommand2 + N' WITH FULLSCAN'	
-					ELSE IF UPPER(@statsSample) = 'RESAMPLE'
+					IF UPPER(@statsSample) = 'FULLSCAN' AND (@partitionNumber = 1 OR @partitionNumber = @maxpartitionNumber)
+					SET @sqlcommand2 = @sqlcommand2 + N' WITH FULLSCAN'
+					IF ISNUMERIC(@statsSample) = 1 AND (@partitionNumber = 1 OR @partitionNumber = @maxpartitionNumber)
+					SET @sqlcommand2 = @sqlcommand2 + N' WITH SAMPLE ' + @statsSample + ' PERCENT'
+					IF UPPER(@statsSample) = 'RESAMPLE'
 					SET @sqlcommand2 = @sqlcommand2 + N' WITH RESAMPLE'
 					
+					IF (UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1) AND @persistStatsSample = 1 
+						AND UPPER(@sqlcommand2) LIKE '%WITH%' AND @sqlmajorver = 13 AND @sqlbuild >= 4446
+					SET @sqlcommand2 = @sqlcommand2 + N', PERSIST_SAMPLE_PERCENT = ON'
+					IF (UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1) AND @persistStatsSample = 0 
+						AND UPPER(@sqlcommand2) LIKE '%WITH%' AND @sqlmajorver = 13 AND @sqlbuild >= 4446
+					SET @sqlcommand2 = @sqlcommand2 + N', PERSIST_SAMPLE_PERCENT = OFF'
+
 					IF @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE') AND UPPER(@sqlcommand2) LIKE '%WITH%'
 					SET @sqlcommand2 = @sqlcommand2 + N' ON PARTITIONS(' + CONVERT(NVARCHAR(10), @partitionNumber) + N');'
 					ELSE IF @stats_isincremental = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE') AND UPPER(@sqlcommand2) NOT LIKE '%WITH%'
