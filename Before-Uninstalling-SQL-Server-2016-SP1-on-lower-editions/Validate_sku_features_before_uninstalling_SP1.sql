@@ -56,9 +56,7 @@ SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Dyn
 		EXECUTE sp_executesql @sqlcmd
 	END TRY
 	BEGIN CATCH
-		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-		SELECT @ErrorMessage = 'Feature usage subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
-		RAISERROR (@ErrorMessage, 16, 1);
+		;THROW
 	END CATCH
 			
 	UPDATE #tmpdbs
