@@ -5,4 +5,4 @@ If for any reason you choose to uninstall SQL Server 2016 SP1, the uninstallatio
 
 Note: If you are running Enterprise edition of SQL Server 2016 SP1, none of this applies and you can uninstall SP1 without any issues or additional checks.
 
-To assist DBAs in performing checks in an instance to see if new features are in use before you plan uninstall SP1, I have created below T-SQL script which checks all the databases of the instance to see if database is using any new features which needs to be disabled or dropped before you uninstall SQL Server 2016 SP1 on lower editions.
+To assist DBAs in performing checks in an instance to see if new features are in use before you plan uninstall SP1, we have created below T-SQL script which checks all the databases of the instance to see if database is using any new features which needs to be disabled or dropped before you uninstall SQL Server 2016 SP1 on lower editions. It also lists which databases host which impacting features.
