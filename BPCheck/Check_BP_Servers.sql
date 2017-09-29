@@ -395,7 +395,8 @@ v2.1.8 - 6/9/2017 - Extended Deprecated and Discontinued features subsection wit
 v2.1.8.1 - 6/11/2017 - Added information about query optimizer changes usage at DB level;
 			/Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
 v2.1.8.2 - 8/23/2017 - Extended search for feature usage in DBs - better determine DB readiness to be moved across editions.
-v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up
+v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up;
+						Extended wait type categorization.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
