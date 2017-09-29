@@ -17,6 +17,7 @@ Set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp
 Set @spn_check to OFF if you want to skip SPN checks.
 Set @diskfrag to ON if you want to check for disk physical fragmentation. 
 	Can take some time in large disks. Requires elevated privileges.
+	See https://support.microsoft.com/en-us/help/3195161/defragmenting-sql-server-database-disk-drives
 Set @ixfrag to ON if you want to check for index fragmentation. 
 	Can take some time to collect data depending on number of databases and indexes, as well as the scan mode chosen in @ixfragscanmode.
 Set @ixfragscanmode to the scanning mode you prefer. 
@@ -378,7 +379,7 @@ v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options che
 v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 						Fixed negative CPU usage in avg cpu usage last 2h check.
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
-v2.1.5 - 11/17/2016 - Added support for SQL Server 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
+v2.1.5 - 11/17/2016 - Added support for SQL Server 2016 SP1 (Enterprise_Feature_usage, LPIM and IFI checks).
 v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
 v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
 v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information section;
@@ -392,7 +393,9 @@ v2.1.8 - 6/9/2017 - Extended Deprecated and Discontinued features subsection wit
 					Added resilience for SQL Injection;
 					Fixed invalid object name error in SQL Server 2005.
 v2.1.8.1 - 6/11/2017 - Added information about query optimizer changes usage at DB level;
-			Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
+			/Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
+v2.1.8.2 - 8/23/2017 - Extended search for feature usage in DBs - better determine DB readiness to be moved across editions.
+v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1647,11 +1650,11 @@ ORDER BY stb.name, st.name;'
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
--- Enterprise features usage subsection
+-- Feature usage subsection
 --------------------------------------------------------------------------------------------------------------------------------
 IF @sqlmajorver > 9
 BEGIN
-	RAISERROR (N'|-Starting Enterprise features usage', 10, 1) WITH NOWAIT
+	RAISERROR (N'|-Starting Feature usage', 10, 1) WITH NOWAIT
 	/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
@@ -1677,7 +1680,21 @@ BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sku_features (NOLOCK);'
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], feature_name FROM sys.dm_db_persisted_sku_features (NOLOCK)
+UNION ALL
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Change_Tracking'' AS feature_name FROM sys.change_tracking_databases (NOLOCK) WHERE database_id = DB_ID()
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Row_Level_Security'' AS feature_name FROM sys.security_policies (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Fine_grained_auditing'' AS feature_name FROM sys.database_audit_specifications (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Always_Encrypted'' AS feature_name FROM sys.column_master_keys (NOLOCK)'
+
+			IF @sqlmajorver >= 13
+			SET @sqlcmd = @sqlcmd + CHAR(10) + 'UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Polybase'' AS feature_name FROM sys.external_data_sources (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Dynamic_Data_Masking'' AS feature_name FROM sys.masked_columns (NOLOCK) WHERE is_masked = 1'
 
 			BEGIN TRY
 				INSERT INTO #tblPerSku
@@ -1685,7 +1702,7 @@ SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], feature_nam
 			END TRY
 			BEGIN CATCH
 				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-				SELECT @ErrorMessage = 'Enterprise features usage subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+				SELECT @ErrorMessage = 'Feature usage subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 			
@@ -1698,31 +1715,31 @@ SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], feature_nam
 	IF @sqlmajorver > 10 AND ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13) AND @IsHadrEnabled = 1
 	BEGIN
 		INSERT INTO #tblPerSku
-		SELECT NULL, 'Always_On' AS feature_name
+		SELECT [dbname], 'Always_On' AS feature_name FROM #tmpdbs0 WHERE is_database_joined = 1;
 	END;
 	
-	IF (SELECT COUNT(DISTINCT d.name) FROM master.sys.databases d (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL) > 0 -- Snapshot
+	IF (SELECT COUNT(DISTINCT [name]) FROM master.sys.databases (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL) > 0 -- Snapshot
 	BEGIN
 		INSERT INTO #tblPerSku
-		SELECT DISTINCT d.name, 'DB_Snapshot' AS feature_name FROM master.sys.databases d (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL
+		SELECT DISTINCT [name], 'DB_Snapshot' AS feature_name FROM master.sys.databases (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL;
 	END;
-	
-	IF (@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13
+
+	IF (SELECT COUNT(DISTINCT [name]) FROM master.sys.master_files (NOLOCK) WHERE database_id NOT IN (2,3) AND [type] = 2 and file_guid IS NOT NULL) > 0 -- Filestream
 	BEGIN
-		DELETE FROM #tblPerSku
-		WHERE Feature_Name IN ('ColumnStoreIndex','InMemoryOLTP')
+		INSERT INTO #tblPerSku
+		SELECT DISTINCT DB_NAME(database_id), 'Filestream' AS feature_name FROM sys.master_files (NOLOCK) WHERE database_id NOT IN (2,3) AND [type] = 2 and file_guid IS NOT NULL;	
 	END;
 	
 	IF (SELECT COUNT([Feature_Name]) FROM #tblPerSku) > 0
 	BEGIN
-		SELECT 'Information' AS [Category], 'Enterprise_features_usage' AS [Check], '[INFORMATION: Some databases are using Enterprise only features]' AS [Comment]
-		SELECT 'Information' AS [Category], 'Enterprise_features_usage' AS [Information], DBName AS [Database_Name], [Feature_Name]
+		SELECT 'Information' AS [Category], 'Feature_usage' AS [Check], '[INFORMATION: Some databases are using features that are not common to all editions]' AS [Comment]
+		SELECT 'Information' AS [Category], 'Feature_usage' AS [Information], DBName AS [Database_Name], [Feature_Name]
 		FROM #tblPerSku
 		ORDER BY 2, 3
 	END
 	ELSE
 	BEGIN
-		SELECT 'Information' AS [Category], 'Enterprise_features_usage' AS [Check], '[NA]' AS [Comment]
+		SELECT 'Information' AS [Category], 'Feature_usage' AS [Check], '[NA]' AS [Comment]
 	END
 END;
 
@@ -3001,12 +3018,12 @@ IF @winver IS NULL
 BEGIN
 	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[WARNING: Could not determine Windows version for check]' AS [Deviation]
 END
-ELSE IF @planguid IS NOT NULL AND @planguid <> '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+ELSE IF @planguid IS NOT NULL AND @planguid <> N'8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 BEGIN
 	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[WARNING: The current power plan scheme is not recommended for database servers. Please reconfigure for High Performance mode]' AS [Deviation]
-	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Information], CASE WHEN @planguid = '381b4222-f694-41f0-9685-ff5bb260df2e' THEN 'Balanced'
-		WHEN @planguid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' THEN 'High Performance'
-		WHEN @planguid = 'a1841308-3541-4fab-bc81-f71556f20b4a' THEN 'Power Saver'
+	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Information], CASE WHEN @planguid = N'381b4222-f694-41f0-9685-ff5bb260df2e' THEN 'Balanced'
+		WHEN @planguid = N'8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' THEN 'High Performance'
+		WHEN @planguid = N'a1841308-3541-4fab-bc81-f71556f20b4a' THEN 'Power Saver'
 		ELSE 'Other' END AS [Power_Plan]
 END
 ELSE IF @planguid IS NOT NULL AND @planguid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
@@ -7688,13 +7705,15 @@ END'')
 	INSERT INTO #tblWaits
 	SELECT @minctr, wait_type, wait_time_ms, signal_wait_time_ms,(wait_time_ms-signal_wait_time_ms) AS resource_wait_time_ms
 	FROM sys.dm_os_wait_stats (NOLOCK)
-	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP',
-		'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT',
-		'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
-		'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
-		'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
-		'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
-		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP') 
+	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', 
+	'SP_SERVER_DIAGNOSTICS_SLEEP', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP',
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT',
+	'BROKER_TASK_STOP','CLR_MANUAL_EVENT', 'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
+	'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
+	'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
+	'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
+	'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', 
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'WAIT_XTP_OFFLINE_CKPT_NEW_LOG', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP') 
 		AND wait_type NOT LIKE N'SLEEP_%'
 		AND wait_time_ms > 0;
 
@@ -7822,13 +7841,15 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	INSERT INTO #tblWaits
 	SELECT @maxctr, wait_type, wait_time_ms, signal_wait_time_ms,(wait_time_ms-signal_wait_time_ms) AS resource_wait_time_ms
 	FROM sys.dm_os_wait_stats (NOLOCK)
-	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP',
-		'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT',
-		'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
-		'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
-		'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
-		'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
-		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP') 
+	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', 
+	'SP_SERVER_DIAGNOSTICS_SLEEP', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP',
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT',
+	'BROKER_TASK_STOP','CLR_MANUAL_EVENT', 'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
+	'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
+	'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
+	'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
+	'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', 
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'WAIT_XTP_OFFLINE_CKPT_NEW_LOG', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP') 
 		AND wait_type NOT LIKE N'SLEEP_%'
 		AND wait_time_ms > 0;
 
@@ -7971,33 +7992,40 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		CAST(SUM(W2.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
 		CAST(W1.signal_wait_pct AS DECIMAL(12, 2)) AS signal_wait_pct,
 		CAST(W1.resource_wait_pct AS DECIMAL(12, 2)) AS resource_wait_pct,
-		CASE WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock'
-			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch'
-			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch'
-			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO'
-			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
-			WHEN W1.wait_type LIKE N'HADR_%' THEN N'Always On'
-			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
-			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' -- Used to indicate a worker is running code that is not under the SQLOS Scheduling;
-			WHEN W1.wait_type IN (N'IO_COMPLETION', N'ASYNC_IO_COMPLETION', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'DISKIO_SUSPEND') THEN N'Other IO'
-			WHEN W1.wait_type IN(N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
+		CASE WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU' 
 			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
-			WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU - Scheduler Yielding'
-			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE') THEN N'CPU - Parallelism'
-			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'WRITELOG') THEN N'Logging'
-			WHEN W1.wait_type IN (N'NET_WAITFOR_PACKET',N'NETWORK_IO') THEN N'Network IO'
-			WHEN W1.wait_type = N'ASYNC_NETWORK_IO' THEN N'Client Network IO'
-			WHEN W1.wait_type IN (N'UTIL_PAGE_ALLOC',N'SOS_VIRTUALMEMORY_LOW',N'CMEMTHREAD', N'SOS_RESERVEDMEMBLOCKLIST') THEN N'Memory' 
-			WHEN W1.wait_type IN (N'RESOURCE_SEMAPHORE_SMALL_QUERY', N'RESOURCE_SEMAPHORE') THEN N'Memory - Hash or Sort'
+			WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock' 
+			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch' 
+			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch' 
+			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO' 
+			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
+			WHEN W1.wait_type LIKE N'HADR_%' OR W1.wait_type LIKE N'PWAIT_HADR_%' THEN N'Always On'
+			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
 			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Memory - Compilation'
-			WHEN W1.wait_type LIKE N'CLR_%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'CLR'
-			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring'
-			WHEN W1.wait_type LIKE N'XACT%' OR W1.wait_type LIKE N'DTC_%' OR W1.wait_type LIKE N'TRAN_MARKLATCH_%' OR W1.wait_type LIKE N'MSQL_XACT_%' OR W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction'
-		--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
-			WHEN W1.wait_type LIKE N'FT_%' THEN N'Full Text'
+			WHEN W1.wait_type IN (N'UTIL_PAGE_ALLOC', N'SOS_VIRTUALMEMORY_LOW', N'SOS_RESERVEDMEMBLOCKLIST', N'RESOURCE_SEMAPHORE', N'CMEMTHREAD', N'CMEMPARTITIONED', N'EE_PMOLOCK', N'MEMORY_ALLOCATION_EXT', N'RESERVED_MEMORY_ALLOCATION_EXT', N'MEMORY_GRANT_UPDATE') THEN N'Memory'
+			WHEN W1.wait_type LIKE N'CLR%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'SQL CLR' 
+			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring' 
+			WHEN W1.wait_type LIKE N'XACT%' or W1.wait_type LIKE N'DTC%' or W1.wait_type LIKE N'TRAN_MARKLATCH_%' or W1.wait_type LIKE N'MSQL_XACT_%' or W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction' 
+			--WHEN W1.wait_type LIKE N'SLEEP_%' or W1.wait_type IN (N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SQLTRACE_WAIT_ENTRIES', N'FT_IFTS_SCHEDULER_IDLE_WAIT', N'XE_DISPATCHER_WAIT', N'REQUEST_FOR_DEADLOCK_SEARCH', N'LOGMGR_QUEUE', N'ONDEMAND_TASK_QUEUE', N'CHECKPOINT_QUEUE', N'XE_TIMER_EVENT') THEN N'Idle' 
+			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' 
+			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
+			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
+			WHEN W1.wait_type IN (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET', N'PROXY_NETWORK_IO', N'EXTERNAL_SCRIPT_NETWORK_IO') THEN N'Network IO' 
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'WAITFOR', N'WAIT_FOR_RESULTS', N'BROKER_RECEIVE_WAITFOR') THEN N'User Wait' 
+			WHEN W1.wait_type IN (N'TRACEWRITE', N'SQLTRACE_LOCK', N'SQLTRACE_FILE_BUFFER', N'SQLTRACE_FILE_WRITE_IO_COMPLETION', N'SQLTRACE_FILE_READ_IO_COMPLETION', N'SQLTRACE_PENDING_BUFFER_WRITERS', N'SQLTRACE_SHUTDOWN', N'QUERY_TRACEOUT', N'TRACE_EVTNOTIF') THEN N'Tracing' 
+			WHEN W1.wait_type LIKE N'FT_%' OR W1.wait_type IN (N'FULLTEXT GATHERER', N'MSSEARCH', N'PWAIT_RESOURCE_SEMAPHORE_FT_PARALLEL_QUERY_SYNC') THEN N'Full Text Search' 
+			WHEN W1.wait_type IN (N'ASYNC_IO_COMPLETION', N'IO_COMPLETION', N'WRITE_COMPLETION', N'IO_QUEUE_LIMIT', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'IO_RETRY') THEN N'Other Disk IO' 
+			WHEN W1.wait_type IN (N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
+			WHEN W1.wait_type LIKE N'SE_REPL_%' or W1.wait_type LIKE N'REPL_%'  or W1.wait_type IN (N'REPLICA_WRITES', N'FCB_REPLICA_WRITE', N'FCB_REPLICA_READ', N'PWAIT_HADRSIM') THEN N'Replication' 
+			WHEN W1.wait_type IN (N'LOG_RATE_GOVERNOR', N'POOL_LOG_RATE_GOVERNOR', N'HADR_THROTTLE_LOG_RATE_GOVERNOR', N'INSTANCE_LOG_RATE_GOVERNOR') THEN N'Log Rate Governor' 
+			--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
 			WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
+			WHEN W1.wait_type = N'WAIT_XTP_OFFLINE_CKPT_LOG_IO' OR W1.wait_type = N'WAIT_XTP_CKPT_CLOSE' THEN 'In-Memory OLTP Logging'
 			WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
 			WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
+			WHEN W1.wait_type LIKE N'PARALLEL_REDO%' THEN N'Parallel Redo'
+			WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 		ELSE N'Other' END AS 'wait_category'
 	FROM #tblFinalWaits AS W1 INNER JOIN #tblFinalWaits AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.wait_type, W1.wait_time_s, W1.pct, W1.signal_wait_time_s, W1.resource_wait_time_s, W1.signal_wait_pct, W1.resource_wait_pct
@@ -8013,13 +8041,15 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		100.0 * wait_time_ms / SUM(wait_time_ms) OVER() AS pct,
 		ROW_NUMBER() OVER(ORDER BY wait_time_ms DESC) AS rn
 		FROM sys.dm_os_wait_stats
-		WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP'
-		, 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT'
-		,'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH'
-		,'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
-		'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
-		'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
-		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'XTP_HOST_WAIT') 
+		WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', 
+	'SP_SERVER_DIAGNOSTICS_SLEEP', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP',
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT',
+	'BROKER_TASK_STOP','CLR_MANUAL_EVENT', 'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
+	'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
+	'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
+	'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
+	'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', 
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'WAIT_XTP_OFFLINE_CKPT_NEW_LOG', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP') 
 			AND wait_type NOT LIKE N'SLEEP_%'
 		GROUP BY wait_type, wait_time_ms, signal_wait_time_ms)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Waits' AS [Information], W1.wait_type, 
@@ -8030,7 +8060,11 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		CAST(SUM(W2.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
 		CAST(W1.signal_wait_pct AS DECIMAL(12, 2)) AS signal_wait_pct,
 		CAST(W1.resource_wait_pct AS DECIMAL(12, 2)) AS resource_wait_pct,
-		CASE WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock'
+			-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/en-us/library/cc917684.aspx
+		CASE WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU' 
+			-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
+			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
+			WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock' 
 			-- LATCH = indicates contention for access to some non-page structures. ACCESS_METHODS_DATASET_PARENT, ACCESS_METHODS_SCAN_RANGE_GENERATOR or NESTING_TRANSACTION_FULL latches indicate parallelism issues;
 			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch'
 			-- PAGELATCH = indicates contention for access to in-memory copies of pages, like PFS, SGAM and GAM; 
@@ -8041,26 +8075,35 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			-- PAGEIOLATCH = indicates IO problems, or BP pressure.
 			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO'
 			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
-			WHEN W1.wait_type LIKE N'HADR_%' THEN N'Always On'
+			WHEN W1.wait_type LIKE N'HADR_%' OR W1.wait_type LIKE N'PWAIT_HADR_%' THEN N'Always On'
 			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
+			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Memory - Compilation'
+			WHEN W1.wait_type IN (N'UTIL_PAGE_ALLOC', N'SOS_VIRTUALMEMORY_LOW', N'SOS_RESERVEDMEMBLOCKLIST', N'RESOURCE_SEMAPHORE', N'CMEMTHREAD', N'CMEMPARTITIONED', N'EE_PMOLOCK', N'MEMORY_ALLOCATION_EXT', N'RESERVED_MEMORY_ALLOCATION_EXT', N'MEMORY_GRANT_UPDATE') THEN N'Memory'
+			WHEN W1.wait_type LIKE N'CLR%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'SQL CLR' 
+			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring' 
+			WHEN W1.wait_type LIKE N'XACT%' or W1.wait_type LIKE N'DTC%' or W1.wait_type LIKE N'TRAN_MARKLATCH_%' or W1.wait_type LIKE N'MSQL_XACT_%' or W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction' 
+			--WHEN W1.wait_type LIKE N'SLEEP_%' or W1.wait_type IN (N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SQLTRACE_WAIT_ENTRIES', N'FT_IFTS_SCHEDULER_IDLE_WAIT', N'XE_DISPATCHER_WAIT', N'REQUEST_FOR_DEADLOCK_SEARCH', N'LOGMGR_QUEUE', N'ONDEMAND_TASK_QUEUE', N'CHECKPOINT_QUEUE', N'XE_TIMER_EVENT') THEN N'Idle' 
 			-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
 			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' -- Used to indicate a worker is running code that is not under the SQLOS Scheduling;
+			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
+			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
+			WHEN W1.wait_type IN (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET', N'PROXY_NETWORK_IO', N'EXTERNAL_SCRIPT_NETWORK_IO') THEN N'Network IO' 
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'WAITFOR', N'WAIT_FOR_RESULTS', N'BROKER_RECEIVE_WAITFOR') THEN N'User Wait' 
+			WHEN W1.wait_type IN (N'TRACEWRITE', N'SQLTRACE_LOCK', N'SQLTRACE_FILE_BUFFER', N'SQLTRACE_FILE_WRITE_IO_COMPLETION', N'SQLTRACE_FILE_READ_IO_COMPLETION', N'SQLTRACE_PENDING_BUFFER_WRITERS', N'SQLTRACE_SHUTDOWN', N'QUERY_TRACEOUT', N'TRACE_EVTNOTIF') THEN N'Tracing' 
+			WHEN W1.wait_type LIKE N'FT_%' OR W1.wait_type IN (N'FULLTEXT GATHERER', N'MSSEARCH', N'PWAIT_RESOURCE_SEMAPHORE_FT_PARALLEL_QUERY_SYNC') THEN N'Full Text Search' 
 			-- IO_COMPLETION = usually TempDB spilling; 
 			-- ASYNC_IO_COMPLETION = usually when not using IFI, or waiting on backups.
 			-- DISKIO_SUSPEND = High wait times here indicate the SNAPSHOT BACKUP may be taking longer than expected. Typically the delay is within the VDI application perform the snapshot backup;
-			WHEN W1.wait_type IN (N'IO_COMPLETION', N'ASYNC_IO_COMPLETION', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'DISKIO_SUSPEND') THEN N'Other IO'
+			WHEN W1.wait_type IN (N'ASYNC_IO_COMPLETION', N'IO_COMPLETION', N'WRITE_COMPLETION', N'IO_QUEUE_LIMIT', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'IO_RETRY') THEN N'Other Disk IO' 
 			-- BACKUPIO = check for slow backup media slow, like Tapes or Disks;
 			-- BACKUPBUFFER = usually when backing up to Tape;
 			WHEN W1.wait_type IN(N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
-			-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
-			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
-			-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/en-us/library/cc917684.aspx
-			WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU - Scheduler Yielding'
 			-- Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/en-us/library/ms188743.aspx;
-				-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
-				-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
+			-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
+			-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
 			-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
-			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
 			-- WRITELOG = log management system waiting for a log flush to disk. Examine the IO latency for the log file
 			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'WRITELOG') THEN N'Logging'
 			WHEN W1.wait_type IN (N'NET_WAITFOR_PACKET',N'NETWORK_IO') THEN N'Network IO'
@@ -8075,12 +8118,11 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'CLR_%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'CLR'
 			-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
 			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring'
-			-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS.
 			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Compilation' 
 			WHEN W1.wait_type LIKE N'XACT%' OR W1.wait_type LIKE N'DTC_%' OR W1.wait_type LIKE N'TRAN_MARKLATCH_%' OR W1.wait_type LIKE N'MSQL_XACT_%' OR W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction'
-		--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
-			WHEN W1.wait_type LIKE N'FT_%' THEN N'Full Text'
+			WHEN W1.wait_type IN (N'LOG_RATE_GOVERNOR', N'POOL_LOG_RATE_GOVERNOR', N'HADR_THROTTLE_LOG_RATE_GOVERNOR', N'INSTANCE_LOG_RATE_GOVERNOR') THEN N'Log Rate Governor' 
 			WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
+			WHEN W1.wait_type = N'WAIT_XTP_OFFLINE_CKPT_LOG_IO' OR W1.wait_type = N'WAIT_XTP_CKPT_CLOSE' THEN 'In-Memory OLTP Logging'
 			WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
 			WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
 			WHEN W1.wait_type LIKE N'PARALLEL_REDO%' THEN N'Parallel Redo'
@@ -11917,7 +11959,7 @@ BEGIN
 		ELSE
 		BEGIN
 			SET @dbname = RTRIM(LTRIM(@dbname))
-			SET @query = 'DBCC DBINFO(' + QUOTENAME(@dbname) + ') WITH TABLERESULTS, NO_INFOMSGS'
+			SET @query = 'DBCC DBINFO(''' + @dbname + ''') WITH TABLERESULTS, NO_INFOMSGS'
 
 			INSERT INTO #output_dbinfo
 			EXEC (@query)
