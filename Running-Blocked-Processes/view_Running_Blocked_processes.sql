@@ -16,6 +16,7 @@
 -- 12/2/2016 Fixed transport-level error issue with SQL Server 2016 SP1.
 -- 2/16/2016 Added NOLOCK hints.
 -- 3/28/2017 Fixed missing characters in offset fetches.
+-- 10/11/2017 Commented out Stored procedure stats section to optimize for in-flight requests.
 
 SET NOCOUNT ON;
 DECLARE @UpTime VARCHAR(12), @StartDate DATETIME, @sqlmajorver int, @sqlcmd NVARCHAR(500), @params NVARCHAR(500)
@@ -413,6 +414,7 @@ WHERE es.session_id <> @@SPID AND es.is_user_process = 1
 	AND (es.session_id IN (SELECT er3.blocking_session_id FROM sys.dm_exec_requests (NOLOCK) er3) OR er.blocking_session_id IS NOT NULL OR er.blocking_session_id > 0)
 ORDER BY blocked_spid, is_head_blocker DESC, blocked_spid_wait_time_ms DESC, blocker_spid
 
+/*
 -- Stored procedure stats
 DECLARE @sqlmajorver int, @sqlcmd VARCHAR(4000)
 SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
@@ -445,7 +447,8 @@ BEGIN
  CROSS APPLY sys.dm_exec_query_plan(ps.plan_handle) qp'
 	EXEC (@sqlcmd);
  END
- 
+/*
+
 -- Acquired locks
 /*SELECT tl.*, sp.[object_id], sp.index_id 
 FROM sys.dm_tran_locks (NOLOCK) tl
