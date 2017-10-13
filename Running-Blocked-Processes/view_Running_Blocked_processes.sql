@@ -447,11 +447,11 @@ BEGIN
  CROSS APPLY sys.dm_exec_query_plan(ps.plan_handle) qp'
 	EXEC (@sqlcmd);
  END
-/*
+*/
 
+/*
 -- Acquired locks
-/*SELECT tl.*, sp.[object_id], sp.index_id 
+SELECT tl.*, sp.[object_id], sp.index_id 
 FROM sys.dm_tran_locks (NOLOCK) tl
 LEFT JOIN sys.partitions (NOLOCK) sp ON tl.resource_associated_entity_id = sp.[hobt_id]
 */
-GO
