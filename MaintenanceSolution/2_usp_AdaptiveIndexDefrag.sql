@@ -153,7 +153,6 @@ CREATE TABLE dbo.tbl_AdaptiveIndexDefrag_Analysis_log
 	, objectID int NOT NULL
 	, objectName NVARCHAR(256) NULL
 	, index_or_stat_ID int NOT NULL
-	, index_or_stat_Name NVARCHAR(256) NULL
 	, partitionNumber smallint
 	, dateTimeStart DATETIME NOT NULL
 	, dateTimeEnd DATETIME NULL
@@ -281,12 +280,12 @@ BEGIN
 		FROM dbo.tbl_AdaptiveIndexDefrag_log_old;
 		
 		IF EXISTS (SELECT [object_id] FROM sys.tables WHERE [name] = 'tbl_AdaptiveIndexDefrag_Analysis_log') AND EXISTS(SELECT [object_id] FROM sys.tables WHERE [name] = 'tbl_AdaptiveIndexDefrag_Analysis_log_old')
-		INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Analysis],[dbID],[dbName],[objectID],[objectName]
-			,[index_or_stat_ID],[index_or_stat_Name],[partitionNumber],[dateTimeStart],[dateTimeEnd]
-			,[durationSeconds],[sqlStatement],[errorMessage])
-		SELECT [Analysis],[dbID],[dbName],[objectID],[objectName],[index_or_stat_ID]
-			,[index_or_stat_Name],[partitionNumber],[dateTimeStart],[dateTimeEnd]
-			,[durationSeconds],[sqlStatement],[errorMessage]
+		INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation],[dbID],[dbName],[objectID],[objectName]
+			,[index_or_stat_ID],[partitionNumber],[dateTimeStart],[dateTimeEnd]
+			,[durationSeconds],[errorMessage])
+		SELECT [Operation],[dbID],[dbName],[objectID],[objectName],[index_or_stat_ID]
+			,[partitionNumber],[dateTimeStart],[dateTimeEnd]
+			,[durationSeconds],[errorMessage]
 		FROM dbo.tbl_AdaptiveIndexDefrag_Analysis_log_old;
 		
 		IF EXISTS (SELECT [object_id] FROM sys.tables WHERE [name] = 'tbl_AdaptiveIndexDefrag_Stats_log') AND EXISTS(SELECT [object_id] FROM sys.tables WHERE [name] = 'tbl_AdaptiveIndexDefrag_Stats_log_old')
@@ -1196,7 +1195,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @rows_sampled bigint
 
 		/* Initialize variables */	
-		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5.5';
+		SELECT @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.5.6';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1528,8 +1527,8 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 					SET @dateTimeStart = GETDATE();
 
 					/* Start log actions */
-					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], dbID, dbName, objectID, objectName, index_or_stat_ID, index_or_stat_Name, partitionNumber, dateTimeStart)		
-					SELECT 'Index', @dbID, @dbName, @objectID, @objectName, @indexID, @indexName, @partitionNumber, @dateTimeStart;						
+					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], [dbID], dbName, objectID, objectName, index_or_stat_ID, partitionNumber, dateTimeStart)		
+					SELECT 'Index', @dbID, DB_NAME(@dbID), @objectID, OBJECT_NAME(@objectID, @dbID), @indexID, @partitionNumber, @dateTimeStart;
 
 					SET @analysis_id = SCOPE_IDENTITY();
 					
@@ -1565,21 +1564,25 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 						BEGIN
 							SET @debugMessage = '     Error ' + CONVERT(NVARCHAR(20),ERROR_NUMBER()) + ' has occurred while determining which rowstore indexes to defragment. Message: ' + ERROR_MESSAGE() + ' (Line Number: ' + CAST(ERROR_LINE() AS NVARCHAR(10)) + ')'
 
+							SET @dateTimeEnd = GETDATE();
+
 							/* Update log with completion time */	
 							UPDATE dbo.tbl_AdaptiveIndexDefrag_Analysis_log	
 							SET dateTimeEnd = @dateTimeEnd, durationSeconds = DATEDIFF(second, @dateTimeStart, @dateTimeEnd), errorMessage = LTRIM(@debugMessage)
-							WHERE index_or_stat_ID = @analysis_id AND dateTimeEnd IS NULL;
+							WHERE analysis_id = @analysis_id AND dateTimeEnd IS NULL;
 
 							RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 							--RAISERROR('     An error has occurred executing the pre-command! Please review the tbl_AdaptiveIndexDefrag_log table for details.', 0, 42) WITH NOWAIT;
 						END
 					END CATCH
 					
+					SET @dateTimeEnd = GETDATE();
+												
 					/* Update log with completion time */	
 					UPDATE dbo.tbl_AdaptiveIndexDefrag_Analysis_log	
 					SET dateTimeEnd = @dateTimeEnd, durationSeconds = DATEDIFF(second, @dateTimeStart, @dateTimeEnd)
-					WHERE index_or_stat_ID = @analysis_id AND dateTimeEnd IS NULL;
-					
+					WHERE analysis_id = @analysis_id AND dateTimeEnd IS NULL;
+						
 					UPDATE #tblIndexDefragScanWorking
 					SET is_done = 1
 					WHERE objectID = @objectID AND indexID = @indexID AND partitionNumber = @partitionNumber
@@ -1599,8 +1602,8 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 						SET @dateTimeStart = GETDATE();
 
 						/* Start log actions */
-						INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], dbID, dbName, objectID, objectName, index_or_stat_ID, index_or_stat_Name, partitionNumber, dateTimeStart)		
-						SELECT 'Index', @dbID, @dbName, @objectID, @objectName, @indexID, @indexName, @partitionNumber, @dateTimeStart;						
+						INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], [dbID], dbName, objectID, objectName, index_or_stat_ID, partitionNumber, dateTimeStart)		
+						SELECT 'Index', @dbID, DB_NAME(@dbID), @objectID, OBJECT_NAME(@objectID, @dbID), @indexID, @partitionNumber, @dateTimeStart;					
 
 						SET @analysis_id = SCOPE_IDENTITY();
 					
@@ -1623,22 +1626,26 @@ OPTION (MAXDOP 2)'
 							IF @debugMode = 1
 							BEGIN
 								SET @debugMessage = '     Error ' + CONVERT(NVARCHAR(20),ERROR_NUMBER()) + ' has occurred while determining which columnstore indexes to defragment. Message: ' + ERROR_MESSAGE() + ' (Line Number: ' + CAST(ERROR_LINE() AS NVARCHAR(10)) + ')'
-								
+
+								SET @dateTimeEnd = GETDATE();
+															
 								/* Update log with completion time */	
 								UPDATE dbo.tbl_AdaptiveIndexDefrag_Analysis_log	
 								SET dateTimeEnd = @dateTimeEnd, durationSeconds = DATEDIFF(second, @dateTimeStart, @dateTimeEnd), errorMessage = LTRIM(@debugMessage)
-								WHERE index_or_stat_ID = @analysis_id AND dateTimeEnd IS NULL;
+								WHERE analysis_id = @analysis_id AND dateTimeEnd IS NULL;
 								
 								RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 								--RAISERROR('     An error has occurred executing the pre-command! Please review the tbl_AdaptiveIndexDefrag_log table for details.', 0, 42) WITH NOWAIT;
 							END
 						END CATCH;
-						
+
+						SET @dateTimeEnd = GETDATE();
+													
 						/* Update log with completion time */	
 						UPDATE dbo.tbl_AdaptiveIndexDefrag_Analysis_log	
 						SET dateTimeEnd = @dateTimeEnd, durationSeconds = DATEDIFF(second, @dateTimeStart, @dateTimeEnd)
-						WHERE index_or_stat_ID = @analysis_id AND dateTimeEnd IS NULL;
-						
+						WHERE analysis_id = @analysis_id AND dateTimeEnd IS NULL;
+							
 						UPDATE #tblIndexDefragScanWorking
 						SET is_done = 1
 						WHERE objectID = @objectID AND indexID = @indexID AND partitionNumber = @partitionNumber
@@ -2731,6 +2738,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					/* Log actions */
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, sqlStatement)		
 					SELECT @dbID, @dbName, @statsobjectID, @statsobjectName, @statsID, @statsName, @partitionNumber, @rows, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
+					
 					SET @statsUpdate_id = SCOPE_IDENTITY();
 
 					/* Wrap execution attempt in a TRY/CATCH and log any errors that occur */
