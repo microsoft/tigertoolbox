@@ -393,10 +393,11 @@ v2.1.8 - 6/9/2017 - Extended Deprecated and Discontinued features subsection wit
 					Added resilience for SQL Injection;
 					Fixed invalid object name error in SQL Server 2005.
 v2.1.8.1 - 6/11/2017 - Added information about query optimizer changes usage at DB level;
-			/Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
+					Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
 v2.1.8.2 - 8/23/2017 - Extended search for feature usage in DBs - better determine DB readiness to be moved across editions.
 v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up;
 						Extended wait type categorization.
+v2.2 - 10/17/2017 - Added support for SQL Server on Linux.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -655,7 +656,7 @@ DECLARE @agt smallint, @ole smallint, @sao smallint, @xcmd smallint
 DECLARE @ErrorSeverity int, @ErrorState int, @ErrorMessage NVARCHAR(4000)
 DECLARE @CMD NVARCHAR(4000)
 DECLARE @path NVARCHAR(2048)
-DECLARE @sqlminorver int, @sqlbuild int, @clustered bit, @winver VARCHAR(5), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @winsp VARCHAR(25), @SystemManufacturer VARCHAR(128)
+DECLARE @sqlminorver int, @sqlbuild int, @clustered bit, @osver VARCHAR(5), @ostype VARCHAR(10), @osdistro VARCHAR(20), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @ossp VARCHAR(25), @SystemManufacturer VARCHAR(128)
 DECLARE @existout int, @FSO int, @FS int, @OLEResult int, @FileID int
 DECLARE @FileName VARCHAR(200), @Text1 VARCHAR(2000), @CMD2 VARCHAR(100)
 DECLARE @src VARCHAR(255), @desc VARCHAR(255), @psavail VARCHAR(20), @psver tinyint
@@ -799,14 +800,20 @@ EXECUTE sp_executesql @sqlcmd, @params, @UpTimeOUT=@UpTime OUTPUT, @StartDateOUT
 SELECT 'Information' AS [Category], 'Uptime' AS [Information], GETDATE() AS [Current_Time], @StartDate AS Last_Startup, CONVERT(VARCHAR(4),@UpTime/60/24) + 'd ' + CONVERT(VARCHAR(4),@UpTime/60%24) + 'hr ' + CONVERT(VARCHAR(4),@UpTime%60) + 'min' AS Uptime
 
 --------------------------------------------------------------------------------------------------------------------------------
--- Windows Version and Architecture subsection
+-- OS Version and Architecture subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Windows Version and Architecture', 10, 1) WITH NOWAIT
-IF @sqlmajorver >= 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
+IF (@sqlmajorver >= 11 AND @sqlmajorver < 14) OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
-	SET @sqlcmd = N'SELECT @winverOUT = CASE WHEN windows_release IN (''6.3'',''10.0'') AND (@@VERSION LIKE ''%Build 10586%'' OR @@VERSION LIKE ''%Build 14393%'')THEN ''10.0'' ELSE windows_release END, @winspOUT = windows_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 WHEN @@VERSION LIKE ''%<IA64>%'' THEN 128 ELSE 32 END FROM sys.dm_os_windows_info (NOLOCK)';
-	SET @params = N'@winverOUT VARCHAR(5) OUTPUT, @winspOUT VARCHAR(25) OUTPUT, @archOUT smallint OUTPUT';
-	EXECUTE sp_executesql @sqlcmd, @params, @winverOUT=@winver OUTPUT, @winspOUT=@winsp OUTPUT, @archOUT=@arch OUTPUT;
+	SET @sqlcmd = N'SELECT @ostypeOUT = ''Windows'', @osdistroOUT = ''Windows'', @osverOUT = CASE WHEN windows_release IN (''6.3'',''10.0'') AND (@@VERSION LIKE ''%Build 10586%'' OR @@VERSION LIKE ''%Build 14393%'') THEN ''10.0'' ELSE windows_release END, @osspOUT = windows_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 WHEN @@VERSION LIKE ''%<IA64>%'' THEN 128 ELSE 32 END FROM sys.dm_os_windows_info (NOLOCK)';
+	SET @params = N'@osverOUT VARCHAR(5) OUTPUT, @ostypeOUT VARCHAR(10) OUTPUT, @osdistroOUT VARCHAR(20) OUTPUT, @osspOUT VARCHAR(25) OUTPUT, @archOUT smallint OUTPUT';
+	EXECUTE sp_executesql @sqlcmd, @params, @osverOUT=@osver OUTPUT, @ostypeOUT=@ostype OUTPUT, @osdistroOUT=@osdistro OUTPUT, @osspOUT=@ossp OUTPUT, @archOUT=@arch OUTPUT;
+END
+ELSE IF @sqlmajorver >= 14
+BEGIN
+	SET @sqlcmd = N'SELECT @ostypeOUT = host_platform, @osdistroOUT = host_distribution, @osverOUT = CASE WHEN host_platform = ''Windows'' AND host_release IN (''6.3'',''10.0'') THEN ''10.0'' ELSE host_release END, @osspOUT = host_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 ELSE 32 END FROM sys.dm_os_host_info (NOLOCK)';
+	SET @params = N'@osverOUT VARCHAR(5) OUTPUT, @ostypeOUT VARCHAR(10) OUTPUT, @osdistroOUT VARCHAR(20) OUTPUT, @osspOUT VARCHAR(25) OUTPUT, @archOUT smallint OUTPUT';
+	EXECUTE sp_executesql @sqlcmd, @params, @osverOUT=@osver OUTPUT, @ostypeOUT=@ostype OUTPUT, @osdistroOUT=@osdistro OUTPUT, @osspOUT=@ossp OUTPUT, @archOUT=@arch OUTPUT;
 END
 ELSE
 BEGIN
@@ -820,7 +827,7 @@ BEGIN
 		INSERT INTO @sysinfo
 		EXEC xp_msver;
 		
-		SELECT @winver = LEFT(Character_Value, CHARINDEX(' ', Character_Value)-1) -- 5.2 is WS2003; 6.0 is WS2008; 6.1 is WS2008R2; 6.2 is WS2012, 6.3 is WS2012R2
+		SELECT @osver = LEFT(Character_Value, CHARINDEX(' ', Character_Value)-1) -- 5.2 is WS2003; 6.0 is WS2008; 6.1 is WS2008R2; 6.2 is WS2012, 6.3 is WS2012R2, 6.3 (14396) is WS2016
 		FROM @sysinfo
 		WHERE [Name] LIKE 'WindowsVersion%';
 		
@@ -833,7 +840,8 @@ BEGIN
 		SET @str = (SELECT @@VERSION)
 		SELECT @str2 = RIGHT(@str, LEN(@str)-CHARINDEX('Windows',@str) + 1)
 		SELECT @str3 = RIGHT(@str2, LEN(@str2)-CHARINDEX(': ',@str2))
-		SELECT @winsp = LTRIM(LEFT(@str3, CHARINDEX(')',@str3) -1))
+		SELECT @ossp = LTRIM(LEFT(@str3, CHARINDEX(')',@str3) -1))
+		SET @ostype = 'Windows'
 	END TRY
 	BEGIN CATCH
 		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
@@ -844,32 +852,36 @@ END;
 
 DECLARE @machineinfo TABLE ([Value] NVARCHAR(256), [Data] NVARCHAR(256))
 
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemManufacturer';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemProductName';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemFamily';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVendor';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVersion';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSReleaseDate';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
+IF @ostype = 'Windows'
+BEGIN
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemManufacturer';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemProductName';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemFamily';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVendor';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVersion';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSReleaseDate';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
+END
 
 SELECT @SystemManufacturer = [Data] FROM @machineinfo WHERE [Value] = 'SystemManufacturer';
 
 SELECT 'Information' AS [Category], 'Machine' AS [Information], 
-	CASE @winver WHEN '5.2' THEN 'XP/WS2003'
+	CASE @osver WHEN '5.2' THEN 'XP/WS2003'
 		WHEN '6.0' THEN 'Vista/WS2008'
 		WHEN '6.1' THEN 'W7/WS2008R2'
 		WHEN '6.2' THEN 'W8/WS2012'
 		WHEN '6.3' THEN 'W8.1/WS2012R2'
 		WHEN '10.0' THEN 'W10/WS2016'
-	END AS [Windows_Version],
-	@winsp AS [Service_Pack_Level],
+		ELSE @ostype + ' ' + @osdistro
+	END AS [OS_Version],
+	CASE WHEN @ostype = 'Windows' THEN @ossp ELSE @osver END AS [Service_Pack_Level],
 	@arch AS [Architecture],
 	SERVERPROPERTY('MachineName') AS [Machine_Name],
 	SERVERPROPERTY('ComputerNamePhysicalNetBIOS') AS [NetBIOS_Name],
@@ -1554,7 +1566,12 @@ RAISERROR (N'  |-Starting database file autogrows last 72h', 10, 1) WITH NOWAIT
 IF EXISTS (SELECT TOP 1 id FROM sys.traces WHERE is_default = 1)
 BEGIN
 	DECLARE @tracefilename VARCHAR(500)
+	IF @ostype = 'Windows'
 	SELECT @tracefilename = LEFT([path],LEN([path]) - PATINDEX('%\%', REVERSE([path]))) + '\log.trc' FROM sys.traces WHERE is_default = 1;
+	
+	IF @ostype <> 'Windows'
+	SELECT @tracefilename = LEFT([path],LEN([path]) - PATINDEX('%/%', REVERSE([path]))) + '/log.trc' FROM sys.traces WHERE is_default = 1;
+
 	WITH AutoGrow_CTE (databaseid, [filename], Growth, Duration, StartTime, EndTime)
 	AS
 	(
@@ -2669,15 +2686,15 @@ BEGIN
 	END;
 END
 
-IF @lpim = 0 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
+IF @lpim = 0 AND CONVERT(DECIMAL(3,1), @osver) < 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[WARNING: Locked pages are not in use by SQL Server. In a WS2003 x64 architecture it is recommended to enable LPIM]' AS [Deviation]
 END
-ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
+ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @osver) < 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in a WS2003 x64 architecture]' AS [Deviation]
 END
-ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) >= 6.0 AND @arch = 64
+ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @osver) >= 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in WS2008 or above only when there are signs of paging]' AS [Deviation]
 END
@@ -2763,9 +2780,9 @@ SELECT 'Pagefile_checks' AS [Category], 'Pagefile_free_space' AS [Check],
 	@pagefile AS total_pagefile_MB, @freepagefile AS available_pagefile_MB;
 
 SELECT 'Pagefile_checks' AS [Category], 'Pagefile_minimum_size' AS [Check],
-	CASE WHEN @winver = '5.2' AND @arch = 64 AND @pagefile < 8192 THEN '[WARNING: Pagefile is smaller than 8GB on a WS2003 x64 system. Please revise Pagefile settings]'
-		WHEN @winver = '5.2' AND @arch = 32 AND @pagefile < 2048 THEN '[WARNING: Pagefile is smaller than 2GB on a WS2003 x86 system. Please revise Pagefile settings]'
-		WHEN @winver <> '5.2' THEN '[NA]'
+	CASE WHEN @osver = '5.2' AND @arch = 64 AND @pagefile < 8192 THEN '[WARNING: Pagefile is smaller than 8GB on a WS2003 x64 system. Please revise Pagefile settings]'
+		WHEN @osver = '5.2' AND @arch = 32 AND @pagefile < 2048 THEN '[WARNING: Pagefile is smaller than 2GB on a WS2003 x86 system. Please revise Pagefile settings]'
+		WHEN @osver <> '5.2' THEN '[NA]'
 		ELSE '[OK]' END AS [Deviation], 
 	@pagefile AS total_pagefile_MB;
 	
@@ -2777,8 +2794,7 @@ SELECT 'Pagefile_checks' AS [Category], 'Process_paged_out' AS [Check],
 IF @ptochecks = 1
 RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
 
---------------------------------------------------------------------------------------------------------------------------------
--- I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
+--------------------------------------------------------------------------------------------------------------------------OUT VARCHAR(20), all in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
 -- io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.
 -- Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc). 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -3000,7 +3016,7 @@ DECLARE @planguid NVARCHAR(64), @powerkey NVARCHAR(255)
 --SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
 SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
 
-IF CONVERT(DECIMAL(3,1), @winver) >= 6.0
+IF CONVERT(DECIMAL(3,1), @osver) >= 6.0
 BEGIN
 	BEGIN TRY
 		--EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey, 'PreferredPlan', @planguid OUTPUT, NO_OUTPUT
@@ -3015,7 +3031,7 @@ END
 
 -- http://support.microsoft.com/kb/935799/en-us
 
-IF @winver IS NULL 
+IF @osver IS NULL 
 BEGIN
 	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[WARNING: Could not determine Windows version for check]' AS [Deviation]
 END
@@ -3036,7 +3052,12 @@ END;
 -- Disk Partition alignment offset < 64KB subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Disk Partition alignment offset < 64KB', 10, 1) WITH NOWAIT
-IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
+IF @ostype <> 'Windows'
+BEGIN
+	RAISERROR('    |- [INFORMATION: "partition alignment offset" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
+	--RETURN
+END
+ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 BEGIN
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
@@ -3264,7 +3285,12 @@ END;
 -- NTFS block size in volumes that hold database files <> 64KB subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting NTFS block size in volumes that hold database files <> 64KB', 10, 1) WITH NOWAIT
-IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
+IF @ostype <> 'Windows'
+BEGIN
+	RAISERROR('    |- [INFORMATION: "NTFS block size" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
+	--RETURN
+END
+ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 BEGIN
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
@@ -3494,7 +3520,12 @@ END;
 IF @diskfrag = 1
 BEGIN
 	RAISERROR (N'  |-Starting Disk Fragmentation Analysis', 10, 1) WITH NOWAIT
-	IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
+	IF @ostype <> 'Windows'
+	BEGIN
+		RAISERROR('    |- [INFORMATION: "Disk Fragmentation Analysis" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
+		--RETURN
+	END
+	ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 	BEGIN
 		IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
@@ -3764,7 +3795,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 -- Cluster Quorum Model subsection
 --------------------------------------------------------------------------------------------------------------------------------
-IF @clustered = 1 AND @winver <> '5.2'
+IF @clustered = 1 AND @osver <> '5.2'
 BEGIN
 	RAISERROR (N'  |-Starting Cluster Quorum Model', 10, 1) WITH NOWAIT
 	IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted')) AND @psver > 1
@@ -3800,7 +3831,7 @@ BEGIN
 			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
 			CREATE TABLE #xp_cmdshell_CluOutput (line int IDENTITY(1,1) PRIMARY KEY, [Output] VARCHAR(50));
 
-			IF @winver <> '5.2'
+			IF @osver <> '5.2'
 			BEGIN
 				SELECT @CMD = N'powershell -NoLogo -NoProfile "Import-Module FailoverClusters"; "Get-ClusterNode | Format-Table -Autosize -HideTableHeaders NodeWeight"' 
 				INSERT INTO #xp_cmdshell_CluNodesOutput ([Output])
@@ -3816,7 +3847,7 @@ BEGIN
 				SELECT @CntNodes = COUNT(NodeName) FROM sys.dm_os_cluster_nodes (NOLOCK)
 				
 				SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 
-					CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @winver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
+					CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @osver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndDiskMajority' AND @CntNodes % 2 = 1 THEN '[WARNING: The current quorum model is not recommended for a cluster with ODD number of nodes]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeMajority' AND @CntNodes % 2 = 0 THEN '[WARNING: The current quorum model is not recommended for a cluster with EVEN number of nodes]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndFileShareMajority' THEN '[INFORMATION: The current quorum model is recommended for clusters with special configurations]'
@@ -3832,7 +3863,7 @@ BEGIN
 				IF EXISTS (SELECT TOP 1 [Output] FROM #xp_cmdshell_CluOutput WHERE [Output] LIKE '%Majority%' OR [Output] LIKE '%Disk%')
 				BEGIN
 					SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 
-						CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @winver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
+						CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @osver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndDiskMajority' AND @CntVotes % 2 = 1 THEN '[WARNING: The current quorum model is not recommended for a cluster with ODD number of node votes]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeMajority' AND @CntVotes % 2 = 0 THEN '[WARNING: The current quorum model is not recommended for a cluster with EVEN number of node votes]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndFileShareMajority' THEN '[INFORMATION: The current quorum model is recommended for clusters with special configurations]'
@@ -3878,12 +3909,12 @@ END;
 
 IF @IsHadrEnabled = 1
 BEGIN
-	SET @sqlcmd	= N'DECLARE @winver VARCHAR(5), @CntNodes tinyint
-SELECT @winver = windows_release FROM sys.dm_os_windows_info (NOLOCK)	
+	SET @sqlcmd	= N'DECLARE @osver VARCHAR(5), @CntNodes tinyint
+SELECT @osver = windows_release FROM sys.dm_os_windows_info (NOLOCK)	
 SELECT @CntNodes = SUM(number_of_quorum_votes) FROM sys.dm_hadr_cluster_members (NOLOCK)
 
 SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Cluster_Quorum'' AS [Check], cluster_name,
-	CASE WHEN quorum_type = 3 AND @winver <> ''5.2'' THEN ''[WARNING: The current quorum model is not recommended since WS2003]''
+	CASE WHEN quorum_type = 3 AND @osver <> ''5.2'' THEN ''[WARNING: The current quorum model is not recommended since WS2003]''
 		WHEN quorum_type = 1 AND @CntNodes % 2 = 1 THEN ''[WARNING: The current quorum model is not recommended for a cluster with ODD number of nodes]''
 		WHEN quorum_type = 0 AND @CntNodes % 2 = 0 THEN ''[WARNING: The current quorum model is not recommended for a cluster with EVEN number of nodes]''
 		WHEN quorum_type = 2 THEN ''[INFORMATION: The current quorum model is recommended for clusters with special configurations]''
@@ -4588,7 +4619,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlservice = 'LocalSystem' THEN '[WARNING: Running SQL Server under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server under this account is not recommended]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4602,9 +4633,9 @@ BEGIN
 			WHEN @clustered = 1 AND @accntsqlagentservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server Agent under this account is not supported]' 
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4614,10 +4645,10 @@ BEGIN
 			WHEN @accntolapservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 			WHEN @accntolapservice = @accntsqlservice THEN '[WARNING: Running SQL Server Analysis Services under the same account as SQL Server is not recommended]' 
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2005 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4626,10 +4657,10 @@ BEGIN
 			WHEN @statusdtsservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntdtsservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 			WHEN @accntdtsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Integration Services under the same account as SQL Server is not recommended]' 
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4639,10 +4670,10 @@ BEGIN
 			WHEN @accntrsservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 			WHEN @accntrsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Reporting Services under the same account as SQL Server is not recommended]' 
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4653,12 +4684,12 @@ BEGIN
 				WHEN @accntftservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 				WHEN @accntftservice = @accntsqlservice THEN '[WARNING: Running Full-Text Daemon under the same account as SQL Server is not recommended]' 
 				WHEN @accntftservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running Full-Text Service under this account is not recommended]' 
-				WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+				WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 				WHEN @sqlmajorver <= 10 AND @accntftservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running Full-Text Service under this account is not recommended]' 
 				WHEN @sqlmajorver <= 10 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
-				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
+				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 				-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @winver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
+				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 			ELSE '[OK]' END 
 		ELSE '[INFORMATION: Service is not installed]' 
 		END AS [Deviation]
@@ -12307,10 +12338,10 @@ BEGIN
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Errorlog' AS [Check], '[WARNING: Errorlog contains important messages.]' AS [Deviation];
 
 		;WITH cte_dbcc (err, errcnt, logdate, logmsg) 
-			AS (SELECT CASE WHEN logmsg LIKE 'Error: %' THEN RIGHT(LEFT(#dbcc.logmsg, CHARINDEX(',', #dbcc.logmsg)-1), CHARINDEX(',', #dbcc.logmsg)-8) 
+			AS (SELECT CASE WHEN logmsg LIKE 'Error: [^a-z]%' THEN RIGHT(LEFT(#dbcc.logmsg, CHARINDEX(',', #dbcc.logmsg)-1), CHARINDEX(',', #dbcc.logmsg)-8) 
 					WHEN logmsg LIKE 'SQL Server has encountered % longer than 15 seconds %' THEN CONVERT(CHAR(3),833)
 					WHEN logmsg LIKE 'A significant part of sql server process memory has been paged out%' THEN CONVERT(CHAR(5),17890)
-					ELSE '' END AS err,
+					ELSE NULL END AS err,
 				COUNT(logmsg) AS errcnt, 
 				logdate,
 				CASE WHEN logmsg LIKE 'SQL Server has encountered % longer than 15 seconds %' THEN 'SQL Server has encountered XXX occurrence(s) of IO requests taking longer than 15 seconds to complete on file YYY'
@@ -12373,13 +12404,13 @@ BEGIN
 				WHEN logmsg LIKE 'A significant part of sql server process memory has been paged out%' THEN 'SQL Server process was trimmed by the OS. Preventable if LPIM is granted'
 				WHEN logmsg LIKE '%cachestore flush%' THEN 'CacheStore flush'
 			ELSE '' END AS [Comment],
-			CASE WHEN logmsg LIKE 'Error: %' THEN (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(text,'%.*ls','%'),'%d','%'),'%ls','%'),'%S_MSG','%'),'%S_PGID','%'),'%#016I64x','%'),'%p','%'),'%08x','%'),'%u','%'),'%I64d','%'),'%s','%'),'%ld','%'),'%lx','%'), '%%%', '%') 
+			CASE WHEN logmsg LIKE 'Error: [^a-z]%' THEN (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(text,'%.*ls','%'),'%d','%'),'%ls','%'),'%S_MSG','%'),'%S_PGID','%'),'%#016I64x','%'),'%p','%'),'%08x','%'),'%u','%'),'%I64d','%'),'%s','%'),'%ld','%'),'%lx','%'), '%%%', '%') 
 					FROM sys.messages WHERE message_id = (CONVERT(int, RIGHT(LEFT(cte_dbcc.logmsg, CHARINDEX(',', cte_dbcc.logmsg)-1), CHARINDEX(',', cte_dbcc.logmsg)-8))) AND language_id = @langid) 
 				ELSE '' END AS [Look_for_Message_example]
 		FROM cte_dbcc
 		GROUP BY err, logmsg
 		ORDER BY SUM(errcnt) DESC;
-		
+	
 		IF @logdetail = 1
 		BEGIN
 			SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Errorlog_Detail' AS [Information], logid AS [Errorlog_Id], logdate AS [Logged_Date], spid AS [Process], logmsg AS [Logged_Message], 
@@ -12670,4 +12701,4 @@ EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
 RAISERROR (N'All done!', 10, 1) WITH NOWAIT
-GO
+GO
