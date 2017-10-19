@@ -659,6 +659,7 @@ v1.6.5.3 - 4/30/2017 - Fixed error in debug summary.
 v1.6.5.4 - 8/04/2017 - Fixed error where @minPageCount wasn't getting passed into @ColumnStoreGetIXSQL (by hitzand)
 v1.6.5.5 - 8/11/2017 - Added support for fixed sampling rate for statistics.
 v1.6.5.6 - 10/16/2017 - Added logging for fragmentation analysis.
+v1.6.5.7 - 10/19/2017 - Extended support for CCI under SQL 2016 and above.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1609,7 +1610,7 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 					
 						BEGIN TRY
 							SELECT @ColumnStoreGetIXSQL = 'USE [' + DB_NAME(@dbID) + ']; SELECT @dbID_In, DB_NAME(@dbID_In), rg.object_id, rg.index_id, rg.partition_number, SUM((ISNULL(rg.deleted_rows,1)*100)/rg.total_rows) AS [fragmentation], SUM(ISNULL(rg.size_in_bytes,1)/1024/8) AS [simulated_page_count], SUM(rg.total_rows) AS total_rows, GETDATE() AS [scanDate]	
-FROM sys.column_store_row_groups rg WITH (NOLOCK)
+FROM ' + CASE WHEN @sqlmajorver = 12 THEN 'sys.column_store_row_groups' ELSE 'sys.dm_db_column_store_row_group_physical_stats' END + ' rg WITH (NOLOCK)
 WHERE rg.object_id = @objectID_In
 	AND rg.index_id = @indexID_In
 	AND rg.partition_number = @partitionNumber_In

@@ -123,3 +123,4 @@ v1.6.5.2 - 4/13/2017 - Lowered min threshold for @statsThreshold setting.
 v1.6.5.3 - 4/30/2017 - Fixed error in debug summary.
 v1.6.5.4 - 8/04/2017 - Fixed error where @minPageCount wasn't getting passed into @ColumnStoreGetIXSQL (by hitzand)
 v1.6.5.5 - 8/11/2017 - Added support for fixed sampling rate for statistics.
+v1.6.5.7 - 10/19/2017 - Extended support for CCI under SQL 2016 and above.
