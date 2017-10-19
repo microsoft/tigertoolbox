@@ -398,6 +398,7 @@ v2.1.8.2 - 8/23/2017 - Extended search for feature usage in DBs - better determi
 v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up;
 						Extended wait type categorization.
 v2.2 - 10/17/2017 - Added support for SQL Server on Linux.
+v2.2.1 - 10/19/2017 - Corrected several issues with support for SQL 2017 (thanks Mark Freeman).
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1419,7 +1420,7 @@ WHERE dbsize.[type_desc] = ''ROWS''
 ORDER BY [Database_Name]	
 OPTION (RECOMPILE)'
 END
-ELSE IF @sqlmajorver = 13
+ELSE IF @sqlmajorver >= 13
 BEGIN
 	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
 	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
@@ -4866,7 +4867,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN (@sqlmajorver = 9 AND @sqlbuild < 5000)
 			OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild < 6000)
 			OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 6000)
-			OR (@sqlmajorver = 11 AND @sqlbuild < 6020)
+			OR (@sqlmajorver = 11 AND @sqlbuild < 7001)
 			OR (@sqlmajorver = 12 AND @sqlbuild < 5000)
 			OR (@sqlmajorver = 13 AND @sqlbuild < 4000)
 		THEN '[WARNING: current service pack has been superseded in the current SQL Server version. Install the latest service pack as soon as possible.]'
@@ -4878,6 +4879,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		WHEN @sqlmajorver = 11 THEN '2012'
 		WHEN @sqlmajorver = 12 THEN '2014'
 		WHEN @sqlmajorver = 13 THEN '2016'
+		WHEN @sqlmajorver = 14 THEN '2017'
 	END AS [Product_Major_Version],
 	CONVERT(VARCHAR(128), SERVERPROPERTY('ProductLevel')) AS Product_Level,
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductBuildType')) ELSE 'NA' END AS Product_Build_Type,
@@ -5267,7 +5269,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			CASE WHEN @sqlmajorver = 9 OR @sqlmajorver = 10 OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 4100)
 					THEN '[INFORMATION: TF1236 enables database lock partitioning]'
-				WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver = 13
+				WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver >= 13
 					THEN '[WARNING: TF1236 is not needed in SQL 2012 SP3, SQL Server 2014 SP1 and above]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5288,8 +5290,8 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 12
 				THEN '[INFORMATION: TF2312 enables New CE model, SQL Server 2014 version]' 
-			WHEN @sqlmajorver = 13
-				THEN '[INFORMATION: TF2312 enables New CE model to SQL Server 2014 or SQL Server 2016 versions, dependent of the compatibility level of the database]' 
+			WHEN @sqlmajorver >= 13
+				THEN '[INFORMATION: TF2312 enables New CE model to SQL Server 2014 or above versions, dependent of the compatibility level of the database]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5348,7 +5350,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver >= 11
 				THEN '[INFORMATION: TF2371 changes the fixed rate of the 20pct threshold for update statistics into a dynamic percentage rate]'
-			WHEN @sqlmajorver = 13
+			WHEN @sqlmajorver >= 13
 				THEN '[WARNING: TF2371 is not needed in SQL 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -5525,7 +5527,7 @@ BEGIN
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
 				THEN '[INFORMATION: TF6532 and TF 6533 enable performance improvement of query operations with spatial data types]'
-			WHEN @sqlmajorver = 13
+			WHEN @sqlmajorver >= 13
 				THEN '[WARNING: TF6532 and TF 6533 are not needed in SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -5538,7 +5540,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
-					OR @sqlmajorver = 13
+					OR @sqlmajorver >= 13
 				THEN '[INFORMATION: TF6534 enables performance improvement of query operations with spatial data types]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -5721,10 +5723,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
 					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
 					OR (@sqlmajorver >= 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
-				THEN '[WARNING: TF4135 should be used instead of TF4199 in this SQL build]' 
-				WHEN (@sqlmajorver = 13 AND @sqlbuild < 2149)
-				-- Add 2017 RTM on release
-				THEN '[WARNING: TF4199 is not required in this SQL build]'
+				THEN '[WARNING: TF4135 should be used instead of TF4199 in this SQL build]'
 			ELSE '[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5750,8 +5749,8 @@ BEGIN
 			WHEN (@sqlmajorver = 9 AND @sqlbuild >= 4266) 
 				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1818 AND 1835)
 				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 1702) OR @sqlmajorver = 11 OR @sqlmajorver = 12
-				OR (@sqlmajorver = 13 AND @sqlbuild >= 2149) OR @sqlmajorver >= 14
-			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Pac]'
+				OR (@sqlmajorver = 13 AND @sqlbuild >= 2149) OR @sqlmajorver > 13
+			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
 		END AS [Deviation];
 		
 	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
@@ -7418,7 +7417,7 @@ END
 ELSE 
 BEGIN
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Check], 
-		CASE WHEN @tdb_files < 4 THEN '[WARNING: tempDB has only ' + CONVERT(VARCHAR(10), @tdb_files) + ' file(s). Consider creating between 4 and 8 tempDB data files, 1 per each 2 cores, of the same size]'
+		CASE WHEN @tdb_files < 4 THEN '[WARNING: tempDB has only ' + CONVERT(VARCHAR(10), @tdb_files) + ' file(s). Consider creating between 4 and 8 tempDB data files of the same size, with a minimum of 4]'
 			WHEN @filesizes = 1 AND @tdb_files < (@online_count / 2) AND @tdb_files >= 8 AND @tdb_files % 4 = 0 THEN '[INFORMATION: Number of Data files to Scheduler ratio might not be Optimal. Consider creating 1 data file per each 2 cores, in multiples of 4, all of the same size]'
 			WHEN @filesizes > 1 AND @tdb_files >= 4 AND @tdb_files % 4 > 0 THEN '[WARNING: Data file sizes do not match and Number of data files is not multiple of 4]'
 			WHEN @filesizes = 1 AND @tdb_files >= 4 AND @tdb_files % 4 > 0 THEN '[WARNING: Number of data files is not multiple of 4]'
@@ -8956,7 +8955,7 @@ CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.plan_generation_num DESC');
 	END
-	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver = 13
+	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
 		--CPU 
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
@@ -9052,7 +9051,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		SELECT DISTINCT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
 		FROM #tmp_dm_exec_query_stats;
 	END
-	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver = 13
+	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
 		INSERT INTO #dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
 		SELECT DISTINCT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio]
@@ -9187,7 +9186,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<Warnings UnmatchedIndexes="true"%';
 	END;
 
-	IF (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver = 13
+	IF (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
 		INSERT INTO #qpwarnings
 		-- Note that currently MemoryGrant warnings are only found in actual execution plans
