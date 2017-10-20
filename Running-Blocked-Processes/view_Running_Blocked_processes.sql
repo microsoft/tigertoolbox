@@ -17,6 +17,13 @@
 -- 2/16/2016 Added NOLOCK hints.
 -- 3/28/2017 Fixed missing characters in offset fetches.
 -- 10/11/2017 Commented out Stored procedure stats section to optimize for in-flight requests.
+-- 10/20/2017 Added Query stats section.
+
+
+/*
+NOTE: Some sections are commented out for a quick default insight to in-flight requests. 
+	Uncomment section you would like to execute as well for a more holistic approach on executions. 
+*/
 
 SET NOCOUNT ON;
 DECLARE @UpTime VARCHAR(12), @StartDate DATETIME, @sqlmajorver int, @sqlcmd NVARCHAR(500), @params NVARCHAR(500)
@@ -447,6 +454,31 @@ BEGIN
  CROSS APPLY sys.dm_exec_query_plan(ps.plan_handle) qp'
 	EXEC (@sqlcmd);
  END
+ 
+-- Query stats
+IF @sqlmajorver >= 11
+BEGIN
+	SET @sqlcmd = N'SELECT DB_NAME(CONVERT(int,pa.value)) AS DatabaseName,
+	(SELECT st.text AS [text()] FROM sys.dm_exec_sql_text(qs.plan_handle) AS st FOR XML PATH(''''), TYPE) AS [sqltext],
+	qs.creation_time AS cached_time,
+	qs.last_execution_time,
+	qs.execution_count,
+	qs.total_elapsed_time/qs.execution_count AS avg_elapsed_time,
+	qs.last_elapsed_time,
+	qs.total_worker_time/qs.execution_count AS avg_cpu_time,
+	qs.last_worker_time AS last_cpu_time,
+	qs.min_worker_time AS min_cpu_time, qs.max_worker_time AS max_cpu_time,
+	qs.total_logical_reads/qs.execution_count AS avg_logical_reads,
+	qs.last_logical_reads, qs.min_logical_reads, qs.max_logical_reads,
+	qs.total_physical_reads/qs.execution_count AS avg_physical_reads,
+	qs.last_physical_reads, qs.min_physical_reads, qs.max_physical_reads,
+	qs.total_logical_writes/qs.execution_count AS avg_logical_writes,
+	qs.last_logical_writes, qs.min_logical_writes, qs.max_logical_writes
+FROM sys.dm_exec_query_stats (NOLOCK) AS qs
+CROSS APPLY sys.dm_exec_plan_attributes(qs.plan_handle) AS pa
+WHERE pa.attribute = ''dbid'''
+	EXEC (@sqlcmd);
+END
 */
 
 /*
