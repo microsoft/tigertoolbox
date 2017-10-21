@@ -458,7 +458,7 @@ BEGIN
 -- Query stats
 IF @sqlmajorver >= 11
 BEGIN
-	SET @sqlcmd = N'SELECT DB_NAME(CONVERT(int,pa.value)) AS DatabaseName,
+	SET @sqlcmd = N'SELECT CASE WHEN CONVERT(int,pa.value) = 32767 THEN ''ResourceDB'' ELSE DB_NAME(CONVERT(int,pa.value)) END AS DatabaseName,
 	(SELECT st.text AS [text()] FROM sys.dm_exec_sql_text(qs.plan_handle) AS st FOR XML PATH(''''), TYPE) AS [sqltext],
 	qs.creation_time AS cached_time,
 	qs.last_execution_time,
