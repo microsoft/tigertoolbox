@@ -340,3 +340,4 @@ v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up;
 						Extended wait type categorization.
 v2.2 - 10/17/2017 - Added support for SQL Server on Linux.
 v2.2.1 - 10/19/2017 - Corrected several issues with support for SQL 2017 (thanks Mark Freeman).
+v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bjoern Steinmetz).
