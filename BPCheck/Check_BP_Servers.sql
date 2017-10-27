@@ -399,7 +399,9 @@ v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up;
 						Extended wait type categorization.
 v2.2 - 10/17/2017 - Added support for SQL Server on Linux.
 v2.2.1 - 10/19/2017 - Corrected several issues with support for SQL 2017 (thanks Mark Freeman).
-v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bjoern Steinmetz).
+v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bjoern Steinmetz);
+						Fixed Feature usage subsection when running on SQL 2014 or below;
+						Fixed CPU Affinity bit mask.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -1008,7 +1010,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(255), @cpucount int, @numa int
-DECLARE @i int, @cpuaffin_fixed VARCHAR(300)
+DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(64)
 
 IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
 BEGIN
@@ -1091,13 +1093,35 @@ bytes AS
 SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL 
 SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)
 -- CPU Affinity is shown highest to lowest CPU ID
-SELECT @cpuaffin = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
+SELECT @affinitymask = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
 	ELSE RIGHT((SELECT ((CONVERT(tinyint, SUBSTRING(CONVERT(binary(9), [value]), M, 1)) & E) / E) AS [text()] 
 		FROM bits CROSS JOIN bytes
 		ORDER BY M, N DESC
 		FOR XML PATH('')), @cpucount) END
 FROM sys.configurations (NOLOCK)
 WHERE name = 'affinity mask';
+
+IF @cpucount > 32
+BEGIN
+	;WITH bits AS 
+	(SELECT 7 AS N, 128 AS E UNION ALL SELECT 6, 64 UNION ALL 
+	SELECT 5, 32 UNION ALL SELECT 4, 16 UNION ALL SELECT 3, 8 UNION ALL 
+	SELECT 2, 4 UNION ALL SELECT 1, 2 UNION ALL SELECT 0, 1), 
+	bytes AS 
+	(SELECT 1 M UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL 
+	SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL 
+	SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)
+	-- CPU Affinity is shown highest to lowest CPU ID
+	SELECT @affinity64mask = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
+		ELSE RIGHT((SELECT ((CONVERT(tinyint, SUBSTRING(CONVERT(binary(9), [value]), M, 1)) & E) / E) AS [text()] 
+			FROM bits CROSS JOIN bytes
+			ORDER BY M, N DESC
+			FOR XML PATH('')), @cpucount) END
+	FROM sys.configurations (NOLOCK)
+	WHERE name = 'affinity64 mask';
+END;
+
+SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),LEN(@affinity64mask)-32)) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,32) END
 
 SET @cpuaffin_fixed = @cpuaffin
 
@@ -1704,15 +1728,15 @@ SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], feature_nam
 UNION ALL
 SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Change_Tracking'' AS feature_name FROM sys.change_tracking_databases (NOLOCK) WHERE database_id = DB_ID()
 UNION ALL
-SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Row_Level_Security'' AS feature_name FROM sys.security_policies (NOLOCK)
-UNION ALL
-SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Fine_grained_auditing'' AS feature_name FROM sys.database_audit_specifications (NOLOCK)
-UNION ALL
-SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Always_Encrypted'' AS feature_name FROM sys.column_master_keys (NOLOCK)'
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Fine_grained_auditing'' AS feature_name FROM sys.database_audit_specifications (NOLOCK)'
 
 			IF @sqlmajorver >= 13
 			SET @sqlcmd = @sqlcmd + CHAR(10) + 'UNION ALL
 SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Polybase'' AS feature_name FROM sys.external_data_sources (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Row_Level_Security'' AS feature_name FROM sys.security_policies (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Always_Encrypted'' AS feature_name FROM sys.column_master_keys (NOLOCK)
 UNION ALL
 SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Dynamic_Data_Masking'' AS feature_name FROM sys.masked_columns (NOLOCK) WHERE is_masked = 1'
 
@@ -12701,4 +12725,4 @@ EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
 RAISERROR (N'All done!', 10, 1) WITH NOWAIT
-GO
+GO
