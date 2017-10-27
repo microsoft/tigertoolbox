@@ -1121,7 +1121,7 @@ BEGIN
 	WHERE name = 'affinity64 mask';
 END;
 
-SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),LEN(@affinity64mask)-32)) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,32) END
+SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),LEN(@affinity64mask)-(@cpucount-32))) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,@cpucount) END
 
 SET @cpuaffin_fixed = @cpuaffin
 
