@@ -1129,9 +1129,9 @@ IF @numa > 1
 BEGIN
 	-- format binary mask by node for better reading
 	SET @i = @cpucount/@numa + 1
-	WHILE @i <= @cpucount
+	WHILE @i < @cpucount + @numa
 	BEGIN
-		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin, @i, 1))
+		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
 		SET @i = @i + @cpucount/@numa + 1
 	END
 END
@@ -2086,9 +2086,9 @@ DECLARE /*@cpucount int, @numa int, */@affined_cpus int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300)
 SET @cpuaffin_fixed = @cpuaffin
 SET @i = @cpucount/@numa + 1
-WHILE @i <= @cpucount
+WHILE @i < @cpucount + @numa
 BEGIN
-	SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin, @i, 1))
+	SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
 	SET @i = @i + @cpucount/@numa + 1
 END
 */
