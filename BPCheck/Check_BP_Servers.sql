@@ -1010,7 +1010,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(255), @cpucount int, @numa int
-DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(64)
+DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(64), @cpuover32 int
 
 IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
 BEGIN
@@ -1121,7 +1121,10 @@ BEGIN
 	WHERE name = 'affinity64 mask';
 END;
 
-SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),LEN(@affinity64mask)-(@cpucount-32))) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,@cpucount) END
+IF @cpucount > 32
+SELECT @cpuover32 = ABS(LEN(@affinity64mask) - (@cpucount-32))
+
+SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),@cpuover32)) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,@cpucount) END
 
 SET @cpuaffin_fixed = @cpuaffin
 
