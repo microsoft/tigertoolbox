@@ -1,7 +1,12 @@
-Change log and other information available at http://aka.ms/AdaptiveIndexDefrag
+Change log available in http://github.com/Microsoft/tigertoolbox/blob/master/AdaptiveIndexDefrag/CHANGELOG.txt.
+
+Options list available in http://github.com/Microsoft/tigertoolbox/blob/master/AdaptiveIndexDefrag/OPTIONS.md.
 
 **What’s the purpose of AdaptiveIndexDefrag?**
 The purpose for this procedure to perform an intelligent defrag on one or more indexes and statistics for one or more databases. In a nutshell, this procedure automatically chooses whether to rebuild or reorganize an index according to its fragmentation level, amongst other parameters, like if page locks are allowed or the existence of LOBs, while keeping statistics updated with a linear threshold. All within a specified time frame you choose, defaulting to 8 hours. The defrag priority can also be set, either on size, fragmentation level or index usage (based on range scan count), which is the default. It also handles partitioned indexes, columnstore indexes, indexes in In-Memory tables, statistics update (table-wide or only those related to indexes), rebuilding with the original fill factor or index padding and online operations, to name a few options.
+
+**Does it only handle index and statistics?**
+Yes, but it is used as a part of a full maintenance solution that also handles database integrity checks, errorlog cycling and other relevant SQL Server maintenance routines that every database administrator needs to handle. See more information in http://github.com/Microsoft/tigertoolbox/tree/master/MaintenanceSolution.
 
 **On what version of SQL can I use it?**
 This procedure can be used from SQL Server 2005 SP2 onwards, because of the DMVs and DMFs involved.
