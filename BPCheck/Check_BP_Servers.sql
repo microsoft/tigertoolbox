@@ -977,6 +977,12 @@ FROM sys.dm_hadr_database_replica_states'
 			is_database_joined, recovery_lsn, truncation_lsn 
 		FROM sys.dm_hadr_database_replica_cluster_states;
 	END
+	IF @sqlmajorver >= 13 AND @IsHadrEnabled = 1
+	BEGIN
+		IF EXISTS (SELECT 1 FROM sys.availability_groups where db_failover = 0) 
+	    SELECT 'Information' AS [Category], 'AlwaysOn_Replica_Cluster_Database_Health_Detection' AS [Information], '[INFORMATION: Consider enabling Database Health Detection]'
+		SELECT 'Information' AS [Category], 'AlwaysOn_Replica_Cluster_Database_Health_Detection' AS [Information], name, failure_condition_level, db_failover FROM sys.availability_groups where db_failover = 0
+	END
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
