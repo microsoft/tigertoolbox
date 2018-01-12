@@ -403,7 +403,8 @@ v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bj
 						Fixed Feature usage subsection when running on SQL 2014 or below;
 						Fixed CPU Affinity bit mask.
 v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
-						Fixed max server memory calculations.
+						Fixed max server memory calculations;
+						Added check for Database Health Detection in Server_checks section (thanks Anders Uhl Pedersen).
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -978,12 +979,6 @@ FROM sys.dm_hadr_database_replica_states'
 		SELECT 'Information' AS [Category], 'AlwaysOn_Replica_Cluster' AS [Information], replica_id, group_database_id, database_name, is_failover_ready, is_pending_secondary_suspend, 
 			is_database_joined, recovery_lsn, truncation_lsn 
 		FROM sys.dm_hadr_database_replica_cluster_states;
-	END
-	IF @sqlmajorver >= 13 AND @IsHadrEnabled = 1
-	BEGIN
-		IF EXISTS (SELECT 1 FROM sys.availability_groups where db_failover = 0) 
-	    SELECT 'Information' AS [Category], 'AlwaysOn_Replica_Cluster_Database_Health_Detection' AS [Information], '[INFORMATION: Consider enabling Database Health Detection]'
-		SELECT 'Information' AS [Category], 'AlwaysOn_Replica_Cluster_Database_Health_Detection' AS [Information], name, failure_condition_level, db_failover FROM sys.availability_groups where db_failover = 0
 	END
 END;
 
@@ -3958,6 +3953,16 @@ SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Cluster_Quorum'' AS [Check], 
 		ELSE ''[OK]'' END AS [Deviation], 
 	QUOTENAME(quorum_type_desc) AS QuorumModel
 FROM sys.dm_hadr_cluster;'
+
+	EXECUTE sp_executesql @sqlcmd
+END;
+
+IF @sqlmajorver >= 13 AND @IsHadrEnabled = 1
+BEGIN
+	SET @sqlcmd	= N'IF EXISTS (SELECT 1 FROM sys.availability_groups where db_failover = 0) 
+	SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Replica_Cluster_Database_Health_Detection'' AS [Information], ''[INFORMATION: Consider enabling Database Health Detection]''
+	SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Replica_Cluster_Database_Health_Detection'' AS [Information], name, failure_condition_level, db_failover 
+	FROM sys.availability_groups where db_failover = 0;'
 
 	EXECUTE sp_executesql @sqlcmd
 END;
