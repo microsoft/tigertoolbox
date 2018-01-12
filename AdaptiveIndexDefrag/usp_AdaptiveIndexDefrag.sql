@@ -669,6 +669,7 @@ v1.6.5.6 - 10/16/2017 - Added logging for fragmentation analysis.
 v1.6.5.7 - 10/19/2017 - Extended support for CCI under SQL 2016 and above.
 v1.6.6 	- 1/11/2018 - Added support to set or reset compression setting on all rowstore indexes;
 						Added support for MAXDOP in statistics operations.
+v1.6.6.1 - 1/12/2018 - Improved stats operations logging: stats that were updated as part of index rebuild, or where stats update was not needed at runtime are now logged. Columns [rows] and [rows_sampled] will have value -1.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1653,7 +1654,7 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 						SET @analysis_id = SCOPE_IDENTITY();
 					
 						BEGIN TRY
-							SELECT @ColumnStoreGetIXSQL = 'USE [' + DB_NAME(@dbID) + ']; SELECT @dbID_In, DB_NAME(@dbID_In), rg.object_id, rg.index_id, rg.partition_number, SUM((ISNULL(rg.deleted_rows,1)*100)/rg.total_rows) AS [fragmentation], SUM(ISNULL(rg.size_in_bytes,1)/1024/8) AS [simulated_page_count], SUM(rg.total_rows) AS total_rows, GETDATE() AS [scanDate]	
+							SELECT @ColumnStoreGetIXSQL = 'USE [' + DB_NAME(@dbID) + ']; SELECT @dbID_In, QUOTENAME(DB_NAME(@dbID_In)), rg.object_id, rg.index_id, rg.partition_number, SUM((ISNULL(rg.deleted_rows,1)*100)/rg.total_rows) AS [fragmentation], SUM(ISNULL(rg.size_in_bytes,1)/1024/8) AS [simulated_page_count], SUM(rg.total_rows) AS total_rows, GETDATE() AS [scanDate]	
 FROM ' + CASE WHEN @sqlmajorver = 12 THEN 'sys.column_store_row_groups' ELSE 'sys.dm_db_column_store_row_group_physical_stats' END + ' rg WITH (NOLOCK)
 WHERE rg.object_id = @objectID_In
 	AND rg.index_id = @indexID_In
@@ -2534,7 +2535,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 					/* Log actions */		
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, sqlStatement)		
-					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @rows, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
+					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @record_count, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
 
 					SET @statsUpdate_id = SCOPE_IDENTITY();
 
@@ -2595,6 +2596,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					UPDATE dbo.tbl_AdaptiveIndexDefrag_Stats_Working		
 					SET updateDate = GETDATE(), printStatus = 1	
 					WHERE dbID = @dbID AND objectID = @objectID AND statsID = @statsID AND partitionNumber = @partitionNumber;
+					
+					/* Log actions */		
+					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
+					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
 				END
 				ELSE IF @Exec_Print = 0 
 				BEGIN
@@ -2621,6 +2626,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					UPDATE dbo.tbl_AdaptiveIndexDefrag_Stats_Working		
 					SET printStatus = 1
 					WHERE dbID = @dbID AND objectID = @objectID AND statsID = @statsID AND partitionNumber = @partitionNumber;
+					
+					/* Log actions */		
+					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
+					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
 				END
 			END
 		END;
@@ -2820,7 +2829,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 					/* Log actions */
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, sqlStatement)		
-					SELECT @dbID, @dbName, @statsobjectID, @statsobjectName, @statsID, @statsName, @partitionNumber, @rows, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
+					SELECT @dbID, @dbName, @statsobjectID, @statsobjectName, @statsID, @statsName, @partitionNumber, @record_count, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
 					
 					SET @statsUpdate_id = SCOPE_IDENTITY();
 
@@ -2875,6 +2884,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					UPDATE dbo.tbl_AdaptiveIndexDefrag_Stats_Working
 					SET updateDate = GETDATE(), printStatus = 1
 					WHERE dbID = @dbID AND objectID = @statsobjectID AND statsID = @statsID AND partitionNumber = @partitionNumber;
+					
+					/* Log actions */		
+					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
+					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
 				END
 				ELSE IF @Exec_Print = 0
 				BEGIN
@@ -2900,6 +2913,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					UPDATE dbo.tbl_AdaptiveIndexDefrag_Stats_Working		
 					SET printStatus = 1	
 					WHERE dbID = @dbID AND objectID = @statsobjectID AND statsID = @statsID AND partitionNumber = @partitionNumber;
+					
+					/* Log actions */		
+					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
+					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
 				END
 			END
 			IF (@printCmds = 1 OR @debugMode = 1)		
