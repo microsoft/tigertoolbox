@@ -375,7 +375,7 @@ v2.1 - 9/30/2016 - Fixed issue with LPIM check in SQL Server 2005;
 v2.1.1 - 10/01/2016 - Fixed issues with Database Information subsection in SQL 2005 to 2008R2.
 v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options check;
 						Added W10 Aniversary Edition to OS versions;
-						Fixed Indexing per Table subsection accounting for hypotheical indexes.
+						Fixed Indexing per Table subsection accounting for hypothetical indexes.
 v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 						Fixed negative CPU usage in avg cpu usage last 2h check.
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
@@ -402,6 +402,8 @@ v2.2.1 - 10/19/2017 - Corrected several issues with support for SQL 2017 (thanks
 v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bjoern Steinmetz);
 						Fixed Feature usage subsection when running on SQL 2014 or below;
 						Fixed CPU Affinity bit mask.
+v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
+						Fixed max server memory calculations.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -2365,22 +2367,22 @@ SELECT 'Memory_checks' AS [Category], 'Memory_issues_CommitedMem' AS [Check],
 
 SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 	CASE WHEN @arch IS NULL THEN '[WARNING: Could not determine architecture needed for check]'
-		WHEN (@systemmem <= 2048 AND @maxservermem > @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 2049 AND 4096 AND @maxservermem > @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 4097 AND 8192 AND @maxservermem > @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 8193 AND 12288 AND @maxservermem > @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 12289 AND 24576 AND @maxservermem > @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 24577 AND 32768 AND @maxservermem > @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem > 32768 AND @maxservermem > @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) THEN '[WARNING: Not at the recommended MaxMem setting for this server memory configuration, with a single instance]'
+		WHEN (@systemmem <= 2048 AND @maxservermem > @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 2049 AND 4096 AND @maxservermem > @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 4097 AND 8192 AND @maxservermem > @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 8193 AND 12288 AND @maxservermem > @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 12289 AND 24576 AND @maxservermem > @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 24577 AND 32768 AND @maxservermem > @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem > 32768 AND @maxservermem > @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) THEN '[WARNING: Not at the recommended MaxMem setting for this server memory configuration, with a single instance]'
 		ELSE '[OK]'
 	END AS [Deviation],
-	CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 8193 AND 12288 THEN @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+	CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 8193 AND 12288 THEN @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
 	END AS [Recommended_MaxMem_MB_SingleInstance],
 	CASE WHEN @systemmem <= 2048 THEN 512
 		WHEN @systemmem BETWEEN 2049 AND 4096 THEN 819
@@ -9601,7 +9603,7 @@ WHERE sp.[rows] > 0
 
 		IF (SELECT COUNT(*) FROM #tblStatsSamp) > 0
 		BEGIN
-			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Check], '[WARNING: Some statistics have sampling rates less than 25 pct, consider updating with a larger sample or fullscan]' AS [Deviation]
+			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Check], '[WARNING: Some statistics have sampling rates less than 25 pct, consider updating with a larger sample or fullscan if key is not uniformly distributed]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [tableName] AS [Table_Name], [stats_id] AS [statsID], [stat_name] AS [Statistic_Name], 
 				last_updated, [rows], rows_sampled, CAST((rows_sampled/([rows]*1.00))*100.0 AS DECIMAL(5,2)) AS [Sample_Pct],
 				CASE WHEN su.auto_created = 0 AND su.user_created = 0 THEN 'Index_Statistic'
@@ -10156,7 +10158,7 @@ OPTION (MAXDOP 2);'
 			SELECT @ErrorMessage = 'Duplicate or Redundant indexes subsection - Error raised in TRY block in database ' + @dbname +'. ' + ERROR_MESSAGE()
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
-
+		
 		UPDATE #tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid;
@@ -10257,6 +10259,7 @@ In this case, make the appropriate changes in the clustered index (making it uni
 		END;
 		
 		RAISERROR (N'    |-Starting index search in sql modules...', 10, 1) WITH NOWAIT
+
 		DECLARE Dup_HardCoded CURSOR FAST_FORWARD FOR SELECT I.[DatabaseName],I.[indexName] 
 		FROM #tblIxs1 I INNER JOIN #tblIxs1 I2
 			ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID] 
@@ -11131,7 +11134,7 @@ END'')
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
 	CREATE TABLE #IndexCreation (
 		[database_id] int,
-		DBName NVARCHAR(255),
+		DBName NVARCHAR(1000),
 		[Table] NVARCHAR(255),
 		[ix_handle] int,
 		[User_Hits_on_Missing_Index] int,
@@ -11151,7 +11154,7 @@ END'')
 	DROP TABLE #IndexRedundant;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
 	CREATE TABLE #IndexRedundant (
-		DBName NVARCHAR(255),
+		DBName NVARCHAR(1000),
 		[Table] NVARCHAR(255),
 		[Ix_Name] NVARCHAR(255),
 		[ix_handle] int,
