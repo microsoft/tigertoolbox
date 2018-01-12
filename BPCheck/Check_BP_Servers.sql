@@ -664,7 +664,7 @@ DECLARE @sqlminorver int, @sqlbuild int, @clustered bit, @osver VARCHAR(5), @ost
 DECLARE @existout int, @FSO int, @FS int, @OLEResult int, @FileID int
 DECLARE @FileName VARCHAR(200), @Text1 VARCHAR(2000), @CMD2 VARCHAR(100)
 DECLARE @src VARCHAR(255), @desc VARCHAR(255), @psavail VARCHAR(20), @psver tinyint
-DECLARE @dbid int, @dbname VARCHAR(1000)
+DECLARE @dbid int, @dbname NVARCHAR(1000)
 
 SELECT @instancename = CONVERT(VARCHAR(128),SERVERPROPERTY('InstanceName')) 
 SELECT @server = RTRIM(CONVERT(VARCHAR(128), SERVERPROPERTY('MachineName')))
@@ -1272,12 +1272,12 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Database Information', 10, 1) WITH NOWAIT
 RAISERROR (N'  |-Building DB list', 10, 1) WITH NOWAIT
-DECLARE @curdbname VARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary_role_allow_connections tinyint, @state tinyint
+DECLARE @curdbname NVARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary_role_allow_connections tinyint, @state tinyint
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
 DROP TABLE #tmpdbs0;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
-CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [compatibility_level] tinyint, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
+CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] NVARCHAR(1000), [compatibility_level] tinyint, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 DROP TABLE #tmpdbfiledetail;
@@ -1655,7 +1655,7 @@ BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], st.name, ss.name, stb.name, st.type_desc, st.parent_class_desc, st.create_date, st.modify_date, st.is_disabled, st.is_instead_of_trigger, st.is_not_for_replication
+SELECT N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], st.name, ss.name, stb.name, st.type_desc, st.parent_class_desc, st.create_date, st.modify_date, st.is_disabled, st.is_instead_of_trigger, st.is_not_for_replication
 FROM sys.triggers AS st
 INNER JOIN sys.tables stb ON st.parent_id = stb.[object_id]
 INNER JOIN sys.schemas ss ON stb.[schema_id] = ss.[schema_id]
@@ -1867,7 +1867,7 @@ DECLARE @MSdb int
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
 DROP TABLE #tmpdbs1;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
-CREATE TABLE #tmpdbs1 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [role] tinyint, [secondary_role_allow_connections] tinyint, isdone bit)
+CREATE TABLE #tmpdbs1 (id int IDENTITY(1,1), [dbid] int, [dbname] NVARCHAR(1000), [role] tinyint, [secondary_role_allow_connections] tinyint, isdone bit)
 
 RAISERROR (N'|-Excluding MS shipped by standard names and databases belonging to non-readable AG secondary replicas (if available)', 10, 1) WITH NOWAIT
 -- Ignore MS shipped databases and databases belonging to non-readable AG secondary replicas
@@ -2054,7 +2054,7 @@ RAISERROR (N'|-Applying 2nd layer of specific database scope, if any', 10, 1) WI
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
 DROP TABLE #tmpdbs_userchoice;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
-CREATE TABLE #tmpdbs_userchoice ([dbid] int PRIMARY KEY, [dbname] VARCHAR(1000))
+CREATE TABLE #tmpdbs_userchoice ([dbid] int PRIMARY KEY, [dbname] NVARCHAR(1000))
 	
 IF @dbScope IS NOT NULL
 BEGIN
@@ -5105,12 +5105,12 @@ EXEC ('DBCC TRACESTATUS WITH NO_INFOMSGS')
 
 IF @sqlmajorver >= 11
 BEGIN
-	DECLARE @dbname0 VARCHAR(1000), @dbid0 int, @sqlcmd0 NVARCHAR(4000), @has_colstrix int
+	DECLARE @dbname0 NVARCHAR(1000), @dbid0 int, @sqlcmd0 NVARCHAR(4000), @has_colstrix int
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
 	DROP TABLE #tblColStoreIXs;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
-	CREATE TABLE #tblColStoreIXs ([DBName] VARCHAR(1000), [Schema] VARCHAR(100), [Table] VARCHAR(255), [Object] VARCHAR(255));
+	CREATE TABLE #tblColStoreIXs ([DBName] NVARCHAR(1000), [Schema] VARCHAR(100), [Table] VARCHAR(255), [Object] VARCHAR(255));
 
 	UPDATE #tmpdbs0
 	SET isdone = 0;
@@ -6364,7 +6364,7 @@ BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Object_Name], so.type_desc, tk.Keyword, tk.DeprecatedIn, tk.DiscontinuedIn
+SELECT N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Object_Name], so.type_desc, tk.Keyword, tk.DeprecatedIn, tk.DiscontinuedIn
 FROM sys.sql_modules sm (NOLOCK)
 INNER JOIN sys.objects so (NOLOCK) ON sm.[object_id] = so.[object_id]
 INNER JOIN sys.schemas ss (NOLOCK) ON so.[schema_id] = ss.[schema_id]
@@ -6777,13 +6777,13 @@ END;
 RAISERROR (N'  |-Starting VLF', 10, 1) WITH NOWAIT
 IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1
 BEGIN
-	DECLARE /*@dbid int,*/ @query VARCHAR(1000)/*, @dbname VARCHAR(1000)*/, @count int, @count_used int, @logsize DECIMAL(20,1), @usedlogsize DECIMAL(20,1), @avgvlfsize DECIMAL(20,1)
+	DECLARE /*@dbid int,*/ @query NVARCHAR(1000)/*, @dbname VARCHAR(1000)*/, @count int, @count_used int, @logsize DECIMAL(20,1), @usedlogsize DECIMAL(20,1), @avgvlfsize DECIMAL(20,1)
 	DECLARE @potsize DECIMAL(20,1), @n_iter int, @n_iter_final int, @initgrow DECIMAL(20,1), @n_init_iter int
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
 	DROP TABLE #log_info1;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
-	CREATE TABLE #log_info1 (dbname VARCHAR(100), 
+	CREATE TABLE #log_info1 (dbname NVARCHAR(100), 
 		Current_log_size_MB DECIMAL(20,1), 
 		Used_Log_size_MB DECIMAL(20,1),
 		Potential_log_size_MB DECIMAL(20,1), 
@@ -6798,7 +6798,7 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
 	DROP TABLE #log_info2;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
-	CREATE TABLE #log_info2 (dbname VARCHAR(100), 
+	CREATE TABLE #log_info2 (dbname NVARCHAR(100), 
 		Current_VLFs int, 
 		VLF_size_KB DECIMAL(20,1), 
 		growth_iteration int)
@@ -6824,7 +6824,7 @@ BEGIN
 				OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
 				OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
 			BEGIN
-				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to potential of SQL Injection'
+				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(NVARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to potential of SQL Injection'
 				RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
 			END
 			ELSE
@@ -6840,7 +6840,8 @@ BEGIN
 					[status] tinyint,
 					parity tinyint,
 					create_lsn numeric(25,0))
-				SET @query = 'DBCC LOGINFO (' + '''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''') WITH NO_INFOMSGS'
+				SET @query = N'DBCC LOGINFO (N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + N''') WITH NO_INFOMSGS'
+
 				IF @sqlmajorver < 11
 				BEGIN
 					INSERT INTO #log_info3 (fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn)
@@ -10075,15 +10076,15 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
 	DROP TABLE #tblIxs1;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
-	CREATE TABLE #tblIxs1 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
-		[indexID] int, [indexName] VARCHAR(200), [indexType] tinyint, is_primary_key bit, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit, has_filter bit, filter_definition NVARCHAR(max),
+	CREATE TABLE #tblIxs1 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), 
+		[indexID] int, [indexName] NVARCHAR(200), [indexType] tinyint, is_primary_key bit, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit, has_filter bit, filter_definition NVARCHAR(max),
 		KeyCols VARCHAR(4000), KeyColsOrdered VARCHAR(4000), IncludedCols VARCHAR(4000) NULL, IncludedColsOrdered VARCHAR(4000) NULL, AllColsOrdered VARCHAR(4000) NULL, [KeyCols_data_length_bytes] int,
 		CONSTRAINT PK_Ixs PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID]));
 		
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
 	DROP TABLE #tblCode;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
-	CREATE TABLE #tblCode ([DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [indexName] VARCHAR(200), type_desc NVARCHAR(60));
+	CREATE TABLE #tblCode ([DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), [indexName] NVARCHAR(200), type_desc NVARCHAR(60));
 
 	UPDATE #tmpdbs1
 	SET isdone = 0;
@@ -10093,7 +10094,7 @@ BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + ';
-SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name,
+SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name,
 	mst.[object_id] AS objectID, t.name AS schemaName, mst.[name] AS objectName, mi.index_id AS indexID, 
 	mi.[name] AS Index_Name, mi.[type] AS [indexType], mi.is_primary_key, mi.[is_unique_constraint], mi.is_unique, mi.is_disabled,
 	mi.fill_factor, mi.is_padded, ' + CASE WHEN @sqlmajorver > 9 THEN 'mi.has_filter, mi.filter_definition,' ELSE 'NULL, NULL,' END + ' 
@@ -10155,7 +10156,7 @@ OPTION (MAXDOP 2);'
 			SELECT @ErrorMessage = 'Duplicate or Redundant indexes subsection - Error raised in TRY block in database ' + @dbname +'. ' + ERROR_MESSAGE()
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
-		
+
 		UPDATE #tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid;
@@ -10256,7 +10257,6 @@ In this case, make the appropriate changes in the clustered index (making it uni
 		END;
 		
 		RAISERROR (N'    |-Starting index search in sql modules...', 10, 1) WITH NOWAIT
-
 		DECLARE Dup_HardCoded CURSOR FAST_FORWARD FOR SELECT I.[DatabaseName],I.[indexName] 
 		FROM #tblIxs1 I INNER JOIN #tblIxs1 I2
 			ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID] 
@@ -10287,12 +10287,12 @@ In this case, make the appropriate changes in the clustered index (making it uni
 		FETCH NEXT FROM Dup_HardCoded INTO @DatabaseName,@indexName
 		WHILE (@@FETCH_STATUS = 0)
 		BEGIN
-			SET @sqlcmd = 'USE [' + @DatabaseName + '];
-SELECT ''' + @DatabaseName + ''' AS [database], ss.name AS [schemaName], so.name AS [objectName], ''' + @indexName + ''' AS indexName, so.type_desc
+			SET @sqlcmd = N'USE [' + @DatabaseName + N'];
+SELECT ''' + @DatabaseName + N''' AS [database], ss.name AS [schemaName], so.name AS [objectName], ''' + @indexName + N''' AS indexName, so.type_desc
 FROM sys.sql_modules sm
 INNER JOIN sys.objects so ON sm.[object_id] = so.[object_id]
 INNER JOIN sys.schemas ss ON ss.[schema_id] = so.[schema_id]
-WHERE sm.[definition] LIKE ''%' + @indexName + '%'''
+WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 
 			INSERT INTO #tblCode
 			EXECUTE sp_executesql @sqlcmd
@@ -10381,8 +10381,8 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
 	DROP TABLE #tblIxs2;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
-	CREATE TABLE #tblIxs2 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
-		[indexID] int, [indexName] VARCHAR(200), [Hits] bigint NULL, [Reads_Ratio] DECIMAL(5,2), [Writes_Ratio] DECIMAL(5,2),
+	CREATE TABLE #tblIxs2 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), 
+		[indexID] int, [indexName] NVARCHAR(200), [Hits] bigint NULL, [Reads_Ratio] DECIMAL(5,2), [Writes_Ratio] DECIMAL(5,2),
 		user_updates bigint, last_user_seek DATETIME NULL, last_user_scan DATETIME NULL, last_user_lookup DATETIME NULL, 
 		last_user_update DATETIME NULL, is_unique bit, [type] tinyint, is_primary_key bit, is_unique_constraint bit, is_disabled bit,
 		CONSTRAINT PK_Ixs2 PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID]))
@@ -10686,9 +10686,9 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
 	DROP TABLE #tblIxs6;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
-	CREATE TABLE #tblIxs6 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
-		[indexID] int, [indexName] VARCHAR(200), [indexType] tinyint, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit,
-		KeyCols VARCHAR(4000), KeyColsOrdered VARCHAR(4000), Key_has_GUID int,
+	CREATE TABLE #tblIxs6 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), 
+		[indexID] int, [indexName] NVARCHAR(200), [indexType] tinyint, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit,
+		KeyCols NVARCHAR(4000), KeyColsOrdered NVARCHAR(4000), Key_has_GUID int,
 		CONSTRAINT PK_Ixs3 PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID]));
 
 	UPDATE #tmpdbs1
@@ -10771,8 +10771,8 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
 	DROP TABLE #tblFK;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
-	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] VARCHAR(200), [parent_schema_name] VARCHAR(100), 
-	[parent_table_name] VARCHAR(200), parent_columns VARCHAR(4000), [referenced_schema] VARCHAR(100), [referenced_table_name] VARCHAR(200), referenced_columns VARCHAR(4000),
+	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] NVARCHAR(200), [parent_schema_name] NVARCHAR(100), 
+	[parent_table_name] NVARCHAR(200), parent_columns NVARCHAR(4000), [referenced_schema] NVARCHAR(100), [referenced_table_name] NVARCHAR(200), referenced_columns NVARCHAR(4000),
 	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name]))
 	
 	UPDATE #tmpdbs1
@@ -10899,17 +10899,17 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
 	DROP TABLE #tblIxs3;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
-	CREATE TABLE #tblIxs3 ([Operation] tinyint, [databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200))
+	CREATE TABLE #tblIxs3 ([Operation] tinyint, [databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200))
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
 	DROP TABLE #tblIxs4;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
-	CREATE TABLE #tblIxs4 ([databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [CntCols] int, [CntIxs] int)
+	CREATE TABLE #tblIxs4 ([databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), [CntCols] int, [CntIxs] int)
 	
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
 	DROP TABLE #tblIxs5;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
-	CREATE TABLE #tblIxs5 ([databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [indexName] VARCHAR(200), [indexLocation]  VARCHAR(200))
+	CREATE TABLE #tblIxs5 ([databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), [indexName] NVARCHAR(200), [indexLocation]  NVARCHAR(200))
 
 	UPDATE #tmpdbs1
 	SET isdone = 0
@@ -11042,7 +11042,7 @@ END;
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Missing Indexes', 10, 1) WITH NOWAIT
-	DECLARE @IC VARCHAR(4000), @ICWI VARCHAR(4000), @editionCheck bit
+	DECLARE @IC NVARCHAR(4000), @ICWI NVARCHAR(4000), @editionCheck bit
 
 	/* Refer to http://msdn.microsoft.com/en-us/library/ms174396.aspx */	
 	IF (SELECT SERVERPROPERTY('EditionID')) IN (1804890536, 1872460670, 610778273, -2117995310)	
@@ -11131,17 +11131,17 @@ END'')
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
 	CREATE TABLE #IndexCreation (
 		[database_id] int,
-		DBName VARCHAR(255),
-		[Table] VARCHAR(255),
+		DBName NVARCHAR(255),
+		[Table] NVARCHAR(255),
 		[ix_handle] int,
 		[User_Hits_on_Missing_Index] int,
 		[Estimated_Improvement_Percent] DECIMAL(5,2),
 		[Avg_Total_User_Cost] int,
 		[Unique_Compiles] int,
 		[Score] NUMERIC(19,3),
-		[KeyCols] VARCHAR(1000),
-		[IncludedCols] VARCHAR(4000),
-		[Ix_Name] VARCHAR(255),
+		[KeyCols] NVARCHAR(1000),
+		[IncludedCols] NVARCHAR(4000),
+		[Ix_Name] NVARCHAR(255),
 		[AllCols] NVARCHAR(max),
 		[KeyColsOrdered] NVARCHAR(max),
 		[IncludedColsOrdered] NVARCHAR(max)
@@ -11151,13 +11151,13 @@ END'')
 	DROP TABLE #IndexRedundant;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
 	CREATE TABLE #IndexRedundant (
-		DBName VARCHAR(255),
-		[Table] VARCHAR(255),
-		[Ix_Name] VARCHAR(255),
+		DBName NVARCHAR(255),
+		[Table] NVARCHAR(255),
+		[Ix_Name] NVARCHAR(255),
 		[ix_handle] int,
-		[KeyCols] VARCHAR(1000),
-		[IncludedCols] VARCHAR(4000),
-		[Redundant_With] VARCHAR(255)
+		[KeyCols] NVARCHAR(1000),
+		[IncludedCols] NVARCHAR(4000),
+		[Redundant_With] NVARCHAR(255)
 		)
 
 	INSERT INTO #IndexCreation
@@ -11329,12 +11329,12 @@ RAISERROR (N'|-Starting Objects naming conventions Checks', 10, 1) WITH NOWAIT
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
 DROP TABLE #tmpobjectnames;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
-CREATE TABLE #tmpobjectnames ([DBName] sysname, [schemaName] VARCHAR(100), [Object] VARCHAR(255), [Col] VARCHAR(255), [type] CHAR(2), type_desc VARCHAR(60));
+CREATE TABLE #tmpobjectnames ([DBName] sysname, [schemaName] NVARCHAR(100), [Object] NVARCHAR(255), [Col] NVARCHAR(255), [type] CHAR(2), type_desc NVARCHAR(60));
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
 DROP TABLE #tmpfinalobjectnames;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
-CREATE TABLE #tmpfinalobjectnames ([Deviation] tinyint, [DBName] sysname, [schemaName] VARCHAR(100), [Object] VARCHAR(255), [Col] VARCHAR(255), type_desc VARCHAR(60), [Comment] VARCHAR(500) NULL);
+CREATE TABLE #tmpfinalobjectnames ([Deviation] tinyint, [DBName] sysname, [schemaName] NVARCHAR(100), [Object] NVARCHAR(255), [Col] NVARCHAR(255), type_desc NVARCHAR(60), [Comment] NVARCHAR(500) NULL);
 
 UPDATE #tmpdbs1
 SET isdone = 0
@@ -11993,7 +11993,7 @@ RAISERROR (N'  |-Starting DBCC CHECKDB, Direct Catalog Updates and Data Purity',
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
 DROP TABLE #output_dbinfo;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
-CREATE TABLE #output_dbinfo (ParentObject VARCHAR(255), [Object] VARCHAR(255), Field VARCHAR(255), [value] VARCHAR(255))
+CREATE TABLE #output_dbinfo (ParentObject NVARCHAR(255), [Object] NVARCHAR(255), Field NVARCHAR(255), [value] NVARCHAR(255))
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
 DROP TABLE #dbinfo;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
@@ -12012,13 +12012,13 @@ BEGIN
 			OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
 			OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
 		BEGIN
-			SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to possible SQL Injection'
+			SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(NVARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to possible SQL Injection'
 			RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
 		END
 		ELSE
 		BEGIN
 			SET @dbname = RTRIM(LTRIM(@dbname))
-			SET @query = 'DBCC DBINFO(''' + @dbname + ''') WITH TABLERESULTS, NO_INFOMSGS'
+			SET @query = N'DBCC DBINFO(N''' + @dbname + N''') WITH TABLERESULTS, NO_INFOMSGS'
 
 			INSERT INTO #output_dbinfo
 			EXEC (@query)
