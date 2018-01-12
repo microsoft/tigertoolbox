@@ -343,3 +343,5 @@ v2.2.1 - 10/19/2017 - Corrected several issues with support for SQL 2017 (thanks
 v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bjoern Steinmetz);
 						Fixed Feature usage subsection when running on SQL 2014 or below;
 						Fixed CPU Affinity bit mask.
+v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
+						Fixed max server memory calculations.
