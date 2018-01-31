@@ -42,7 +42,7 @@ BEGIN
 
 			UPDATE #tmpclearPlans 
 			SET [IsDone] = 1 
-			WHERE plan_id = @clearPlan
+			WHERE plan_id = @clearPlan AND query_id = @clearQry
 		END;
 
 		PRINT ''- Cleared possibly affected plans in database [' + @userDB + ']''
