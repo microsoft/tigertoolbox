@@ -23,21 +23,21 @@ BEGIN
 	-- PRINT 'Working on database ' + @userDB
 
 	EXEC ('USE [' + @userDB + '];
-DECLARE @clearPlan bigint;
+DECLARE @clearPlan bigint, @clearQry bigint;
 IF EXISTS (SELECT [actual_state] FROM sys.database_query_store_options WHERE [actual_state] IN (1,2))
 BEGIN
 	IF EXISTS (SELECT plan_id FROM sys.query_store_plan WHERE engine_version = ''14.0.3008.27'')
 	BEGIN
 		DROP TABLE IF EXISTS #tmpclearPlans;
 
-		SELECT plan_id, 0 AS [IsDone]
+		SELECT plan_id, query_id, 0 AS [IsDone]
 		INTO #tmpclearPlans
 		FROM sys.query_store_plan WHERE engine_version = ''14.0.3008.27''
 
 		WHILE (SELECT COUNT(plan_id) FROM #tmpclearPlans WHERE [IsDone] = 0) > 0
 		BEGIN
-			SELECT TOP 1 @clearPlan = plan_id FROM #tmpclearPlans WHERE [IsDone] = 0
-			EXECUTE sys.sp_query_store_unforce_plan @clearPlan;
+			SELECT TOP 1 @clearPlan = plan_id, @clearQry = query_id FROM #tmpclearPlans WHERE [IsDone] = 0
+			EXECUTE sys.sp_query_store_unforce_plan @clearQry, @clearPlan;
 			EXECUTE sys.sp_query_store_remove_plan @clearPlan;
 
 			UPDATE #tmpclearPlans 
