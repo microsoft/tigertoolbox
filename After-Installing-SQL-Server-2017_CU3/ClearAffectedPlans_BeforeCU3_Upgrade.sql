@@ -37,7 +37,8 @@ BEGIN
 		WHILE (SELECT COUNT(plan_id) FROM #tmpclearPlans WHERE [IsDone] = 0) > 0
 		BEGIN
 			SELECT TOP 1 @clearPlan = plan_id FROM #tmpclearPlans WHERE [IsDone] = 0
-			EXECUTE sys.sp_query_store_remove_plan @clearPlan
+			EXECUTE sys.sp_query_store_unforce_plan @clearPlan;
+			EXECUTE sys.sp_query_store_remove_plan @clearPlan;
 
 			UPDATE #tmpclearPlans 
 			SET [IsDone] = 1 
