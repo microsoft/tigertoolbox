@@ -2166,6 +2166,19 @@ SELECT 'Processor_checks' AS [Category], 'Processor_Summary' AS [Information], c
 FROM sys.dm_os_sys_info (NOLOCK)
 OPTION (RECOMPILE);
 
+-- Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594)
+IF LOWER(@SystemManufacturer) <> 'microsoft' and LOWER(@SystemManufacturer) <> 'vmware' and LOWER(@ostype) = 'windows'
+BEGIN
+	DECLARE @BIOSVendor AS varchar(128), @Processor_Name as varchar(128)
+
+	SELECT @BIOSVendor = [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor'
+	SELECT @Processor_Name = [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString'
+	IF LOWER(@BIOSVendor) = 'hp' AND LOWER(@Processor_Name) like '%xeon%e5%' --and
+	BEGIN
+		SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Information], 'Warning: You may be affected by HP Logical Processor issue outlined in https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594' AS [Deviation]
+	END
+END
+
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Processor utilization rate in the last 2 hours', 10, 1) WITH NOWAIT
