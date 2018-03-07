@@ -174,7 +174,7 @@ SELECT 'Waits_last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1
 		WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
 		WHEN W1.wait_type = N'WAIT_XTP_OFFLINE_CKPT_LOG_IO' OR W1.wait_type = N'WAIT_XTP_CKPT_CLOSE' THEN 'In-Memory OLTP Logging'
 		WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
-		WHEN W1.wait_type LIKE N'XTP%' OR wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
+		WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
 		WHEN W1.wait_type LIKE N'PARALLEL_REDO%' THEN N'Parallel Redo'
 		WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 	ELSE N'Other' END AS 'wait_category'
