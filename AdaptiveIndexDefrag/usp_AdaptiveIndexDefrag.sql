@@ -233,7 +233,7 @@ CREATE TABLE dbo.tbl_AdaptiveIndexDefrag_Stats_log
 	(statsUpdate_id int identity(1,1) NOT NULL
 	, dbID int NOT NULL
 	, dbName NVARCHAR(128) NULL
-	, objectID int NOT NULL
+	, objectID int NULL
 	, objectName NVARCHAR(256) NULL
 	, statsID int NOT NULL
 	, statsName NVARCHAR(256) NULL
@@ -672,6 +672,7 @@ v1.6.6 	- 1/11/2018 - Added support to set or reset compression setting on all r
 v1.6.6.1 - 1/12/2018 - Improved stats operations logging: stats that were updated as part of index rebuild, or where stats update was not needed at runtime are now logged. Columns [rows] and [rows_sampled] will have value -1.
 v1.6.6.2 - 2/24/2018 - Fixed stats operation logging issue when using @Exec_Print = 0;
 						Fixed vw_LastRun_Log view.
+v1.6.6.3 - 3/27/2018 - Fixed stats operation logging issue.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
