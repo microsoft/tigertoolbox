@@ -519,7 +519,6 @@ IF  NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[spLoadS
 		END
 GO
 
-　
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[spGetPerfCountersFromPowerShell]') AND type in (N'P', N'PC'))
               BEGIN
                      DROP PROCEDURE dbo.[spGetPerfCountersFromPowerShell]
