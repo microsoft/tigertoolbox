@@ -673,6 +673,8 @@ v1.6.6.1 - 1/12/2018 - Improved stats operations logging: stats that were update
 v1.6.6.2 - 2/24/2018 - Fixed stats operation logging issue when using @Exec_Print = 0;
 						Fixed vw_LastRun_Log view.
 v1.6.6.3 - 3/27/2018 - Fixed stats operation logging issue.
+v1.6.6.4 - 6/25/2018 - Tested with Azure SQL Managed Instance;
+						Added extra debug output.
 					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1234,7 +1236,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.2';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.4';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1574,6 +1576,12 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 					
 					/* Get the time for logging purposes */		
 					SET @dateTimeStart = GETDATE();
+
+					IF @debugMode = 1
+					BEGIN
+						SELECT @debugMessage = '      Analyzing index ID ' + CONVERT(VARCHAR(20), @indexID) + ' on table [' + OBJECT_NAME(@objectID, @dbID) + ']...'
+						RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
+					END
 
 					/* Start log actions */
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], [dbID], dbName, objectID, objectName, index_or_stat_ID, partitionNumber, dateTimeStart)		
@@ -2900,6 +2908,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					SET updateDate = GETDATE(), printStatus = 1
 					WHERE dbID = @dbID AND objectID = @statsobjectID AND statsID = @statsID AND partitionNumber = @partitionNumber;
 					
+					/* Get the time for logging purposes */
+					IF @dateTimeStart IS NULL
+					SET @dateTimeStart = GETDATE();
+					
 					/* Log actions */		
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
 					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
@@ -2998,7 +3010,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 	/* Drop all temp tables */
 	IF @debugMode = 1
-	RAISERROR(' Droping temporary objects', 0, 42) WITH NOWAIT;
+	RAISERROR(' Dropping temporary objects', 0, 42) WITH NOWAIT;
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
 	DROP TABLE #tblIndexDefragDatabaseList;
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragmaxPartitionList'))
