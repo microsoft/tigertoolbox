@@ -625,7 +625,9 @@ ALTER DATABASE [' + @dbname + '] SET MULTI_USER WITH ROLLBACK IMMEDIATE;'
 
 		IF @VLDBMode = 0 -- Now do table checks on todays bucket
 		BEGIN
-			WHILE (SELECT COUNT(*) FROM tblDbBuckets WHERE [database_id] = @dbid AND isdone = 0 AND BucketId = @TodayBucket) > 0
+			WHILE (SELECT COUNT(*) FROM tblDbBuckets WHERE [database_id] = @dbid AND isdone = 0 AND BucketId = @TodayBucket
+                               -- Confirm the table still exists
+                               AND OBJECT_ID(N'[' + DB_NAME(database_id) + '].[' + [schema] + '].[' + [name] + ']') IS NOT NULL) > 0
 			BEGIN
 				SELECT TOP 1 @name = [name], @schema = [schema], @used_page_count = used_page_count
 				FROM tblDbBuckets
