@@ -5821,7 +5821,7 @@ RAISERROR (N'  |-Starting System configurations', 10, 1) WITH NOWAIT
 -- max worker threads (should be zero in 2005 or above)
 -- affinity mask and affinity I/O mask (must not overlap)
 
-DECLARE @awe tinyint, @ssp bit, @bckcomp bit, @clr bit, @costparallel tinyint, @chain bit, @lpooling bit
+DECLARE @awe tinyint, @ssp bit, @bckcomp bit, @clr bit, @costparallel smallint, @chain bit, @lpooling bit
 DECLARE @adhoc smallint, @pboost bit, @qtimeout int, @cmdshell bit, @deftrace bit, @remote bit, @autoNUMA bit
 DECLARE @minmemqry int, @allowupd bit, @mwthreads int, @recinterval int, @netsize smallint
 DECLARE @ixmem smallint, @adhocqry bit, @locks int, @qrywait int--, @mwthreads_count int
@@ -5840,7 +5840,7 @@ SELECT @awe = CONVERT(tinyint, [value]) FROM sys.configurations WHERE [Name] = '
 SELECT @autoNUMA = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'automatic soft-NUMA disabled';
 SELECT @bckcomp = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'backup compression default';
 SELECT @clr = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'clr enabled';
-SELECT @costparallel = CONVERT(tinyint, [value]) FROM sys.configurations WHERE [Name] = 'cost threshold for parallelism';
+SELECT @costparallel = CONVERT(smallint, [value]) FROM sys.configurations WHERE [Name] = 'cost threshold for parallelism';
 SELECT @chain = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'cross db ownership chaining';
 SELECT @deftrace = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'default trace enabled';
 SELECT @ixmem = CONVERT(smallint, [value]) FROM sys.configurations WHERE [Name] = 'index create memory (KB)';
