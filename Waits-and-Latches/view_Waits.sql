@@ -174,7 +174,7 @@ SELECT 'Waits_last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1
 		WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
 		WHEN W1.wait_type = N'WAIT_XTP_OFFLINE_CKPT_LOG_IO' OR W1.wait_type = N'WAIT_XTP_CKPT_CLOSE' THEN 'In-Memory OLTP Logging'
 		WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
-		WHEN W1.wait_type LIKE N'XTP%' OR wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
+		WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
 		WHEN W1.wait_type LIKE N'PARALLEL_REDO%' THEN N'Parallel Redo'
 		WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 	ELSE N'Other' END AS 'wait_category'
@@ -246,8 +246,8 @@ SELECT 'Historical_Waits' AS [Information], W1.wait_type,
 		WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
 		WHEN W1.wait_type IN (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET', N'PROXY_NETWORK_IO', N'EXTERNAL_SCRIPT_NETWORK_IO') THEN N'Network IO' 
 		-- Check Waiting_tasks section below for Exchange wait types -> http://technet.microsoft.com/en-us/library/ms188743.aspx;
-			-- Wait Resource e_waitPipeNewRow IN CXPACKET waits – Producer waiting on consumer for a packet to fill;
-			-- Wait Resource e_waitPipeGetRow IN CXPACKET waits – Consumer waiting on producer to fill a packet;
+			-- Wait Resource e_waitPipeNewRow IN CXPACKET waits Â– Producer waiting on consumer for a packet to fill;
+			-- Wait Resource e_waitPipeGetRow IN CXPACKET waits Â– Consumer waiting on producer to fill a packet;
 		-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
 		WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
 		-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> http://blogs.msdn.com/b/psssql/archive/2012/12/20/how-it-works-cmemthread-and-debugging-them.aspx
