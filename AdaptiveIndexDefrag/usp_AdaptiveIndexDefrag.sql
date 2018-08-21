@@ -1727,14 +1727,22 @@ AND ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 				
 				IF @scanMode = 'LIMITED'
 				BEGIN
-					SELECT @updateSQL = N'UPDATE ids		
-SET [record_count] = [rows], [compression_type] = [data_compression_desc] 
-FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
-INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
-WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
-
-					EXECUTE sp_executesql @updateSQL;
-				END
+					IF @sqlmajorver = 9
+					BEGIN
+						SELECT @updateSQL = N'UPDATE ids
+	SET [record_count] = [rows], [compression_type] = N''''
+	FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
+	INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
+	WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
+					END
+					ELSE
+					BEGIN
+						SELECT @updateSQL = N'UPDATE ids
+	SET [record_count] = [rows], [compression_type] = [data_compression_desc] END
+	FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
+	INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
+	WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
+					END
 				
 				IF @debugMode = 1
 				RAISERROR('    Looking up additional statistic information...', 0, 42) WITH NOWAIT;
