@@ -3,11 +3,10 @@
 
 USE msdb
 GO
-
 SET NOCOUNT ON;
 
 DECLARE @deploymode bit
-SET @deploymode = 1 /* 0 = Upgrade from immediately previous version, preserving all historic data;
+SET @deploymode = 0 /* 0 = Upgrade from immediately previous version, preserving all historic data;
 							1 = Rewrite all objects, disregarding historic data */
 
 /* Scroll down to line 429 to the see notes, disclaimers, and licensing information */
