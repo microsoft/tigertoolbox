@@ -6,7 +6,7 @@ use msdb
 SET NOCOUNT ON;
 
 DECLARE @deploymode bit
-SET @deploymode = 1 /* 0 = Upgrade from immediately previous version, preserving all historic data;
+SET @deploymode = 0 /* 0 = Upgrade from immediately previous version, preserving all historic data;
 							1 = Rewrite all objects, disregarding historic data */
 
 /* Scroll down to line 429 to the see notes, disclaimers, and licensing information */
@@ -670,8 +670,12 @@ v1.6.6.2 - 2/24/2018 - Fixed stats operation logging issue when using @Exec_Prin
 v1.6.6.3 - 3/27/2018 - Fixed stats operation logging issue.
 v1.6.6.4 - 6/25/2018 - Tested with Azure SQL Managed Instance;
 						Added extra debug output.
+v1.6.6.5 - 9/6/2018    Missing 3 sp_executesql for index status for various purposes. 
+					   Missing 2 checks to see if @CurrCompression is not null  when building the REBUILD statement for data_compression
+					   Missing @statsobjectID=@objectID in select to get information on selected statistics 
+					   When DebugMode=1 there are issues with tables that have large records, need to set varchar(11) for @rowmodctr in two places
+					   Missing setting of @objectID=idss.objectID in a couple queries when 'Selecting a stastics to update...'
 
-					
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
 										
