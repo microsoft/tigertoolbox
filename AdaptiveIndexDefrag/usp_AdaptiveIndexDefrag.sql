@@ -1,6 +1,8 @@
 -- If you are using AdaptiveIndexDefrag together with the maintenance plans in http://blogs.msdn.com/b/blogdoezequiel/archive/2012/09/18/about-maintenance-plans-grooming-sql-server.aspx
 -- please note that the job that runs AdaptiveIndexDefrag is expecting msdb. As such, change the database context accordingly.
 
+
+-- For deployment in Azure SQL Database, remove or comment the USE statement below.
 USE msdb
 GO
 
@@ -675,7 +677,9 @@ v1.6.6.2 - 2/24/2018 - Fixed stats operation logging issue when using @Exec_Prin
 v1.6.6.3 - 3/27/2018 - Fixed stats operation logging issue.
 v1.6.6.4 - 6/25/2018 - Tested with Azure SQL Managed Instance;
 						Added extra debug output.
-					
+v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become uncompressed (by d-moloney);
+						Extended row mode counter info data type in debug mode (by d-moloney);
+						Fixed issue with @statsThreshold and large tables (by AndrewG2)
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
 										
@@ -1199,7 +1203,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @partitionSQL_Param NVARCHAR(1000)
 				, @rowmodctrSQL NVARCHAR(4000)
 				, @rowmodctrSQL_Param NVARCHAR(1000)
-				, @rowmodctr bigint
+				, @rowmodctr NUMERIC(10,3)
 				, @record_count bigint
 				, @range_scan_count bigint
 				, @getStatSQL NVARCHAR(4000)
@@ -1236,7 +1240,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.4';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.5';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -2471,7 +2475,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 				IF @debugMode = 1
 				BEGIN
-					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(10), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(10), @record_count) + ' rows' + CASE WHEN ISNULL(@stats_isincremental,0) = 1 THEN ' on partition ' + CONVERT(NVARCHAR(10), @partitionNumber) ELSE '' END + '...';
+					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(15), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(15), @record_count) + ' rows' + CASE WHEN ISNULL(@stats_isincremental,0) = 1 THEN ' on partition ' + CONVERT(NVARCHAR(15), @partitionNumber) ELSE '' END + '...';
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 				END
 

@@ -1,6 +1,8 @@
 -- If you are using AdaptiveIndexDefrag together with the maintenance plans in http://blogs.msdn.com/b/blogdoezequiel/archive/2012/09/18/about-maintenance-plans-grooming-sql-server.aspx
 -- please note that the job that runs AdaptiveIndexDefrag is expecting msdb. As such, change the database context accordingly.
 
+
+-- For deployment in Azure SQL Database, remove or comment the USE statement below.
 USE msdb
 GO
 
@@ -233,7 +235,7 @@ CREATE TABLE dbo.tbl_AdaptiveIndexDefrag_Stats_log
 	(statsUpdate_id int identity(1,1) NOT NULL
 	, dbID int NOT NULL
 	, dbName NVARCHAR(128) NULL
-	, objectID int NOT NULL
+	, objectID int NULL
 	, objectName NVARCHAR(256) NULL
 	, statsID int NOT NULL
 	, statsName NVARCHAR(256) NULL
@@ -672,7 +674,12 @@ v1.6.6 	- 1/11/2018 - Added support to set or reset compression setting on all r
 v1.6.6.1 - 1/12/2018 - Improved stats operations logging: stats that were updated as part of index rebuild, or where stats update was not needed at runtime are now logged. Columns [rows] and [rows_sampled] will have value -1.
 v1.6.6.2 - 2/24/2018 - Fixed stats operation logging issue when using @Exec_Print = 0;
 						Fixed vw_LastRun_Log view.
-					
+v1.6.6.3 - 3/27/2018 - Fixed stats operation logging issue.
+v1.6.6.4 - 6/25/2018 - Tested with Azure SQL Managed Instance;
+						Added extra debug output.
+v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become uncompressed (by d-moloney);
+						Extended row mode counter info data type in debug mode (by d-moloney);
+						Fixed issue with @statsThreshold and large tables (by AndrewG2)
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
 										
@@ -1196,7 +1203,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @partitionSQL_Param NVARCHAR(1000)
 				, @rowmodctrSQL NVARCHAR(4000)
 				, @rowmodctrSQL_Param NVARCHAR(1000)
-				, @rowmodctr bigint
+				, @rowmodctr NUMERIC(10,3)
 				, @record_count bigint
 				, @range_scan_count bigint
 				, @getStatSQL NVARCHAR(4000)
@@ -1233,7 +1240,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.2';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.5';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1574,6 +1581,12 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 					/* Get the time for logging purposes */		
 					SET @dateTimeStart = GETDATE();
 
+					IF @debugMode = 1
+					BEGIN
+						SELECT @debugMessage = '      Analyzing index ID ' + CONVERT(VARCHAR(20), @indexID) + ' on table [' + OBJECT_NAME(@objectID, @dbID) + ']...'
+						RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
+					END
+
 					/* Start log actions */
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], [dbID], dbName, objectID, objectName, index_or_stat_ID, partitionNumber, dateTimeStart)		
 					SELECT 'Index', @dbID, DB_NAME(@dbID), @objectID, OBJECT_NAME(@objectID, @dbID), @indexID, @partitionNumber, @dateTimeStart;
@@ -1718,13 +1731,22 @@ AND ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 				
 				IF @scanMode = 'LIMITED'
 				BEGIN
-					SELECT @updateSQL = N'UPDATE ids		
-SET [record_count] = [rows], [compression_type] = [data_compression_desc] 
-FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
-INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
-WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
-
-					EXECUTE sp_executesql @updateSQL;
+					IF @sqlmajorver = 9
+					BEGIN
+						SELECT @updateSQL = N'UPDATE ids
+	SET [record_count] = [rows], [compression_type] = N''''
+	FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
+	INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
+	WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
+					END
+					ELSE
+					BEGIN
+						SELECT @updateSQL = N'UPDATE ids
+	SET [record_count] = [rows], [compression_type] = [data_compression_desc] END
+	FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
+	INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
+	WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
+					END
 				END
 				
 				IF @debugMode = 1
@@ -2453,7 +2475,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 				IF @debugMode = 1
 				BEGIN
-					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(10), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(10), @record_count) + ' rows' + CASE WHEN ISNULL(@stats_isincremental,0) = 1 THEN ' on partition ' + CONVERT(NVARCHAR(10), @partitionNumber) ELSE '' END + '...';
+					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(15), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(15), @record_count) + ' rows' + CASE WHEN ISNULL(@stats_isincremental,0) = 1 THEN ' on partition ' + CONVERT(NVARCHAR(15), @partitionNumber) ELSE '' END + '...';
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 				END
 
@@ -2899,6 +2921,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					SET updateDate = GETDATE(), printStatus = 1
 					WHERE dbID = @dbID AND objectID = @statsobjectID AND statsID = @statsID AND partitionNumber = @partitionNumber;
 					
+					/* Get the time for logging purposes */
+					IF @dateTimeStart IS NULL
+					SET @dateTimeStart = GETDATE();
+					
 					/* Log actions */		
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
 					SELECT @dbID, @dbName, @objectID, @objectName, @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
@@ -2997,7 +3023,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 	/* Drop all temp tables */
 	IF @debugMode = 1
-	RAISERROR(' Droping temporary objects', 0, 42) WITH NOWAIT;
+	RAISERROR(' Dropping temporary objects', 0, 42) WITH NOWAIT;
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
 	DROP TABLE #tblIndexDefragDatabaseList;
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragmaxPartitionList'))
