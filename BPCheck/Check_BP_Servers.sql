@@ -2166,6 +2166,19 @@ SELECT 'Processor_checks' AS [Category], 'Processor_Summary' AS [Information], c
 FROM sys.dm_os_sys_info (NOLOCK)
 OPTION (RECOMPILE);
 
+-- Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594)
+IF LOWER(@SystemManufacturer) <> 'microsoft' and LOWER(@SystemManufacturer) <> 'vmware' and LOWER(@ostype) = 'windows'
+BEGIN
+	DECLARE @BIOSVendor AS varchar(128), @Processor_Name as varchar(128)
+
+	SELECT @BIOSVendor = [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor'
+	SELECT @Processor_Name = [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString'
+	IF LOWER(@BIOSVendor) = 'hp' AND LOWER(@Processor_Name) like '%xeon%e5%' --and
+	BEGIN
+		SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Information], 'Warning: You may be affected by HP Logical Processor issue outlined in https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594' AS [Deviation]
+	END
+END
+
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Processor utilization rate in the last 2 hours', 10, 1) WITH NOWAIT
@@ -5118,7 +5131,7 @@ EXEC ('DBCC TRACESTATUS WITH NO_INFOMSGS')
 
 IF @sqlmajorver >= 11
 BEGIN
-	DECLARE @dbname0 NVARCHAR(1000), @dbid0 int, @sqlcmd0 NVARCHAR(4000), @has_colstrix int
+	DECLARE @dbname0 NVARCHAR(1000), @dbid0 int, @sqlcmd0 NVARCHAR(4000), @has_colstrix int, @min_compat_level tinyint
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
 	DROP TABLE #tblColStoreIXs;
@@ -5167,6 +5180,9 @@ WHERE i.[type] IN (5,6,7)' -- 5 = Clustered columnstore; 6 = Nonclustered column
 	END;
 	
 	SELECT @has_colstrix = COUNT(*) FROM #tblColStoreIXs
+
+	SELECT @min_compat_level = min([compatibility_level]) from #tmpdbs0
+
 END;
 
 IF (SELECT COUNT(TraceFlag) FROM @tracestatus WHERE [Global]=1) = 0
@@ -5225,7 +5241,7 @@ BEGIN
 						OR (@sqlmajorver = 9 AND @sqlbuild >= 4226))
 					THEN '[INFORMATION: TF845 supports locking pages in memory in SQL Server Standard Editions]'
 				WHEN SERVERPROPERTY('EngineEdition') = 2 --Standard SKU
-					AND @sqlmajorver = 11
+					AND @sqlmajorver >= 11 
 					THEN '[WARNING: TF845 is not needed in SQL 2012 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -5241,12 +5257,13 @@ BEGIN
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 902
 	END;
-	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1117)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-			'[INFORMATION: TF1117 autogrows all files at the same time and affects all databases]' 
-			AS [Deviation], TraceFlag
+		CASE WHEN @sqlmajorver >= 13 --SQL 2016
+			THEN '[WARNING: TF1117 is not needed in SQL 2016 and above]'
+			ELSE '[INFORMATION: TF1117 autogrows all files at the same time and affects all databases]' 
+		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1117
 	END;
@@ -5254,12 +5271,13 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[INFORMATION: TF1118 forces uniform extent allocations instead of mixed page allocations]'
-			AS [Deviation], TraceFlag
+		CASE WHEN @sqlmajorver >= 13 --SQL 2016
+			THEN '[WARNING: TF1118 is not needed in SQL 2016 and above]'
+			ELSE '[INFORMATION: TF1118 forces uniform extent allocations instead of mixed page allocations]'
+		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1118
 	END;
-
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1204)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -5354,11 +5372,11 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 9
-				AND @maxservermem >= 100000 * 1024 -- 100GB
+				AND @maxservermem >= 102400 -- 100GB
 				AND @maxservermem <> 2147483647
 				THEN '[INFORMATION: TF2335 assumes a fixed amount of memory is available during query optimization. Recommended when server has more than 100GB of memory]'
 			WHEN @sqlmajorver >= 9
-				AND @maxservermem < 100000 * 1024 -- 100GB
+				AND @maxservermem < 102400 -- 100GB
 				AND @maxservermem <> 2147483647
 				THEN '[WARNING: TF2335 should not be set on servers with less than 100GB of memory]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
@@ -5369,7 +5387,7 @@ BEGIN
 	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2335)
 		AND @sqlmajorver >= 9
-		AND @maxservermem >= 100000 * 1024 -- 100GB
+		AND @maxservermem >= 102400 -- 100GB
 		AND @maxservermem <> 2147483647
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
@@ -5389,10 +5407,11 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver >= 11
+			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12 OR (@sqlmajorver >= 13 AND @min_compat_level < 130)
 				THEN '[INFORMATION: TF2371 changes the fixed rate of the 20pct threshold for update statistics into a dynamic percentage rate]'
-			WHEN @sqlmajorver >= 13
-				THEN '[WARNING: TF2371 is not needed in SQL 2016 and above]'
+			WHEN @sqlmajorver >= 13 AND @min_compat_level >= 130
+				--TF2371 has no effect if all databases are at least at compatibility level 130.
+				THEN '[WARNING: TF2371 is not needed in SQL 2016 and above when all databases are at compatibility level 130 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5400,7 +5419,7 @@ BEGIN
 	END;
 	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
-		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver >= 11)
+		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12 OR (@sqlmajorver >= 13 AND @min_compat_level < 130))
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF2371 to change the 20pct fixed rate threshold for update statistics into a dynamic percentage rate]' --http://blogs.msdn.com/b/saponsqlserver/archive/2011/09/07/changes-to-automatic-update-statistics-in-sql-server-traceflag-2371.aspx
