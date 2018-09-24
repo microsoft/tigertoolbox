@@ -1743,6 +1743,7 @@ AND ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 	INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
 	WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 					END
+				END
 				
 				IF @debugMode = 1
 				RAISERROR('    Looking up additional statistic information...', 0, 42) WITH NOWAIT;
