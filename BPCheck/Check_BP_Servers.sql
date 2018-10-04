@@ -1,4 +1,4 @@
-﻿USE [master]
+USE [master]
 GO
 
 DECLARE @custompath NVARCHAR(500), @allow_xpcmdshell bit, @ptochecks bit, @duration tinyint, @logdetail bit, @diskfrag bit, @ixfrag bit, @ixfragscanmode VARCHAR(8), @bpool_consumer bit, @gen_scripts bit, @dbScope VARCHAR(256), @spn_check bit
@@ -17,6 +17,7 @@ Set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp
 Set @spn_check to OFF if you want to skip SPN checks.
 Set @diskfrag to ON if you want to check for disk physical fragmentation. 
 	Can take some time in large disks. Requires elevated privileges.
+	See https://support.microsoft.com/en-us/help/3195161/defragmenting-sql-server-database-disk-drives
 Set @ixfrag to ON if you want to check for index fragmentation. 
 	Can take some time to collect data depending on number of databases and indexes, as well as the scan mode chosen in @ixfragscanmode.
 Set @ixfragscanmode to the scanning mode you prefer. 
@@ -374,12 +375,36 @@ v2.1 - 9/30/2016 - Fixed issue with LPIM check in SQL Server 2005;
 v2.1.1 - 10/01/2016 - Fixed issues with Database Information subsection in SQL 2005 to 2008R2.
 v2.1.2 - 10/25/2016 - Added incremental stats as default to Database Options check;
 						Added W10 Aniversary Edition to OS versions;
-						Fixed Indexing per Table subsection accounting for hypotheical indexes.
+						Fixed Indexing per Table subsection accounting for hypothetical indexes.
 v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 						Fixed negative CPU usage in avg cpu usage last 2h check.
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
-v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
+v2.1.5 - 11/17/2016 - Added support for SQL Server 2016 SP1 (Enterprise_Feature_usage, LPIM and IFI checks).
 v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
+v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
+v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information section;
+						Fixed conversion error when multiple TCP ports.
+v2.1.5.4 - 3/28/2017 - Fixed collation issues.
+v2.1.6 - 4/11/2017 - Changed port discovery method for SQL Server 2012 and above.
+v2.1.6.1 - 4/30/2017 - Enhanced wait and latches report section.
+v2.1.7 - 5/10/2017 - Added database size details to Database Information section.
+v2.1.8 - 6/9/2017 - Extended Deprecated and Discontinued features subsection with info from sql modules;
+					Extended trace flags subsection;
+					Added resilience for SQL Injection;
+					Fixed invalid object name error in SQL Server 2005.
+v2.1.8.1 - 6/11/2017 - Added information about query optimizer changes usage at DB level;
+					Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
+v2.1.8.2 - 8/23/2017 - Extended search for feature usage in DBs - better determine DB readiness to be moved across editions.
+v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up;
+						Extended wait type categorization.
+v2.2 - 10/17/2017 - Added support for SQL Server on Linux.
+v2.2.1 - 10/19/2017 - Corrected several issues with support for SQL 2017 (thanks Mark Freeman).
+v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bjoern Steinmetz);
+						Fixed Feature usage subsection when running on SQL 2014 or below;
+						Fixed CPU Affinity bit mask.
+v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
+						Fixed max server memory calculations;
+						Added check for Database Health Detection in Server_checks section (thanks Anders Uhl Pedersen).
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -558,7 +583,7 @@ BEGIN
 			AND p.permission_name = 'ALTER SETTINGS'
 			AND QUOTENAME(l.name) = QUOTENAME(@pname)) = 0)
 	BEGIN
-		RAISERROR('[WARNING: If not sysadmin, then you must be a member of serveradmin server role or have the ALTER SETTINGS server permission]', 16, 1, N'serveradmin')
+		RAISERROR('[WARNING: If not sysadmin, then you must be a member of serveradmin server role or have the ALTER SETTINGS server permission. Exiting...]', 16, 1, N'serveradmin')
 		RETURN
 	END
 	ELSE IF (ISNULL(IS_SRVROLEMEMBER(N'serveradmin'), 0) <> 1) AND ((SELECT COUNT(l.name)
@@ -570,7 +595,7 @@ BEGIN
 			AND p.permission_name = 'VIEW SERVER STATE'
 			AND QUOTENAME(l.name) = QUOTENAME(@pname)) = 0)
 	BEGIN
-		RAISERROR('[WARNING: If not sysadmin, then you must be a member of serveradmin server role or granted the VIEW SERVER STATE permission]', 16, 1, N'serveradmin')
+		RAISERROR('[WARNING: If not sysadmin, then you must be a member of serveradmin server role or granted the VIEW SERVER STATE permission. Exiting...]', 16, 1, N'serveradmin')
 		RETURN
 	END
 
@@ -638,11 +663,11 @@ DECLARE @agt smallint, @ole smallint, @sao smallint, @xcmd smallint
 DECLARE @ErrorSeverity int, @ErrorState int, @ErrorMessage NVARCHAR(4000)
 DECLARE @CMD NVARCHAR(4000)
 DECLARE @path NVARCHAR(2048)
-DECLARE @sqlminorver int, @sqlbuild int, @clustered bit, @winver VARCHAR(5), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @winsp VARCHAR(25), @SystemManufacturer VARCHAR(128)
+DECLARE @sqlminorver int, @sqlbuild int, @clustered bit, @osver VARCHAR(5), @ostype VARCHAR(10), @osdistro VARCHAR(20), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @ossp VARCHAR(25), @SystemManufacturer VARCHAR(128)
 DECLARE @existout int, @FSO int, @FS int, @OLEResult int, @FileID int
 DECLARE @FileName VARCHAR(200), @Text1 VARCHAR(2000), @CMD2 VARCHAR(100)
 DECLARE @src VARCHAR(255), @desc VARCHAR(255), @psavail VARCHAR(20), @psver tinyint
-DECLARE @dbid int, @dbname VARCHAR(1000)
+DECLARE @dbid int, @dbname NVARCHAR(1000)
 
 SELECT @instancename = CONVERT(VARCHAR(128),SERVERPROPERTY('InstanceName')) 
 SELECT @server = RTRIM(CONVERT(VARCHAR(128), SERVERPROPERTY('MachineName')))
@@ -782,14 +807,20 @@ EXECUTE sp_executesql @sqlcmd, @params, @UpTimeOUT=@UpTime OUTPUT, @StartDateOUT
 SELECT 'Information' AS [Category], 'Uptime' AS [Information], GETDATE() AS [Current_Time], @StartDate AS Last_Startup, CONVERT(VARCHAR(4),@UpTime/60/24) + 'd ' + CONVERT(VARCHAR(4),@UpTime/60%24) + 'hr ' + CONVERT(VARCHAR(4),@UpTime%60) + 'min' AS Uptime
 
 --------------------------------------------------------------------------------------------------------------------------------
--- Windows Version and Architecture subsection
+-- OS Version and Architecture subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Windows Version and Architecture', 10, 1) WITH NOWAIT
-IF @sqlmajorver >= 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
+IF (@sqlmajorver >= 11 AND @sqlmajorver < 14) OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
-	SET @sqlcmd = N'SELECT @winverOUT = CASE WHEN windows_release IN (''6.3'',''10.0'') AND (@@VERSION LIKE ''%Build 10586%'' OR @@VERSION LIKE ''%Build 14393%'')THEN ''10.0'' ELSE windows_release END, @winspOUT = windows_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 WHEN @@VERSION LIKE ''%<IA64>%'' THEN 128 ELSE 32 END FROM sys.dm_os_windows_info (NOLOCK)';
-	SET @params = N'@winverOUT VARCHAR(5) OUTPUT, @winspOUT VARCHAR(25) OUTPUT, @archOUT smallint OUTPUT';
-	EXECUTE sp_executesql @sqlcmd, @params, @winverOUT=@winver OUTPUT, @winspOUT=@winsp OUTPUT, @archOUT=@arch OUTPUT;
+	SET @sqlcmd = N'SELECT @ostypeOUT = ''Windows'', @osdistroOUT = ''Windows'', @osverOUT = CASE WHEN windows_release IN (''6.3'',''10.0'') AND (@@VERSION LIKE ''%Build 10586%'' OR @@VERSION LIKE ''%Build 14393%'') THEN ''10.0'' ELSE windows_release END, @osspOUT = windows_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 WHEN @@VERSION LIKE ''%<IA64>%'' THEN 128 ELSE 32 END FROM sys.dm_os_windows_info (NOLOCK)';
+	SET @params = N'@osverOUT VARCHAR(5) OUTPUT, @ostypeOUT VARCHAR(10) OUTPUT, @osdistroOUT VARCHAR(20) OUTPUT, @osspOUT VARCHAR(25) OUTPUT, @archOUT smallint OUTPUT';
+	EXECUTE sp_executesql @sqlcmd, @params, @osverOUT=@osver OUTPUT, @ostypeOUT=@ostype OUTPUT, @osdistroOUT=@osdistro OUTPUT, @osspOUT=@ossp OUTPUT, @archOUT=@arch OUTPUT;
+END
+ELSE IF @sqlmajorver >= 14
+BEGIN
+	SET @sqlcmd = N'SELECT @ostypeOUT = host_platform, @osdistroOUT = host_distribution, @osverOUT = CASE WHEN host_platform = ''Windows'' AND host_release IN (''6.3'',''10.0'') THEN ''10.0'' ELSE host_release END, @osspOUT = host_service_pack_level, @archOUT = CASE WHEN @@VERSION LIKE ''%<X64>%'' THEN 64 ELSE 32 END FROM sys.dm_os_host_info (NOLOCK)';
+	SET @params = N'@osverOUT VARCHAR(5) OUTPUT, @ostypeOUT VARCHAR(10) OUTPUT, @osdistroOUT VARCHAR(20) OUTPUT, @osspOUT VARCHAR(25) OUTPUT, @archOUT smallint OUTPUT';
+	EXECUTE sp_executesql @sqlcmd, @params, @osverOUT=@osver OUTPUT, @ostypeOUT=@ostype OUTPUT, @osdistroOUT=@osdistro OUTPUT, @osspOUT=@ossp OUTPUT, @archOUT=@arch OUTPUT;
 END
 ELSE
 BEGIN
@@ -803,7 +834,7 @@ BEGIN
 		INSERT INTO @sysinfo
 		EXEC xp_msver;
 		
-		SELECT @winver = LEFT(Character_Value, CHARINDEX(' ', Character_Value)-1) -- 5.2 is WS2003; 6.0 is WS2008; 6.1 is WS2008R2; 6.2 is WS2012, 6.3 is WS2012R2
+		SELECT @osver = LEFT(Character_Value, CHARINDEX(' ', Character_Value)-1) -- 5.2 is WS2003; 6.0 is WS2008; 6.1 is WS2008R2; 6.2 is WS2012, 6.3 is WS2012R2, 6.3 (14396) is WS2016
 		FROM @sysinfo
 		WHERE [Name] LIKE 'WindowsVersion%';
 		
@@ -816,7 +847,8 @@ BEGIN
 		SET @str = (SELECT @@VERSION)
 		SELECT @str2 = RIGHT(@str, LEN(@str)-CHARINDEX('Windows',@str) + 1)
 		SELECT @str3 = RIGHT(@str2, LEN(@str2)-CHARINDEX(': ',@str2))
-		SELECT @winsp = LTRIM(LEFT(@str3, CHARINDEX(')',@str3) -1))
+		SELECT @ossp = LTRIM(LEFT(@str3, CHARINDEX(')',@str3) -1))
+		SET @ostype = 'Windows'
 	END TRY
 	BEGIN CATCH
 		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
@@ -827,32 +859,36 @@ END;
 
 DECLARE @machineinfo TABLE ([Value] NVARCHAR(256), [Data] NVARCHAR(256))
 
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemManufacturer';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemProductName';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemFamily';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVendor';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVersion';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSReleaseDate';
-INSERT INTO @machineinfo
-EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
+IF @ostype = 'Windows'
+BEGIN
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemManufacturer';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemProductName';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','SystemFamily';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVendor';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSVersion';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSReleaseDate';
+	INSERT INTO @machineinfo
+	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
+END
 
 SELECT @SystemManufacturer = [Data] FROM @machineinfo WHERE [Value] = 'SystemManufacturer';
 
 SELECT 'Information' AS [Category], 'Machine' AS [Information], 
-	CASE @winver WHEN '5.2' THEN 'XP/WS2003'
+	CASE @osver WHEN '5.2' THEN 'XP/WS2003'
 		WHEN '6.0' THEN 'Vista/WS2008'
 		WHEN '6.1' THEN 'W7/WS2008R2'
 		WHEN '6.2' THEN 'W8/WS2012'
 		WHEN '6.3' THEN 'W8.1/WS2012R2'
 		WHEN '10.0' THEN 'W10/WS2016'
-	END AS [Windows_Version],
-	@winsp AS [Service_Pack_Level],
+		ELSE @ostype + ' ' + @osdistro
+	END AS [OS_Version],
+	CASE WHEN @ostype = 'Windows' THEN @ossp ELSE @osver END AS [Service_Pack_Level],
 	@arch AS [Architecture],
 	SERVERPROPERTY('MachineName') AS [Machine_Name],
 	SERVERPROPERTY('ComputerNamePhysicalNetBIOS') AS [NetBIOS_Name],
@@ -867,13 +903,16 @@ SELECT 'Information' AS [Category], 'Machine' AS [Information],
 --------------------------------------------------------------------------------------------------------------------------------
 -- Disk space subsection
 --------------------------------------------------------------------------------------------------------------------------------
-RAISERROR (N'|-Starting Disk space', 10, 1) WITH NOWAIT
-SELECT DISTINCT 'Information' AS [Category], 'Disk_Space' AS [Information], vs.logical_volume_name,
-	vs.volume_mount_point, vs.file_system_type, CONVERT(int,vs.total_bytes/1048576.0) AS TotalSpace_MB,
-	CONVERT(int,vs.available_bytes/1048576.0) AS FreeSpace_MB, vs.is_compressed
-FROM sys.master_files mf
-CROSS APPLY sys.dm_os_volume_stats(mf.database_id, mf.[file_id]) vs
-ORDER BY FreeSpace_MB ASC;
+IF @sqlmajorver > 9
+BEGIN
+	RAISERROR (N'|-Starting Disk space', 10, 1) WITH NOWAIT
+	SELECT DISTINCT 'Information' AS [Category], 'Disk_Space' AS [Information], vs.logical_volume_name,
+		vs.volume_mount_point, vs.file_system_type, CONVERT(int,vs.total_bytes/1048576.0) AS TotalSpace_MB,
+		CONVERT(int,vs.available_bytes/1048576.0) AS FreeSpace_MB, vs.is_compressed
+	FROM sys.master_files mf
+	CROSS APPLY sys.dm_os_volume_stats(mf.database_id, mf.[file_id]) vs
+	ORDER BY FreeSpace_MB ASC
+END;
 	
 --------------------------------------------------------------------------------------------------------------------------------
 -- HA Information subsection
@@ -930,10 +969,12 @@ BEGIN
 	IF @ptochecks = 1 AND @IsHadrEnabled = 1
 	BEGIN
 		-- Note: If low_water_mark_for_ghosts number is not increasing over time, it implies that ghost cleanup might not happen.
-		SELECT 'Information' AS [Category], 'AlwaysOn_Replicas' AS [Information], database_id, group_id, replica_id, group_database_id, is_local, synchronization_state_desc, 
-			is_commit_participant, synchronization_health_desc, database_state_desc, is_suspended, suspend_reason_desc, last_sent_time, last_received_time, last_hardened_time, 
-			last_redone_time, log_send_queue_size, log_send_rate, redo_queue_size, redo_rate, filestream_send_rate, last_commit_time, low_water_mark_for_ghosts 
-		FROM sys.dm_hadr_database_replica_states;
+		SET @sqlcmd = 'SELECT ''Information'' AS [Category], ''AlwaysOn_Replicas'' AS [Information], database_id, group_id, replica_id, group_database_id, is_local, synchronization_state_desc, 
+	is_commit_participant, synchronization_health_desc, database_state_desc, is_suspended, suspend_reason_desc, last_sent_time, last_received_time, last_hardened_time, 
+	last_redone_time, log_send_queue_size, log_send_rate, redo_queue_size, redo_rate, filestream_send_rate, last_commit_time, 
+	low_water_mark_for_ghosts' + CASE WHEN @sqlmajorver > 12 THEN ', secondary_lag_seconds' ELSE '' END + ' 
+FROM sys.dm_hadr_database_replica_states'
+		EXECUTE sp_executesql @sqlcmd
 
 		SELECT 'Information' AS [Category], 'AlwaysOn_Replica_Cluster' AS [Information], replica_id, group_database_id, database_name, is_failover_ready, is_pending_secondary_suspend, 
 			is_database_joined, recovery_lsn, truncation_lsn 
@@ -947,37 +988,20 @@ END;
 RAISERROR (N'|-Starting Linked servers info', 10, 1) WITH NOWAIT
 IF (SELECT COUNT(*) FROM sys.servers AS s INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id WHERE s.is_linked = 1) > 0
 BEGIN
-	IF @sqlmajorver > 9
-	BEGIN
-		EXEC ('SELECT ''Information'' AS [Category], ''Linked_servers'' AS [Information], s.name, s.product, 
+	SET @sqlcmd = 'SELECT ''Information'' AS [Category], ''Linked_servers'' AS [Information], s.name, s.product, 
 	s.provider, s.data_source, s.location, s.provider_string, s.catalog, s.connect_timeout, 
 	s.query_timeout, s.is_linked, s.is_remote_login_enabled, s.is_rpc_out_enabled, 
 	s.is_data_access_enabled, s.is_collation_compatible, s.uses_remote_collation, s.collation_name, 
 	s.lazy_schema_validation, s.is_system, s.is_publisher, s.is_subscriber, s.is_distributor, 
-	s.is_nonsql_subscriber, s.is_remote_proc_transaction_promotion_enabled, 
+	s.is_nonsql_subscriber' + CASE WHEN @sqlmajorver > 9 THEN ', s.is_remote_proc_transaction_promotion_enabled' ELSE '' END + ',
 	s.modify_date, CASE WHEN l.local_principal_id = 0 THEN ''local or wildcard'' ELSE p.name END AS [local_principal], 
 	CASE WHEN l.uses_self_credential = 0 THEN ''use own credentials'' ELSE ''use supplied username and pwd'' END AS uses_self_credential, 
 	l.remote_name, l.modify_date AS [linked_login_modify_date]
 FROM sys.servers AS s (NOLOCK)
 INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id
 INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
-WHERE s.is_linked = 1')
-	END
-	ELSE 
-	BEGIN
-		EXEC ('SELECT ''Information'' AS [Category], ''Linked_servers'' AS [Information], s.name, s.product, 
-	s.provider, s.data_source, s.location, s.provider_string, s.catalog, s.connect_timeout, 
-	s.query_timeout, s.is_linked, s.is_remote_login_enabled, s.is_rpc_out_enabled, 
-	s.is_data_access_enabled, s.is_collation_compatible, s.uses_remote_collation, s.collation_name, 
-	s.lazy_schema_validation, s.is_system, s.is_publisher, s.is_subscriber, s.is_distributor, 
-	s.is_nonsql_subscriber, s.modify_date, CASE WHEN l.local_principal_id = 0 THEN ''local or wildcard'' ELSE p.name END AS [local_principal], 
-	CASE WHEN l.uses_self_credential = 0 THEN ''use own credentials'' ELSE ''use supplied username and pwd'' END AS uses_self_credential, 
-	l.remote_name, l.modify_date AS [linked_login_modify_date]
-FROM sys.servers AS s (NOLOCK)
-INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id
-INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
-WHERE s.is_linked = 1')
-	END
+WHERE s.is_linked = 1'
+	EXECUTE sp_executesql @sqlcmd
 END
 ELSE
 BEGIN
@@ -988,8 +1012,8 @@ END;
 -- Instance info subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
-DECLARE @port VARCHAR(5), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(255), @cpucount int, @numa int
-DECLARE @i int, @cpuaffin_fixed VARCHAR(300)
+DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(255), @cpucount int, @numa int
+DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(64), @cpuover32 int
 
 IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
 BEGIN
@@ -1015,13 +1039,24 @@ END
 ELSE
 BEGIN
 	BEGIN TRY
-		SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(int,CONVERT(float,value_data))) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpPort%'' AND CONVERT(float,value_data) > 0;';
-		SET @params = N'@portOUT int OUTPUT';
+		/*
+		SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(VARCHAR(15),value_data)) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpPort%'' AND CONVERT(float,value_data) > 0;';
+		SET @params = N'@portOUT VARCHAR(15) OUTPUT';
 		EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
 		IF @port IS NULL
 		BEGIN
-			SET @sqlcmd = N'SELECT @portOUT = CONVERT(int,CONVERT(float,value_data)) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpDynamicPort%'' AND CONVERT(float,value_data) > 0;';
-			SET @params = N'@portOUT int OUTPUT';
+			SET @sqlcmd = N'SELECT @portOUT = CONVERT(VARCHAR(15),value_data) FROM sys.dm_server_registry WHERE registry_key LIKE ''%MSSQLServer\SuperSocketNetLib\Tcp\%'' AND value_name LIKE N''%TcpDynamicPort%'' AND CONVERT(float,value_data) > 0;';
+			SET @params = N'@portOUT VARCHAR(15) OUTPUT';
+			EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
+		END
+		*/
+		SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(VARCHAR(15),port)) FROM sys.dm_tcp_listener_states WHERE is_ipv4 = 1 AND [type] = 0 AND ip_address <> ''127.0.0.1'';';
+		SET @params = N'@portOUT VARCHAR(15) OUTPUT';
+		EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
+		IF @port IS NULL
+		BEGIN
+			SET @sqlcmd = N'SELECT @portOUT = MAX(CONVERT(VARCHAR(15),port)) FROM sys.dm_tcp_listener_states WHERE is_ipv4 = 0 AND [type] = 0 AND ip_address <> ''127.0.0.1'';';
+			SET @params = N'@portOUT VARCHAR(15) OUTPUT';
 			EXECUTE sp_executesql @sqlcmd, @params, @portOUT = @port OUTPUT;
 		END
 	END TRY
@@ -1061,7 +1096,7 @@ bytes AS
 SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL 
 SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)
 -- CPU Affinity is shown highest to lowest CPU ID
-SELECT @cpuaffin = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
+SELECT @affinitymask = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
 	ELSE RIGHT((SELECT ((CONVERT(tinyint, SUBSTRING(CONVERT(binary(9), [value]), M, 1)) & E) / E) AS [text()] 
 		FROM bits CROSS JOIN bytes
 		ORDER BY M, N DESC
@@ -1069,15 +1104,40 @@ SELECT @cpuaffin = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
 FROM sys.configurations (NOLOCK)
 WHERE name = 'affinity mask';
 
+IF @cpucount > 32
+BEGIN
+	;WITH bits AS 
+	(SELECT 7 AS N, 128 AS E UNION ALL SELECT 6, 64 UNION ALL 
+	SELECT 5, 32 UNION ALL SELECT 4, 16 UNION ALL SELECT 3, 8 UNION ALL 
+	SELECT 2, 4 UNION ALL SELECT 1, 2 UNION ALL SELECT 0, 1), 
+	bytes AS 
+	(SELECT 1 M UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL 
+	SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL 
+	SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)
+	-- CPU Affinity is shown highest to lowest CPU ID
+	SELECT @affinity64mask = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
+		ELSE RIGHT((SELECT ((CONVERT(tinyint, SUBSTRING(CONVERT(binary(9), [value]), M, 1)) & E) / E) AS [text()] 
+			FROM bits CROSS JOIN bytes
+			ORDER BY M, N DESC
+			FOR XML PATH('')), @cpucount) END
+	FROM sys.configurations (NOLOCK)
+	WHERE name = 'affinity64 mask';
+END;
+
+IF @cpucount > 32
+SELECT @cpuover32 = ABS(LEN(@affinity64mask) - (@cpucount-32))
+
+SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),@cpuover32)) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,@cpucount) END
+
 SET @cpuaffin_fixed = @cpuaffin
 
 IF @numa > 1
 BEGIN
 	-- format binary mask by node for better reading
 	SET @i = @cpucount/@numa + 1
-	WHILE @i <= @cpucount
+	WHILE @i < @cpucount + @numa
 	BEGIN
-		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin, @i, 1))
+		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
 		SET @i = @i + @cpucount/@numa + 1
 	END
 END
@@ -1215,34 +1275,41 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Database Information', 10, 1) WITH NOWAIT
 RAISERROR (N'  |-Building DB list', 10, 1) WITH NOWAIT
-DECLARE @curdbname VARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary_role_allow_connections tinyint, @state tinyint
+DECLARE @curdbname NVARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary_role_allow_connections tinyint, @state tinyint
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
 DROP TABLE #tmpdbs0;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
-CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [compatibility_level] int, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
+CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] NVARCHAR(1000), [compatibility_level] tinyint, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 DROP TABLE #tmpdbfiledetail;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
-CREATE TABLE #tmpdbfiledetail([database_id] [int] NOT NULL, [file_id] int, [type_desc] NVARCHAR(60), [data_space_id] int,[name] sysname, [physical_name] NVARCHAR(260), [state_desc] NVARCHAR(60), [size] int, [max_size] int, [is_percent_growth] bit, [growth] int, [is_media_read_only] bit, [is_read_only] bit, [is_sparse] bit, [is_name_reserved] bit)
+CREATE TABLE #tmpdbfiledetail([database_id] [int] NOT NULL, [file_id] int, [type_desc] NVARCHAR(60), [data_space_id] int, [name] sysname, [physical_name] NVARCHAR(260), [state_desc] NVARCHAR(60), [size] bigint, [max_size] bigint, [is_percent_growth] bit, [growth] int, [is_media_read_only] bit, [is_read_only] bit, [is_sparse] bit, [is_name_reserved] bit)
+
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmpdbsizes'))
+DROP TABLE ##tmpdbsizes;
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmpdbsizes'))
+CREATE TABLE ##tmpdbsizes([database_id] [int] NOT NULL, [size] bigint, [type_desc] NVARCHAR(60))
 
 IF @sqlmajorver < 11
 BEGIN
+	SET @sqlcmd = 'SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0 FROM master.sys.databases (NOLOCK)'
 	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], [isdone])
-	SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0 FROM master.sys.databases (NOLOCK)
+	EXEC sp_executesql @sqlcmd;
 END;
 
 IF @sqlmajorver > 10
 BEGIN
+	SET @sqlcmd = 'SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, 0 
+	FROM master.sys.databases (NOLOCK) sd
+		LEFT JOIN sys.dm_hadr_database_replica_states (NOLOCK) d ON sd.database_id = d.database_id
+		LEFT JOIN sys.availability_replicas ar (NOLOCK) ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
+		LEFT JOIN sys.dm_hadr_availability_replica_states (NOLOCK) ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
+		LEFT JOIN sys.dm_hadr_database_replica_cluster_states (NOLOCK) rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
+	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;'
 	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, [isdone])
-	SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, 0 
-	FROM master.sys.databases sd (NOLOCK) 
-		LEFT JOIN sys.dm_hadr_database_replica_states d ON sd.database_id = d.database_id
-		LEFT JOIN sys.availability_replicas ar ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
-		LEFT JOIN sys.dm_hadr_availability_replica_states ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
-		LEFT JOIN sys.dm_hadr_database_replica_cluster_states rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
-	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;
+	EXEC sp_executesql @sqlcmd;
 END;
 
 /* Validate if database scope is set */
@@ -1259,102 +1326,7 @@ BEGIN
 	EXEC sp_executesql @sqlcmd;
 END;
 
-IF @sqlmajorver < 11
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
-	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
-	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, ''NA'' AS [is_indirect_checkpoint_on], 
-	db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-ELSE IF @sqlmajorver = 11
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
-	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
-	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
-	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
-	db.target_recovery_time_in_seconds, 
-	db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-ELSE IF @sqlmajorver = 12
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
-	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
-	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on,
-	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
-	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-ELSE IF @sqlmajorver >= 13
-BEGIN
-	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
-	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
-	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
-	ls.cntr_value AS [Log_Size_KB], lu.cntr_value AS [Log_Used_KB],
-	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
-	db.[compatibility_level] AS [DB_Compatibility_Level], db.collation_name AS [DB_Collation], 
-	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
-	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
-	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
-	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
-	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
-	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced, 
-	db.is_memory_optimized_elevate_to_snapshot_on, db.is_remote_data_archive_enabled, db.is_mixed_page_allocation_on
-FROM master.sys.databases AS db (NOLOCK)
-INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
-INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
-WHERE lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
-	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
-	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + 'AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
-ORDER BY [Database_Name]	
-OPTION (RECOMPILE)'
-END
-
-EXECUTE sp_executesql @sqlcmd;
-
+/* Populate data file info*/
 WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 BEGIN
 	SELECT TOP 1 @curdbname = [dbname], @curdbid = [dbid], @currole = [role], @state = [state], @cursecondary_role_allow_connections = secondary_role_allow_connections FROM #tmpdbs0 WHERE isdone = 0
@@ -1384,6 +1356,161 @@ FROM sys.database_files (NOLOCK)'
 	SET isdone = 1
 	WHERE [dbid] = @curdbid
 END;
+
+BEGIN TRY
+	INSERT INTO ##tmpdbsizes([database_id], [size], [type_desc])
+	SELECT [database_id], SUM([size]) AS [size], [type_desc]
+	FROM #tmpdbfiledetail
+	WHERE [type_desc] <> 'LOG'
+	GROUP BY [database_id], [type_desc]
+END TRY
+BEGIN CATCH
+	SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+	SELECT @ErrorMessage = 'Database Information subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+	RAISERROR (@ErrorMessage, 16, 1);
+END CATCH
+
+IF @sqlmajorver < 11
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
+	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
+	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, ''NA'' AS [is_indirect_checkpoint_on], 
+	db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND dbfssize.[type_desc] = ''FILESTREAM''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver = 11
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_update_stats_on,
+	db.is_auto_update_stats_async_on, db.is_parameterization_forced, 
+	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver = 12
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
+	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
+	db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on,
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver >= 13
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct], 
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
+	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
+	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced, 
+	db.is_memory_optimized_elevate_to_snapshot_on, db.is_remote_data_archive_enabled, db.is_mixed_page_allocation_on
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+ELSE IF @sqlmajorver = 14
+BEGIN
+	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
+	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
+	db.recovery_model_desc AS [Recovery_Model], db.create_date, db.log_reuse_wait_desc AS [Log_Reuse_Wait_Description], 
+	(dbsize.[size]*8)/1024 AS [Data_Size_MB], ISNULL((dbfssize.[size]*8)/1024,0) AS [Filestream_Size_MB], 
+	ls.cntr_value/1024 AS [Log_Size_MB], lu.cntr_value/1024 AS [Log_Used_MB],
+	CAST(CAST(lu.cntr_value AS FLOAT) / CAST(ls.cntr_value AS FLOAT)AS DECIMAL(18,2)) * 100 AS [Log_Used_pct],
+	CASE WHEN ssu.reserved_space_kb>0 THEN ssu.reserved_space_kb/1024 ELSE 0 END AS [Version_Store_Size_MB],
+	db.[compatibility_level] AS [Compatibility_Level], db.collation_name AS [DB_Collation], 
+	db.page_verify_option_desc AS [Page_Verify_Option], db.is_auto_create_stats_on, db.is_auto_create_stats_incremental_on,
+	db.is_auto_update_stats_on, db.is_auto_update_stats_async_on, db.delayed_durability_desc AS [delayed_durability_status], 
+	db.is_query_store_on, db.snapshot_isolation_state_desc, db.is_read_committed_snapshot_on,
+	db.is_read_only, db.is_auto_close_on, db.is_auto_shrink_on, 
+	CASE WHEN db.target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on,
+	db.target_recovery_time_in_seconds, db.is_encrypted, db.is_trustworthy_on, db.is_db_chaining_on, db.is_parameterization_forced, 
+	db.is_memory_optimized_elevate_to_snapshot_on, db.is_remote_data_archive_enabled, db.is_mixed_page_allocation_on
+FROM master.sys.databases AS db (NOLOCK)
+INNER JOIN ##tmpdbsizes AS dbsize (NOLOCK) ON db.database_id = dbsize.database_id
+INNER JOIN sys.dm_os_performance_counters AS lu (NOLOCK) ON db.name = lu.instance_name
+INNER JOIN sys.dm_os_performance_counters AS ls (NOLOCK) ON db.name = ls.instance_name
+LEFT JOIN ##tmpdbsizes AS dbfssize (NOLOCK) ON db.database_id = dbfssize.database_id AND dbfssize.[type_desc] = ''FILESTREAM''
+LEFT JOIN sys.dm_tran_version_store_space_usage AS ssu (NOLOCK) ON db.database_id = ssu.database_id
+WHERE dbsize.[type_desc] = ''ROWS''
+	AND lu.counter_name LIKE N''Log File(s) Used Size (KB)%'' 
+	AND ls.counter_name LIKE N''Log File(s) Size (KB)%''
+	AND ls.cntr_value > 0 AND ls.cntr_value > 0' + CASE WHEN @dbScope IS NOT NULL THEN CHAR(10) + ' AND db.[database_id] IN (' + REPLACE(@dbScope,' ','') + ')' ELSE '' END + '
+ORDER BY [Database_Name]	
+OPTION (RECOMPILE)'
+END
+
+EXECUTE sp_executesql @sqlcmd;
 	
 SELECT 'Information' AS [Category], 'Database_Files' AS [Information], DB_NAME(database_id) AS [Database_Name], [file_id], type_desc, data_space_id AS [Filegroup], name, physical_name,
 	state_desc, (size * 8) / 1024 AS size_MB, CASE max_size WHEN -1 THEN 'Unlimited' ELSE CONVERT(VARCHAR(10), max_size) END AS max_size,
@@ -1421,7 +1548,7 @@ BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + @dbname + ''' AS [DBName], ISNULL((SELECT 1 FROM sys.filegroups FG WHERE FG.[type] = ''FX''), 0) AS [Has_MemoryOptimizedObjects],
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ISNULL((SELECT 1 FROM sys.filegroups FG WHERE FG.[type] = ''FX''), 0) AS [Has_MemoryOptimizedObjects],
 ISNULL((SELECT CONVERT(DECIMAL(18,2), (SUM(tms.memory_allocated_for_table_kb) + SUM(tms.memory_allocated_for_indexes_kb))) FROM sys.dm_db_xtp_table_memory_stats tms), 0.00) AS [MemoryAllocated_MemoryOptimizedObjects_KB],
 ISNULL((SELECT CONVERT(DECIMAL(18,2),(SUM(tms.memory_used_by_table_kb) + SUM(tms.memory_used_by_indexes_kb))) FROM sys.dm_db_xtp_table_memory_stats tms), 0.00) AS [MemoryUsed_MemoryOptimizedObjects_KB];'
 
@@ -1471,12 +1598,17 @@ RAISERROR (N'  |-Starting database file autogrows last 72h', 10, 1) WITH NOWAIT
 IF EXISTS (SELECT TOP 1 id FROM sys.traces WHERE is_default = 1)
 BEGIN
 	DECLARE @tracefilename VARCHAR(500)
+	IF @ostype = 'Windows'
 	SELECT @tracefilename = LEFT([path],LEN([path]) - PATINDEX('%\%', REVERSE([path]))) + '\log.trc' FROM sys.traces WHERE is_default = 1;
+	
+	IF @ostype <> 'Windows'
+	SELECT @tracefilename = LEFT([path],LEN([path]) - PATINDEX('%/%', REVERSE([path]))) + '/log.trc' FROM sys.traces WHERE is_default = 1;
+
 	WITH AutoGrow_CTE (databaseid, [filename], Growth, Duration, StartTime, EndTime)
 	AS
 	(
 	SELECT databaseid, [filename], SUM(IntegerData*8) AS Growth, Duration, StartTime, EndTime--, CASE WHEN EventClass =
-	FROM ::fn_trace_gettable(@tracefilename, default)
+	FROM sys.fn_trace_gettable(@tracefilename, default)
 	WHERE EventClass >= 92 AND EventClass <= 95 AND DATEDIFF(hh,StartTime,GETDATE()) < 72 -- Last 24h
 	GROUP BY databaseid, [filename], IntegerData, Duration, StartTime, EndTime
 	)
@@ -1526,7 +1658,7 @@ BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + @dbname + ''' AS [DBName], st.name, ss.name, stb.name, st.type_desc, st.parent_class_desc, st.create_date, st.modify_date, st.is_disabled, st.is_instead_of_trigger, st.is_not_for_replication
+SELECT N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], st.name, ss.name, stb.name, st.type_desc, st.parent_class_desc, st.create_date, st.modify_date, st.is_disabled, st.is_instead_of_trigger, st.is_not_for_replication
 FROM sys.triggers AS st
 INNER JOIN sys.tables stb ON st.parent_id = stb.[object_id]
 INNER JOIN sys.schemas ss ON stb.[schema_id] = ss.[schema_id]
@@ -1568,11 +1700,11 @@ ORDER BY stb.name, st.name;'
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
--- Enterprise features usage subsection
+-- Feature usage subsection
 --------------------------------------------------------------------------------------------------------------------------------
 IF @sqlmajorver > 9
 BEGIN
-	RAISERROR (N'|-Starting Enterprise features usage', 10, 1) WITH NOWAIT
+	RAISERROR (N'|-Starting Feature usage', 10, 1) WITH NOWAIT
 	/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerSku'))
@@ -1598,7 +1730,21 @@ BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sku_features (NOLOCK);'
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], feature_name FROM sys.dm_db_persisted_sku_features (NOLOCK)
+UNION ALL
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Change_Tracking'' AS feature_name FROM sys.change_tracking_databases (NOLOCK) WHERE database_id = DB_ID()
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Fine_grained_auditing'' AS feature_name FROM sys.database_audit_specifications (NOLOCK)'
+
+			IF @sqlmajorver >= 13
+			SET @sqlcmd = @sqlcmd + CHAR(10) + 'UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Polybase'' AS feature_name FROM sys.external_data_sources (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Row_Level_Security'' AS feature_name FROM sys.security_policies (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Always_Encrypted'' AS feature_name FROM sys.column_master_keys (NOLOCK)
+UNION ALL
+SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Dynamic_Data_Masking'' AS feature_name FROM sys.masked_columns (NOLOCK) WHERE is_masked = 1'
 
 			BEGIN TRY
 				INSERT INTO #tblPerSku
@@ -1606,7 +1752,7 @@ SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sk
 			END TRY
 			BEGIN CATCH
 				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
-				SELECT @ErrorMessage = 'Enterprise features usage subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+				SELECT @ErrorMessage = 'Feature usage subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 			
@@ -1619,31 +1765,31 @@ SELECT ''' + @dbname + ''' AS [DBName], feature_name FROM sys.dm_db_persisted_sk
 	IF @sqlmajorver > 10 AND ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13) AND @IsHadrEnabled = 1
 	BEGIN
 		INSERT INTO #tblPerSku
-		SELECT NULL, 'Always_On' AS feature_name
+		SELECT [dbname], 'Always_On' AS feature_name FROM #tmpdbs0 WHERE is_database_joined = 1;
 	END;
 	
-	IF (SELECT COUNT(DISTINCT d.name) FROM master.sys.databases d (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL) > 0 -- Snapshot
+	IF (SELECT COUNT(DISTINCT [name]) FROM master.sys.databases (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL) > 0 -- Snapshot
 	BEGIN
 		INSERT INTO #tblPerSku
-		SELECT DISTINCT d.name, 'DB_Snapshot' AS feature_name FROM master.sys.databases d (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL
+		SELECT DISTINCT [name], 'DB_Snapshot' AS feature_name FROM master.sys.databases (NOLOCK) WHERE database_id NOT IN (2,3) AND source_database_id IS NOT NULL;
 	END;
-	
-	IF (@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13
+
+	IF (SELECT COUNT(DISTINCT [name]) FROM master.sys.master_files (NOLOCK) WHERE database_id NOT IN (2,3) AND [type] = 2 and file_guid IS NOT NULL) > 0 -- Filestream
 	BEGIN
-		DELETE FROM #tblPerSku
-		WHERE feature_name IN ('ColumnStoreIndex','InMemoryOLTP')
+		INSERT INTO #tblPerSku
+		SELECT DISTINCT DB_NAME(database_id), 'Filestream' AS feature_name FROM sys.master_files (NOLOCK) WHERE database_id NOT IN (2,3) AND [type] = 2 and file_guid IS NOT NULL;	
 	END;
 	
 	IF (SELECT COUNT([Feature_Name]) FROM #tblPerSku) > 0
 	BEGIN
-		SELECT 'Information' AS [Category], 'Enterprise_features_usage' AS [Check], '[INFORMATION: Some databases are using Enterprise only features]' AS [Comment]
-		SELECT 'Information' AS [Category], 'Enterprise_features_usage' AS [Information], DBName AS [Database_Name], [Feature_Name]
+		SELECT 'Information' AS [Category], 'Feature_usage' AS [Check], '[INFORMATION: Some databases are using features that are not common to all editions]' AS [Comment]
+		SELECT 'Information' AS [Category], 'Feature_usage' AS [Information], DBName AS [Database_Name], [Feature_Name]
 		FROM #tblPerSku
 		ORDER BY 2, 3
 	END
 	ELSE
 	BEGIN
-		SELECT 'Information' AS [Category], 'Enterprise_features_usage' AS [Check], '[NA]' AS [Comment]
+		SELECT 'Information' AS [Category], 'Feature_usage' AS [Check], '[NA]' AS [Comment]
 	END
 END;
 
@@ -1724,7 +1870,7 @@ DECLARE @MSdb int
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
 DROP TABLE #tmpdbs1;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
-CREATE TABLE #tmpdbs1 (id int IDENTITY(1,1), [dbid] int, [dbname] VARCHAR(1000), [role] tinyint, [secondary_role_allow_connections] tinyint, isdone bit)
+CREATE TABLE #tmpdbs1 (id int IDENTITY(1,1), [dbid] int, [dbname] NVARCHAR(1000), [role] tinyint, [secondary_role_allow_connections] tinyint, isdone bit)
 
 RAISERROR (N'|-Excluding MS shipped by standard names and databases belonging to non-readable AG secondary replicas (if available)', 10, 1) WITH NOWAIT
 -- Ignore MS shipped databases and databases belonging to non-readable AG secondary replicas
@@ -1911,7 +2057,7 @@ RAISERROR (N'|-Applying 2nd layer of specific database scope, if any', 10, 1) WI
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
 DROP TABLE #tmpdbs_userchoice;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
-CREATE TABLE #tmpdbs_userchoice ([dbid] int PRIMARY KEY, [dbname] VARCHAR(1000))
+CREATE TABLE #tmpdbs_userchoice ([dbid] int PRIMARY KEY, [dbname] NVARCHAR(1000))
 	
 IF @dbScope IS NOT NULL
 BEGIN
@@ -1946,9 +2092,9 @@ DECLARE /*@cpucount int, @numa int, */@affined_cpus int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300)
 SET @cpuaffin_fixed = @cpuaffin
 SET @i = @cpucount/@numa + 1
-WHILE @i <= @cpucount
+WHILE @i < @cpucount + @numa
 BEGIN
-	SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin, @i, 1))
+	SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
 	SET @i = @i + @cpucount/@numa + 1
 END
 */
@@ -2019,6 +2165,19 @@ SELECT 'Processor_checks' AS [Category], 'Processor_Summary' AS [Information], c
 	@cpuaffin_fixed AS Affinity_Mask_Bitmask
 FROM sys.dm_os_sys_info (NOLOCK)
 OPTION (RECOMPILE);
+
+-- Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594)
+IF LOWER(@SystemManufacturer) <> 'microsoft' and LOWER(@SystemManufacturer) <> 'vmware' and LOWER(@ostype) = 'windows'
+BEGIN
+	DECLARE @BIOSVendor AS varchar(128), @Processor_Name as varchar(128)
+
+	SELECT @BIOSVendor = [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor'
+	SELECT @Processor_Name = [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString'
+	IF LOWER(@BIOSVendor) = 'hp' AND LOWER(@Processor_Name) like '%xeon%e5%' --and
+	BEGIN
+		SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Information], 'Warning: You may be affected by HP Logical Processor issue outlined in https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594' AS [Deviation]
+	END
+END
 
 IF @ptochecks = 1
 BEGIN
@@ -2222,22 +2381,22 @@ SELECT 'Memory_checks' AS [Category], 'Memory_issues_CommitedMem' AS [Check],
 
 SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 	CASE WHEN @arch IS NULL THEN '[WARNING: Could not determine architecture needed for check]'
-		WHEN (@systemmem <= 2048 AND @maxservermem > @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 2049 AND 4096 AND @maxservermem > @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 4097 AND 8192 AND @maxservermem > @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 8193 AND 12288 AND @maxservermem > @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 12289 AND 24576 AND @maxservermem > @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem BETWEEN 24577 AND 32768 AND @maxservermem > @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) OR
-		(@systemmem > 32768 AND @maxservermem > @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))) THEN '[WARNING: Not at the recommended MaxMem setting for this server memory configuration, with a single instance]'
+		WHEN (@systemmem <= 2048 AND @maxservermem > @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 2049 AND 4096 AND @maxservermem > @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 4097 AND 8192 AND @maxservermem > @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 8193 AND 12288 AND @maxservermem > @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 12289 AND 24576 AND @maxservermem > @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem BETWEEN 24577 AND 32768 AND @maxservermem > @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
+		(@systemmem > 32768 AND @maxservermem > @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) THEN '[WARNING: Not at the recommended MaxMem setting for this server memory configuration, with a single instance]'
 		ELSE '[OK]'
 	END AS [Deviation],
-	CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 8193 AND 12288 THEN @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
-		WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))
+	CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 8193 AND 12288 THEN @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
 	END AS [Recommended_MaxMem_MB_SingleInstance],
 	CASE WHEN @systemmem <= 2048 THEN 512
 		WHEN @systemmem BETWEEN 2049 AND 4096 THEN 819
@@ -2387,7 +2546,7 @@ ORDER BY SUM(mcch.removed_all_rounds_count) DESC, mcch.[type];'
 		SET @sqlcmd = 'SELECT ''Memory_checks'' AS [Category], ''Buffer_Pool_Consumers'' AS [Information], 
 	COUNT_BIG(DISTINCT page_id)*8/1024 AS total_pages_MB, 
 	CASE database_id WHEN 32767 THEN ''ResourceDB'' ELSE DB_NAME(database_id) END AS database_name,
-	SUM(row_count)/COUNT_BIG(DISTINCT page_id) AS avg_row_count_per_page, 
+	SUM(CONVERT(BIGINT,row_count))/COUNT_BIG(DISTINCT page_id) AS avg_row_count_per_page, 
 	SUM(CONVERT(BIGINT, free_space_in_bytes))/COUNT_BIG(DISTINCT page_id) AS avg_free_space_bytes_per_page
 	' + CASE WHEN @sqlmajorver >= 12 THEN ',is_in_bpool_extension' ELSE '' END + '
 	' + CASE WHEN @sqlmajorver = 10 THEN ',numa_node' ELSE '' END + '
@@ -2490,17 +2649,19 @@ DECLARE @lpim bit, @lognumber int, @logcount int
 
 IF ((@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13)
 BEGIN
-	SET @sqlcmd = N'SELECT @lpimOUT = CASE WHEN sql_memory_model = 2 THEN 1 ELSE 0 END FROM sys.dm_os_sys_info';
+	SET @sqlcmd = N'SELECT @lpimOUT = CASE WHEN sql_memory_model = 2 THEN 1 ELSE 0 END FROM sys.dm_os_sys_info (NOLOCK)';
 	SET @params = N'@lpimOUT bit OUTPUT';
 	EXECUTE sp_executesql @sqlcmd, @params, @lpimOUT=@lpim OUTPUT;
 END
-ELSE IF ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13)
+
+IF ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR (@sqlmajorver >= 10 AND @sqlmajorver < 13))
 BEGIN
 	SET @sqlcmd = N'SELECT @lpimOUT = CASE WHEN locked_page_allocations_kb > 0 THEN 1 ELSE 0 END FROM sys.dm_os_process_memory (NOLOCK)'
 	SET @params = N'@lpimOUT bit OUTPUT';
 	EXECUTE sp_executesql @sqlcmd, @params, @lpimOUT=@lpim OUTPUT
 END
-ELSE IF @sqlmajorver = 9
+
+IF @sqlmajorver = 9
 BEGIN
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) = 1 -- Is securityadmin
@@ -2570,15 +2731,15 @@ BEGIN
 	END;
 END
 
-IF @lpim = 0 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
+IF @lpim = 0 AND CONVERT(DECIMAL(3,1), @osver) < 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[WARNING: Locked pages are not in use by SQL Server. In a WS2003 x64 architecture it is recommended to enable LPIM]' AS [Deviation]
 END
-ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) < 6.0 AND @arch = 64
+ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @osver) < 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in a WS2003 x64 architecture]' AS [Deviation]
 END
-ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @winver) >= 6.0 AND @arch = 64
+ELSE IF @lpim = 1 AND CONVERT(DECIMAL(3,1), @osver) >= 6.0 AND @arch = 64
 BEGIN
 	SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[INFORMATION: Locked pages are being used by SQL Server. This is recommended in WS2008 or above only when there are signs of paging]' AS [Deviation]
 END
@@ -2664,9 +2825,9 @@ SELECT 'Pagefile_checks' AS [Category], 'Pagefile_free_space' AS [Check],
 	@pagefile AS total_pagefile_MB, @freepagefile AS available_pagefile_MB;
 
 SELECT 'Pagefile_checks' AS [Category], 'Pagefile_minimum_size' AS [Check],
-	CASE WHEN @winver = '5.2' AND @arch = 64 AND @pagefile < 8192 THEN '[WARNING: Pagefile is smaller than 8GB on a WS2003 x64 system. Please revise Pagefile settings]'
-		WHEN @winver = '5.2' AND @arch = 32 AND @pagefile < 2048 THEN '[WARNING: Pagefile is smaller than 2GB on a WS2003 x86 system. Please revise Pagefile settings]'
-		WHEN @winver <> '5.2' THEN '[NA]'
+	CASE WHEN @osver = '5.2' AND @arch = 64 AND @pagefile < 8192 THEN '[WARNING: Pagefile is smaller than 8GB on a WS2003 x64 system. Please revise Pagefile settings]'
+		WHEN @osver = '5.2' AND @arch = 32 AND @pagefile < 2048 THEN '[WARNING: Pagefile is smaller than 2GB on a WS2003 x86 system. Please revise Pagefile settings]'
+		WHEN @osver <> '5.2' THEN '[NA]'
 		ELSE '[OK]' END AS [Deviation], 
 	@pagefile AS total_pagefile_MB;
 	
@@ -2678,8 +2839,7 @@ SELECT 'Pagefile_checks' AS [Category], 'Process_paged_out' AS [Check],
 IF @ptochecks = 1
 RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
 
---------------------------------------------------------------------------------------------------------------------------------
--- I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
+--------------------------------------------------------------------------------------------------------------------------OUT VARCHAR(20), all in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
 -- io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.
 -- Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc). 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -2693,7 +2853,7 @@ BEGIN
 	DROP TABLE #tmp_dm_io_virtual_file_stats;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))	
 	CREATE TABLE [dbo].[#tmp_dm_io_virtual_file_stats]([retrieval_time] [datetime],database_id int, [file_id] int, [DBName] sysname, [logical_file_name] NVARCHAR(255), [type_desc] NVARCHAR(60), 
-		[physical_location] NVARCHAR(260),[sample_ms] int,[num_of_reads] bigint,[num_of_bytes_read] bigint,[io_stall_read_ms] bigint,[num_of_writes] bigint,
+		[physical_location] NVARCHAR(260),[sample_ms] bigint,[num_of_reads] bigint,[num_of_bytes_read] bigint,[io_stall_read_ms] bigint,[num_of_writes] bigint,
 		[num_of_bytes_written] bigint,[io_stall_write_ms] bigint,[io_stall] bigint,[size_on_disk_bytes] bigint,
 		CONSTRAINT PK_dm_io_virtual_file_stats PRIMARY KEY CLUSTERED(database_id, [file_id], [retrieval_time]));
 
@@ -2901,7 +3061,7 @@ DECLARE @planguid NVARCHAR(64), @powerkey NVARCHAR(255)
 --SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
 SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
 
-IF CONVERT(DECIMAL(3,1), @winver) >= 6.0
+IF CONVERT(DECIMAL(3,1), @osver) >= 6.0
 BEGIN
 	BEGIN TRY
 		--EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey, 'PreferredPlan', @planguid OUTPUT, NO_OUTPUT
@@ -2916,16 +3076,16 @@ END
 
 -- http://support.microsoft.com/kb/935799/en-us
 
-IF @winver IS NULL 
+IF @osver IS NULL 
 BEGIN
 	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[WARNING: Could not determine Windows version for check]' AS [Deviation]
 END
-ELSE IF @planguid IS NOT NULL AND @planguid <> '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
+ELSE IF @planguid IS NOT NULL AND @planguid <> N'8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
 BEGIN
 	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[WARNING: The current power plan scheme is not recommended for database servers. Please reconfigure for High Performance mode]' AS [Deviation]
-	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Information], CASE WHEN @planguid = '381b4222-f694-41f0-9685-ff5bb260df2e' THEN 'Balanced'
-		WHEN @planguid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' THEN 'High Performance'
-		WHEN @planguid = 'a1841308-3541-4fab-bc81-f71556f20b4a' THEN 'Power Saver'
+	SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Information], CASE WHEN @planguid = N'381b4222-f694-41f0-9685-ff5bb260df2e' THEN 'Balanced'
+		WHEN @planguid = N'8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' THEN 'High Performance'
+		WHEN @planguid = N'a1841308-3541-4fab-bc81-f71556f20b4a' THEN 'Power Saver'
 		ELSE 'Other' END AS [Power_Plan]
 END
 ELSE IF @planguid IS NOT NULL AND @planguid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'
@@ -2937,7 +3097,12 @@ END;
 -- Disk Partition alignment offset < 64KB subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Disk Partition alignment offset < 64KB', 10, 1) WITH NOWAIT
-IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
+IF @ostype <> 'Windows'
+BEGIN
+	RAISERROR('    |- [INFORMATION: "partition alignment offset" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
+	--RETURN
+END
+ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 BEGIN
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
@@ -3165,7 +3330,12 @@ END;
 -- NTFS block size in volumes that hold database files <> 64KB subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting NTFS block size in volumes that hold database files <> 64KB', 10, 1) WITH NOWAIT
-IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
+IF @ostype <> 'Windows'
+BEGIN
+	RAISERROR('    |- [INFORMATION: "NTFS block size" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
+	--RETURN
+END
+ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 BEGIN
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
@@ -3395,7 +3565,12 @@ END;
 IF @diskfrag = 1
 BEGIN
 	RAISERROR (N'  |-Starting Disk Fragmentation Analysis', 10, 1) WITH NOWAIT
-	IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
+	IF @ostype <> 'Windows'
+	BEGIN
+		RAISERROR('    |- [INFORMATION: "Disk Fragmentation Analysis" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
+		--RETURN
+	END
+	ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 	BEGIN
 		IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
@@ -3665,7 +3840,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 -- Cluster Quorum Model subsection
 --------------------------------------------------------------------------------------------------------------------------------
-IF @clustered = 1 AND @winver <> '5.2'
+IF @clustered = 1 AND @osver <> '5.2'
 BEGIN
 	RAISERROR (N'  |-Starting Cluster Quorum Model', 10, 1) WITH NOWAIT
 	IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted')) AND @psver > 1
@@ -3701,7 +3876,7 @@ BEGIN
 			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluOutput'))
 			CREATE TABLE #xp_cmdshell_CluOutput (line int IDENTITY(1,1) PRIMARY KEY, [Output] VARCHAR(50));
 
-			IF @winver <> '5.2'
+			IF @osver <> '5.2'
 			BEGIN
 				SELECT @CMD = N'powershell -NoLogo -NoProfile "Import-Module FailoverClusters"; "Get-ClusterNode | Format-Table -Autosize -HideTableHeaders NodeWeight"' 
 				INSERT INTO #xp_cmdshell_CluNodesOutput ([Output])
@@ -3717,7 +3892,7 @@ BEGIN
 				SELECT @CntNodes = COUNT(NodeName) FROM sys.dm_os_cluster_nodes (NOLOCK)
 				
 				SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 
-					CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @winver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
+					CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @osver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndDiskMajority' AND @CntNodes % 2 = 1 THEN '[WARNING: The current quorum model is not recommended for a cluster with ODD number of nodes]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeMajority' AND @CntNodes % 2 = 0 THEN '[WARNING: The current quorum model is not recommended for a cluster with EVEN number of nodes]'
 						WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndFileShareMajority' THEN '[INFORMATION: The current quorum model is recommended for clusters with special configurations]'
@@ -3733,7 +3908,7 @@ BEGIN
 				IF EXISTS (SELECT TOP 1 [Output] FROM #xp_cmdshell_CluOutput WHERE [Output] LIKE '%Majority%' OR [Output] LIKE '%Disk%')
 				BEGIN
 					SELECT 'Server_checks' AS [Category], 'Cluster_Quorum' AS [Check], 
-						CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @winver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
+						CASE WHEN REPLACE([Output], CHAR(9), '') = 'DiskOnly' AND @osver <> '5.2' THEN '[WARNING: The current quorum model is not recommended since WS2003]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndDiskMajority' AND @CntVotes % 2 = 1 THEN '[WARNING: The current quorum model is not recommended for a cluster with ODD number of node votes]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeMajority' AND @CntVotes % 2 = 0 THEN '[WARNING: The current quorum model is not recommended for a cluster with EVEN number of node votes]'
 							WHEN REPLACE([Output], CHAR(9), '') = 'NodeAndFileShareMajority' THEN '[INFORMATION: The current quorum model is recommended for clusters with special configurations]'
@@ -3779,18 +3954,28 @@ END;
 
 IF @IsHadrEnabled = 1
 BEGIN
-	SET @sqlcmd	= N'DECLARE @winver VARCHAR(5), @CntNodes tinyint
-SELECT @winver = windows_release FROM sys.dm_os_windows_info (NOLOCK)	
+	SET @sqlcmd	= N'DECLARE @osver VARCHAR(5), @CntNodes tinyint
+SELECT @osver = windows_release FROM sys.dm_os_windows_info (NOLOCK)	
 SELECT @CntNodes = SUM(number_of_quorum_votes) FROM sys.dm_hadr_cluster_members (NOLOCK)
 
 SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Cluster_Quorum'' AS [Check], cluster_name,
-	CASE WHEN quorum_type = 3 AND @winver <> ''5.2'' THEN ''[WARNING: The current quorum model is not recommended since WS2003]''
+	CASE WHEN quorum_type = 3 AND @osver <> ''5.2'' THEN ''[WARNING: The current quorum model is not recommended since WS2003]''
 		WHEN quorum_type = 1 AND @CntNodes % 2 = 1 THEN ''[WARNING: The current quorum model is not recommended for a cluster with ODD number of nodes]''
 		WHEN quorum_type = 0 AND @CntNodes % 2 = 0 THEN ''[WARNING: The current quorum model is not recommended for a cluster with EVEN number of nodes]''
 		WHEN quorum_type = 2 THEN ''[INFORMATION: The current quorum model is recommended for clusters with special configurations]''
 		ELSE ''[OK]'' END AS [Deviation], 
 	QUOTENAME(quorum_type_desc) AS QuorumModel
 FROM sys.dm_hadr_cluster;'
+
+	EXECUTE sp_executesql @sqlcmd
+END;
+
+IF @sqlmajorver >= 13 AND @IsHadrEnabled = 1
+BEGIN
+	SET @sqlcmd	= N'IF EXISTS (SELECT 1 FROM sys.availability_groups where db_failover = 0) 
+	SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Replica_Cluster_Database_Health_Detection'' AS [Information], ''[INFORMATION: Consider enabling Database Health Detection]''
+	SELECT ''Server_checks'' AS [Category], ''AlwaysOn_Replica_Cluster_Database_Health_Detection'' AS [Information], name, failure_condition_level, db_failover 
+	FROM sys.availability_groups where db_failover = 0;'
 
 	EXECUTE sp_executesql @sqlcmd
 END;
@@ -4489,7 +4674,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlservice = 'LocalSystem' THEN '[WARNING: Running SQL Server under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server under this account is not recommended]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4503,9 +4688,9 @@ BEGIN
 			WHEN @clustered = 1 AND @accntsqlagentservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server Agent under this account is not supported]' 
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4515,10 +4700,10 @@ BEGIN
 			WHEN @accntolapservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 			WHEN @accntolapservice = @accntsqlservice THEN '[WARNING: Running SQL Server Analysis Services under the same account as SQL Server is not recommended]' 
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND @winver <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2005 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
+			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4527,10 +4712,10 @@ BEGIN
 			WHEN @statusdtsservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntdtsservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 			WHEN @accntdtsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Integration Services under the same account as SQL Server is not recommended]' 
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @winver <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4540,10 +4725,10 @@ BEGIN
 			WHEN @accntrsservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 			WHEN @accntrsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Reporting Services under the same account as SQL Server is not recommended]' 
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
-			WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			WHEN @sqlmajorver >= 11 AND @winver <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
+			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-			WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
+			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
 	UNION ALL
@@ -4554,12 +4739,12 @@ BEGIN
 				WHEN @accntftservice IS NULL THEN '[WARNING: Could not detect account for check]' 
 				WHEN @accntftservice = @accntsqlservice THEN '[WARNING: Running Full-Text Daemon under the same account as SQL Server is not recommended]' 
 				WHEN @accntftservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running Full-Text Service under this account is not recommended]' 
-				WHEN @winver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
+				WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 				WHEN @sqlmajorver <= 10 AND @accntftservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running Full-Text Service under this account is not recommended]' 
 				WHEN @sqlmajorver <= 10 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
-				WHEN @sqlmajorver >= 11 AND @winver <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
+				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 				-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
-				WHEN @sqlmajorver >= 11 AND CONVERT(float, @winver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
+				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 			ELSE '[OK]' END 
 		ELSE '[INFORMATION: Service is not installed]' 
 		END AS [Deviation]
@@ -4723,7 +4908,7 @@ BEGIN
 END
 ELSE
 BEGIN
-	RAISERROR('  |- [INFORMATION: "Service Accounts and SPN registration" check was skipped: either spn checks were not allowed, xp_cmdshell was not allowed or the service account is not a domain account.]', 10, 1, N'disallow_xp_cmdshell')
+	RAISERROR('    |- [INFORMATION: "Service Accounts and SPN registration" check was skipped: either spn checks were not allowed, xp_cmdshell was not allowed or the service account is not a domain account.]', 10, 1, N'disallow_xp_cmdshell')
 	--RETURN
 END;
 
@@ -4736,7 +4921,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN (@sqlmajorver = 9 AND @sqlbuild < 5000)
 			OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild < 6000)
 			OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 6000)
-			OR (@sqlmajorver = 11 AND @sqlbuild < 6020)
+			OR (@sqlmajorver = 11 AND @sqlbuild < 7001)
 			OR (@sqlmajorver = 12 AND @sqlbuild < 5000)
 			OR (@sqlmajorver = 13 AND @sqlbuild < 4000)
 		THEN '[WARNING: current service pack has been superseded in the current SQL Server version. Install the latest service pack as soon as possible.]'
@@ -4748,6 +4933,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		WHEN @sqlmajorver = 11 THEN '2012'
 		WHEN @sqlmajorver = 12 THEN '2014'
 		WHEN @sqlmajorver = 13 THEN '2016'
+		WHEN @sqlmajorver = 14 THEN '2017'
 	END AS [Product_Major_Version],
 	CONVERT(VARCHAR(128), SERVERPROPERTY('ProductLevel')) AS Product_Level,
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductBuildType')) ELSE 'NA' END AS Product_Build_Type,
@@ -4945,12 +5131,12 @@ EXEC ('DBCC TRACESTATUS WITH NO_INFOMSGS')
 
 IF @sqlmajorver >= 11
 BEGIN
-	DECLARE @dbname0 VARCHAR(1000), @dbid0 int, @sqlcmd0 NVARCHAR(4000), @has_colstrix int
+	DECLARE @dbname0 NVARCHAR(1000), @dbid0 int, @sqlcmd0 NVARCHAR(4000), @has_colstrix int, @min_compat_level tinyint
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
 	DROP TABLE #tblColStoreIXs;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblColStoreIXs'))
-	CREATE TABLE #tblColStoreIXs ([DBName] VARCHAR(1000), [Schema] VARCHAR(100), [Table] VARCHAR(255), [Object] VARCHAR(255));
+	CREATE TABLE #tblColStoreIXs ([DBName] NVARCHAR(1000), [Schema] VARCHAR(100), [Table] VARCHAR(255), [Object] VARCHAR(255));
 
 	UPDATE #tmpdbs0
 	SET isdone = 0;
@@ -4970,7 +5156,7 @@ BEGIN
 			SELECT TOP 1 @dbname0 = [dbname], @dbid0 = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 
 			SET @sqlcmd0 = 'USE ' + QUOTENAME(@dbname0) + ';
-SELECT ''' + @dbname0 + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), i.name 
+SELECT ''' + REPLACE(@dbname0, CHAR(39), CHAR(95)) + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), i.name 
 FROM sys.indexes AS i (NOLOCK)
 INNER JOIN sys.objects AS o (NOLOCK) ON o.[object_id] = i.[object_id]
 INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = i.[object_id]
@@ -4994,6 +5180,9 @@ WHERE i.[type] IN (5,6,7)' -- 5 = Clustered columnstore; 6 = Nonclustered column
 	END;
 	
 	SELECT @has_colstrix = COUNT(*) FROM #tblColStoreIXs
+
+	SELECT @min_compat_level = min([compatibility_level]) from #tmpdbs0
+
 END;
 
 IF (SELECT COUNT(TraceFlag) FROM @tracestatus WHERE [Global]=1) = 0
@@ -5052,7 +5241,7 @@ BEGIN
 						OR (@sqlmajorver = 9 AND @sqlbuild >= 4226))
 					THEN '[INFORMATION: TF845 supports locking pages in memory in SQL Server Standard Editions]'
 				WHEN SERVERPROPERTY('EngineEdition') = 2 --Standard SKU
-					AND @sqlmajorver = 11
+					AND @sqlmajorver >= 11 
 					THEN '[WARNING: TF845 is not needed in SQL 2012 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -5068,12 +5257,13 @@ BEGIN
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 902
 	END;
-	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1117)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-			'[INFORMATION: TF1117 autogrows all files at the same time and affects all databases]' 
-			AS [Deviation], TraceFlag
+		CASE WHEN @sqlmajorver >= 13 --SQL 2016
+			THEN '[WARNING: TF1117 is not needed in SQL 2016 and above]'
+			ELSE '[INFORMATION: TF1117 autogrows all files at the same time and affects all databases]' 
+		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1117
 	END;
@@ -5081,12 +5271,13 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[INFORMATION: TF1118 forces uniform extent allocations instead of mixed page allocations]'
-			AS [Deviation], TraceFlag
+		CASE WHEN @sqlmajorver >= 13 --SQL 2016
+			THEN '[WARNING: TF1118 is not needed in SQL 2016 and above]'
+			ELSE '[INFORMATION: TF1118 forces uniform extent allocations instead of mixed page allocations]'
+		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1118
 	END;
-
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1204)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -5137,7 +5328,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			CASE WHEN @sqlmajorver = 9 OR @sqlmajorver = 10 OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 4100)
 					THEN '[INFORMATION: TF1236 enables database lock partitioning]'
-				WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver = 13
+				WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver >= 13
 					THEN '[WARNING: TF1236 is not needed in SQL 2012 SP3, SQL Server 2014 SP1 and above]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5158,8 +5349,8 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 12
 				THEN '[INFORMATION: TF2312 enables New CE model, SQL Server 2014 version]' 
-			WHEN @sqlmajorver = 13
-				THEN '[INFORMATION: TF2312 enables New CE model to SQL Server 2014 or SQL Server 2016 versions, dependent of the compatibility level of the database]' 
+			WHEN @sqlmajorver >= 13
+				THEN '[INFORMATION: TF2312 enables New CE model to SQL Server 2014 or above versions, dependent of the compatibility level of the database]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5181,11 +5372,11 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 9
-				AND @maxservermem >= 100000 * 1024 -- 100GB
+				AND @maxservermem >= 102400 -- 100GB
 				AND @maxservermem <> 2147483647
 				THEN '[INFORMATION: TF2335 assumes a fixed amount of memory is available during query optimization. Recommended when server has more than 100GB of memory]'
 			WHEN @sqlmajorver >= 9
-				AND @maxservermem < 100000 * 1024 -- 100GB
+				AND @maxservermem < 102400 -- 100GB
 				AND @maxservermem <> 2147483647
 				THEN '[WARNING: TF2335 should not be set on servers with less than 100GB of memory]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
@@ -5196,7 +5387,7 @@ BEGIN
 	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2335)
 		AND @sqlmajorver >= 9
-		AND @maxservermem >= 100000 * 1024 -- 100GB
+		AND @maxservermem >= 102400 -- 100GB
 		AND @maxservermem <> 2147483647
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
@@ -5216,10 +5407,11 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver >= 11
+			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12 OR (@sqlmajorver >= 13 AND @min_compat_level < 130)
 				THEN '[INFORMATION: TF2371 changes the fixed rate of the 20pct threshold for update statistics into a dynamic percentage rate]'
-			WHEN @sqlmajorver = 13
-				THEN '[WARNING: TF2371 is not needed in SQL 2016 and above]'
+			WHEN @sqlmajorver >= 13 AND @min_compat_level >= 130
+				--TF2371 has no effect if all databases are at least at compatibility level 130.
+				THEN '[WARNING: TF2371 is not needed in SQL 2016 and above when all databases are at compatibility level 130 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5227,7 +5419,7 @@ BEGIN
 	END;
 	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
-		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver >= 11)
+		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12 OR (@sqlmajorver >= 13 AND @min_compat_level < 130))
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF2371 to change the 20pct fixed rate threshold for update statistics into a dynamic percentage rate]' --http://blogs.msdn.com/b/saponsqlserver/archive/2011/09/07/changes-to-automatic-update-statistics-in-sql-server-traceflag-2371.aspx
@@ -5374,19 +5566,6 @@ BEGIN
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4139
 	END;
-	
-	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4199)
-	BEGIN
-		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
-					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
-					OR (@sqlmajorver >= 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
-				THEN '[WARNING: TF4135 should be used instead of TF4199 in this SQL build]'
-			ELSE '[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-			END AS [Deviation], TraceFlag
-		FROM @tracestatus 
-		WHERE [Global] = 1 AND TraceFlag = 4199
-	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6498)
 	BEGIN
@@ -5408,7 +5587,7 @@ BEGIN
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
 				THEN '[INFORMATION: TF6532 and TF 6533 enable performance improvement of query operations with spatial data types]'
-			WHEN @sqlmajorver = 13
+			WHEN @sqlmajorver >= 13
 				THEN '[WARNING: TF6532 and TF 6533 are not needed in SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -5421,7 +5600,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
-					OR @sqlmajorver = 13
+					OR @sqlmajorver >= 13
 				THEN '[INFORMATION: TF6534 enables performance improvement of query operations with spatial data types]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -5597,6 +5776,26 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 10204
 	END;
+		
+	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4199)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
+			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
+					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
+					OR (@sqlmajorver >= 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
+				THEN '[WARNING: TF4135 should be used instead of TF4199 in this SQL build]'
+			ELSE '[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
+			END AS [Deviation], TraceFlag
+		FROM @tracestatus 
+		WHERE [Global] = 1 AND TraceFlag = 4199;
+		
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			[name] AS [DBName], sd.compatibility_level, 'On' AS [TF_4199],
+			'Enabled' AS 'QO_changes_from_previous_DB_compat_levels',
+			'Enabled' AS 'QO_changes_for_current_version_post_RTM'
+		FROM sys.databases sd
+		INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
+	END;
 END;
 		
 IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (4135,4199))
@@ -5609,9 +5808,17 @@ BEGIN
 			THEN '[INFORMATION: Consider enabling TF4135 to support fixes and enhancements on the query optimizer]'
 			WHEN (@sqlmajorver = 9 AND @sqlbuild >= 4266) 
 				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1818 AND 1835)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 1702) OR @sqlmajorver >= 11
+				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 1702) OR @sqlmajorver = 11 OR @sqlmajorver = 12
+				OR (@sqlmajorver = 13 AND @sqlbuild >= 2149) OR @sqlmajorver > 13
 			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-		END AS [Deviation]
+		END AS [Deviation];
+		
+	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+		[name] AS [DBName], sd.compatibility_level, 'Off' AS [TF_4199],
+		CASE WHEN sd.compatibility_level < 130 THEN 'Disabled' ELSE 'Enabled' END AS 'QO_changes_from_previous_DB_compat_levels',
+		'Disabled' AS 'QO_changes_for_current_version_post_RTM'
+	FROM sys.databases sd
+	INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
 END;
 	
 --------------------------------------------------------------------------------------------------------------------------------
@@ -5633,7 +5840,7 @@ RAISERROR (N'  |-Starting System configurations', 10, 1) WITH NOWAIT
 -- max worker threads (should be zero in 2005 or above)
 -- affinity mask and affinity I/O mask (must not overlap)
 
-DECLARE @awe tinyint, @ssp bit, @bckcomp bit, @clr bit, @costparallel tinyint, @chain bit, @lpooling bit
+DECLARE @awe tinyint, @ssp bit, @bckcomp bit, @clr bit, @costparallel smallint, @chain bit, @lpooling bit
 DECLARE @adhoc smallint, @pboost bit, @qtimeout int, @cmdshell bit, @deftrace bit, @remote bit, @autoNUMA bit
 DECLARE @minmemqry int, @allowupd bit, @mwthreads int, @recinterval int, @netsize smallint
 DECLARE @ixmem smallint, @adhocqry bit, @locks int, @qrywait int--, @mwthreads_count int
@@ -5652,7 +5859,7 @@ SELECT @awe = CONVERT(tinyint, [value]) FROM sys.configurations WHERE [Name] = '
 SELECT @autoNUMA = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'automatic soft-NUMA disabled';
 SELECT @bckcomp = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'backup compression default';
 SELECT @clr = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'clr enabled';
-SELECT @costparallel = CONVERT(tinyint, [value]) FROM sys.configurations WHERE [Name] = 'cost threshold for parallelism';
+SELECT @costparallel = CONVERT(smallint, [value]) FROM sys.configurations WHERE [Name] = 'cost threshold for parallelism';
 SELECT @chain = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'cross db ownership chaining';
 SELECT @deftrace = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'default trace enabled';
 SELECT @ixmem = CONVERT(smallint, [value]) FROM sys.configurations WHERE [Name] = 'index create memory (KB)';
@@ -5675,7 +5882,7 @@ SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'All
 UNION ALL
 SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Ad Hoc Distributed Queries' AS [Setting], @adhocqry AS [Current Value], CASE WHEN @adhocqry = 0 THEN '[OK]' ELSE '[WARNING: Ad Hoc Distributed Queries are enabled]' END AS [Deviation], '' AS [Comment]
 UNION ALL
-SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Auto Soft NUMA Enabled' AS [Setting], @autoNUMA AS [Current Value], CASE WHEN @sqlmajorver >= 13 AND @autoNUMA = 0 THEN '[WARNING: Auto Soft NUMA is not enabled]' WHEN @sqlmajorver < 13 THEN '[NA]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
+SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Auto Soft NUMA Enabled' AS [Setting], @autoNUMA AS [Current Value], CASE WHEN @sqlmajorver >= 13 AND @autoNUMA = 1 THEN '[WARNING: Auto Soft NUMA is not enabled]' WHEN @sqlmajorver < 13 THEN '[NA]' ELSE '[OK]' END AS [Deviation], '' AS [Comment]
 UNION ALL
 SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Affinity Mask' AS [Setting], @affin AS [Current Value], CASE WHEN (@affin & @affinIO <> 0) OR (@affin & @affinIO <> 0 AND @affin64 & @affin64IO <> 0) THEN '[WARNING: Current Affinity Mask and Affinity I/O Mask are overlaping]' ELSE '[OK]' END AS [Deviation], '[INFORMATION: Configured values for AffinityMask = ' + CONVERT(VARCHAR(10), @affin) + '; Affinity64Mask = ' + CONVERT(VARCHAR(10), @affin64) + '; AffinityIOMask = ' + CONVERT(VARCHAR(10), @affinIO) + '; Affinity64IOMask = ' + CONVERT(VARCHAR(10), @affin64IO) + ']' AS [Comment]
 UNION ALL
@@ -5807,7 +6014,7 @@ BEGIN
 	END
 	ELSE
 	BEGIN
-		RAISERROR('  |- [INFORMATION: "Instant Initialization" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
+		RAISERROR('    |- [INFORMATION: "Instant Initialization" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
 		--RETURN
 	END
 END
@@ -5918,21 +6125,354 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 -- Deprecated features subsection
 --------------------------------------------------------------------------------------------------------------------------------
-IF @ptochecks = 1
+RAISERROR (N'  |-Starting Deprecated or Discontinued features', 10, 1) WITH NOWAIT
+IF (SELECT COUNT(instance_name) FROM sys.dm_os_performance_counters WHERE [object_name] = 'SQLServer:Deprecated Features' AND cntr_value > 0) > 0
 BEGIN
-	RAISERROR (N'  |-Starting Deprecated features', 10, 1) WITH NOWAIT
-	IF (SELECT COUNT(instance_name) FROM sys.dm_os_performance_counters WHERE [object_name] = 'SQLServer:Deprecated Features' AND cntr_value > 0) > 0
+	SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Check], '[WARNING: Deprecated or Discontinued features are being used. Deprecated features are scheduled to be removed in a future release of SQL Server. Discontinued features have been removed from specific versions of SQL Server]' AS [Deviation]
+	SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Information], instance_name, cntr_value AS [Times_used_since_startup]
+	FROM sys.dm_os_performance_counters (NOLOCK)
+	WHERE [object_name] LIKE '%Deprecated Features%' AND cntr_value > 0
+	ORDER BY instance_name;
+	
+	RAISERROR (N'    |-Deprecated or Discontinued Features are being used - finding usage in SQL modules and SQL Agent jobs', 10, 1) WITH NOWAIT
+		
+	/*DECLARE @dbid int, @dbname VARCHAR(1000), @sqlcmd NVARCHAR(4000)*/
+
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecated'))
+	DROP TABLE #tblDeprecated;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecated'))
+	CREATE TABLE #tblDeprecated ([DBName] sysname, [Schema] VARCHAR(100), [Object] VARCHAR(255), [Type] VARCHAR(100), DeprecatedFeature VARCHAR(30), DeprecatedIn tinyint, DiscontinuedIn tinyint);
+	
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecatedJobs'))
+	DROP TABLE #tblDeprecatedJobs;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecatedJobs'))
+	CREATE TABLE #tblDeprecatedJobs ([JobName] sysname, [Step] VARCHAR(100), DeprecatedFeature VARCHAR(30), DeprecatedIn tinyint, DiscontinuedIn tinyint);
+	
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tblKeywords'))
+	DROP TABLE ##tblKeywords;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tblKeywords'))
+	CREATE TABLE ##tblKeywords (
+		KeywordID int IDENTITY(1,1) PRIMARY KEY,
+		Keyword VARCHAR(64), -- the keyword itself
+		DeprecatedIn tinyint,
+		DiscontinuedIn tinyint
+		);
+
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.indexes (NOLOCK) WHERE name = N'UI_Keywords' AND [object_id] = OBJECT_ID('tempdb.dbo.##tblKeywords'))
+	CREATE UNIQUE INDEX UI_Keywords ON ##tblKeywords(Keyword);
+
+	INSERT INTO ##tblKeywords (Keyword, DeprecatedIn, DiscontinuedIn)
+	-- discontinued on sql 2005
+	SELECT 'disk init', NULL, 9 UNION ALL
+	SELECT 'disk resize', NULL, 9 UNION ALL
+	SELECT 'for load', NULL, 9 UNION ALL
+	SELECT 'dbcc dbrepair', NULL, 9 UNION ALL
+	SELECT 'dbcc newalloc', NULL, 9 UNION ALL
+	SELECT 'dbcc pintable', NULL, 9 UNION ALL
+	SELECT 'dbcc unpintable', NULL, 9 UNION ALL
+	SELECT 'dbcc rowlock', NULL, 9 UNION ALL
+	SELECT 'dbcc textall', NULL, 9 UNION ALL
+	SELECT 'dbcc textalloc', NULL, 9 UNION ALL
+	SELECT '*=', NULL, 9 UNION ALL
+	SELECT '=*', NULL, 9 UNION ALL
+	-- deprecated on sql 2005 and not yet discontinued
+	SELECT 'setuser', 9, NULL UNION ALL
+	SELECT 'sp_helpdevice', 9, NULL UNION ALL
+	SELECT 'sp_addtype', 9, NULL UNION ALL
+	SELECT 'sp_attach_db', 9, NULL UNION ALL
+	SELECT 'sp_attach_single_file_db', 9, NULL UNION ALL
+	SELECT 'sp_bindefault', 9, NULL UNION ALL
+	SELECT 'sp_unbindefault', 9, NULL UNION ALL
+	SELECT 'sp_bindrule', 9, NULL UNION ALL
+	SELECT 'sp_unbindrule', 9, NULL UNION ALL
+	SELECT 'create default', 9, NULL UNION ALL
+	SELECT 'drop default', 9, NULL UNION ALL
+	SELECT 'create rule', 9, NULL UNION ALL
+	SELECT 'drop rule', 9, NULL UNION ALL
+	SELECT 'sp_renamedb', 9, NULL UNION ALL
+	SELECT 'sp_resetstatus', 9, NULL UNION ALL
+	SELECT 'dbcc dbreindex', 9, NULL UNION ALL
+	SELECT 'dbcc indexdefrag', 9, NULL UNION ALL
+	SELECT 'dbcc showcontig', 9, NULL UNION ALL
+	SELECT 'sp_addextendedproc', 9, NULL UNION ALL
+	SELECT 'sp_dropextendedproc', 9, NULL UNION ALL
+	SELECT 'sp_helpextendedproc', 9, NULL UNION ALL
+	SELECT 'xp_loginconfig', 1, NULL UNION ALL
+	SELECT 'sp_fulltext_catalog', 9, NULL UNION ALL
+	SELECT 'sp_fulltext_table', 9, NULL UNION ALL
+	SELECT 'sp_fulltext_column', 9, NULL UNION ALL
+	SELECT 'sp_fulltext_database', 9, NULL UNION ALL
+	SELECT 'sp_help_fulltext_tables', 9, NULL UNION ALL
+	SELECT 'sp_help_fulltext_columns', 9, NULL UNION ALL
+	SELECT 'sp_help_fulltext_catalogs', 9, NULL UNION ALL
+	SELECT 'sp_help_fulltext_tables_cursor', 9, NULL UNION ALL
+	SELECT 'sp_help_fulltext_columns_cursor', 9, NULL UNION ALL
+	SELECT 'sp_help_fulltext_catalogs_cursor', 9, NULL UNION ALL
+	SELECT 'fn_get_sql', 9, NULL UNION ALL
+	SELECT 'sp_indexoption', 9, NULL UNION ALL
+	SELECT 'sp_lock', 9, NULL UNION ALL
+	SELECT 'indexkey_property', 9, NULL UNION ALL
+	SELECT 'file_id', 9, NULL UNION ALL
+	SELECT 'sp_certify_removable', 9, NULL UNION ALL
+	SELECT 'sp_create_removable', 9, NULL UNION ALL
+	SELECT 'sp_dbremove', 9, NULL UNION ALL
+	SELECT 'sp_addapprole', 9, NULL UNION ALL
+	SELECT 'sp_dropapprole', 9, NULL UNION ALL
+	SELECT 'sp_addlogin', 9, NULL UNION ALL
+	SELECT 'sp_droplogin', 9, NULL UNION ALL
+	SELECT 'sp_adduser', 9, NULL UNION ALL
+	SELECT 'sp_dropuser', 9, NULL UNION ALL
+	SELECT 'sp_grantdbaccess', 9, NULL UNION ALL
+	SELECT 'sp_revokedbaccess', 9, NULL UNION ALL
+	SELECT 'sp_addrole', 9, NULL UNION ALL
+	SELECT 'sp_droprole', 9, NULL UNION ALL
+	SELECT 'sp_approlepassword', 9, NULL UNION ALL
+	SELECT 'sp_password', 9, NULL UNION ALL
+	SELECT 'sp_changeobjectowner', 9, NULL UNION ALL
+	SELECT 'sp_defaultdb', 9, NULL UNION ALL
+	SELECT 'sp_defaultlanguage', 9, NULL UNION ALL
+	SELECT 'sp_denylogin', 9, NULL UNION ALL
+	SELECT 'sp_grantlogin', 9, NULL UNION ALL
+	SELECT 'sp_revokelogin', 9, NULL UNION ALL
+	SELECT 'user_id', 9, NULL UNION ALL
+	SELECT 'sp_srvrolepermission', 9, NULL UNION ALL
+	SELECT 'sp_dbfixedrolepermission', 9, NULL UNION ALL
+	SELECT 'text', 9, NULL UNION ALL
+	SELECT 'ntext', 9, NULL UNION ALL
+	SELECT 'image', 9, NULL UNION ALL
+	SELECT 'textptr', 9, NULL UNION ALL
+	SELECT 'textvalid', 9, NULL UNION ALL
+	-- discontinued on sql 2008
+	SELECT 'sp_addalias', 9, 10 UNION ALL
+	SELECT 'no_log', 9, 10 UNION ALL
+	SELECT 'truncate_only', 9, 10 UNION ALL
+	SELECT 'backup transaction', 9, 10 UNION ALL
+	SELECT 'dbcc concurrencyviolation', 9, 10 UNION ALL
+	SELECT 'sp_addgroup', 9, 10 UNION ALL
+	SELECT 'sp_changegroup', 9, 10 UNION ALL
+	SELECT 'sp_dropgroup', 9, 10 UNION ALL
+	SELECT 'sp_helpgroup', 9, 10 UNION ALL
+	SELECT 'sp_makewebtask', NULL, 10 UNION ALL
+	SELECT 'sp_dropwebtask', NULL, 10 UNION ALL
+	SELECT 'sp_runwebtask', NULL, 10 UNION ALL
+	SELECT 'sp_enumcodepages', NULL, 10 UNION ALL
+	SELECT 'dump', 9, 10 UNION ALL
+	SELECT 'load', 9, 10 UNION ALL
+	-- undocumented system stored procedures are removed from sql server:
+	SELECT 'sp_articlesynctranprocs', NULL, 10 UNION ALL
+	SELECT 'sp_diskdefault', NULL, 10 UNION ALL
+	SELECT 'sp_eventlog', NULL, 10 UNION ALL
+	SELECT 'sp_getmbcscharlen', NULL, 10 UNION ALL
+	SELECT 'sp_helplog', NULL, 10 UNION ALL
+	SELECT 'sp_helpsql', NULL, 10 UNION ALL
+	SELECT 'sp_ismbcsleadbyte', NULL, 10 UNION ALL
+	SELECT 'sp_lock2', NULL, 10 UNION ALL
+	SELECT 'sp_msget_current_activity', NULL, 10 UNION ALL
+	SELECT 'sp_msset_current_activity', NULL, 10 UNION ALL
+	SELECT 'sp_msobjessearch', NULL, 10 UNION ALL
+	SELECT 'xp_enum_activescriptengines', NULL, 10 UNION ALL
+	SELECT 'xp_eventlog', NULL, 10 UNION ALL
+	SELECT 'xp_getadmingroupname', NULL, 10 UNION ALL
+	SELECT 'xp_getfiledetails', NULL, 10 UNION ALL
+	SELECT 'xp_getlocalsystemaccountname', NULL, 10 UNION ALL
+	SELECT 'xp_isntadmin', NULL, 10 UNION ALL
+	SELECT 'xp_mslocalsystem', NULL, 10 UNION ALL
+	SELECT 'xp_msnt2000', NULL, 10 UNION ALL
+	SELECT 'xp_msplatform', NULL, 10 UNION ALL
+	SELECT 'xp_setsecurity', NULL, 10 UNION ALL
+	SELECT 'xp_varbintohexstr', NULL, 10 UNION ALL
+	-- undocumented system tables are removed from sql server:
+	SELECT 'spt_datatype_info', NULL, 10 UNION ALL
+	SELECT 'spt_datatype_info_ext', NULL, 10 UNION ALL
+	SELECT 'spt_provider_types', NULL, 10 UNION ALL
+	SELECT 'spt_server_info', NULL, 10 UNION ALL
+	SELECT 'spt_values', NULL, 10 UNION ALL
+	SELECT 'sysfulltextnotify ', NULL, 10 UNION ALL
+	SELECT 'syslocks', NULL, 10 UNION ALL
+	SELECT 'sysproperties', NULL, 10 UNION ALL
+	SELECT 'sysprotects_aux', NULL, 10 UNION ALL
+	SELECT 'sysprotects_view', NULL, 10 UNION ALL
+	SELECT 'sysremote_catalogs', NULL, 10 UNION ALL
+	SELECT 'sysremote_column_privileges', NULL, 10 UNION ALL
+	SELECT 'sysremote_columns', NULL, 10 UNION ALL
+	SELECT 'sysremote_foreign_keys', NULL, 10 UNION ALL
+	SELECT 'sysremote_indexes', NULL, 10 UNION ALL
+	SELECT 'sysremote_primary_keys', NULL, 10 UNION ALL
+	SELECT 'sysremote_provider_types', NULL, 10 UNION ALL
+	SELECT 'sysremote_schemata', NULL, 10 UNION ALL
+	SELECT 'sysremote_statistics', NULL, 10 UNION ALL
+	SELECT 'sysremote_table_privileges', NULL, 10 UNION ALL
+	SELECT 'sysremote_tables', NULL, 10 UNION ALL
+	SELECT 'sysremote_views', NULL, 10 UNION ALL
+	SELECT 'syssegments', NULL, 10 UNION ALL
+	SELECT 'sysxlogins', NULL, 10 UNION ALL
+	-- deprecated on sql 2008 and not yet discontinued
+	SELECT 'sp_droptype', 10, NULL UNION ALL
+	SELECT '@@remserver', 10, NULL UNION ALL
+	SELECT 'remote_proc_transactions', 10, NULL UNION ALL
+	SELECT 'sp_addumpdevice', 10, NULL UNION ALL
+	SELECT 'xp_grantlogin', 10, NULL UNION ALL
+	SELECT 'xp_revokelogin', 10, NULL UNION ALL
+	SELECT 'grant all', 10, NULL UNION ALL
+	SELECT 'deny all', 10, NULL UNION ALL
+	SELECT 'revoke all', 10, NULL UNION ALL
+	SELECT 'fn_virtualservernodes', 10, NULL UNION ALL
+	SELECT 'fn_servershareddrives', 10, NULL UNION ALL
+	SELECT 'writetext', 10, NULL UNION ALL
+	SELECT 'updatetext', 10, NULL UNION ALL
+	SELECT 'readtext', 10, NULL UNION ALL
+	SELECT 'torn_page_detection', 10, NULL UNION ALL
+	SELECT 'set rowcount', 10, NULL UNION ALL
+	-- discontinued on sql 2012
+	SELECT 'dbo_only', 9, 11 UNION ALL -- on restore statements
+	SELECT 'mediapassword', 9, 11 UNION ALL -- on backup statements
+	SELECT 'password', 9, 11 UNION ALL -- on backup statements except for media
+	SELECT 'with append', 10, 11 UNION ALL -- on triggers
+	SELECT 'sp_dboption', 9, 11 UNION ALL
+	SELECT 'databaseproperty', 9, 11 UNION ALL
+	SELECT 'fastfirstrow', 10, 11 UNION ALL
+	SELECT 'sp_addserver', 10, 11 UNION ALL -- for linked servers
+	SELECT 'sp_dropalias', 9, 11 UNION ALL
+	SELECT 'disable_def_cnst_chk', 10, 11 UNION ALL
+	SELECT 'sp_activedirectory_obj', NULL, 11 UNION ALL
+	SELECT 'sp_activedirectory_scp', NULL, 11 UNION ALL
+	SELECT 'sp_activedirectory_start', NULL, 11 UNION ALL
+	SELECT 'sys.database_principal_aliases', NULL, 11 UNION ALL
+	SELECT 'compute', 10, 11 UNION ALL
+	SELECT 'compute by', 10, 11 UNION ALL
+	-- deprecated on sql 2012 and not yet discontinued
+	SELECT 'sp_change_users_login', 11, NULL UNION ALL
+	SELECT 'sp_depends', 11, NULL UNION ALL
+	SELECT 'sp_getbindtoken', 11, NULL UNION ALL
+	SELECT 'sp_bindsession', 11, NULL UNION ALL
+	SELECT 'fmtonly', 11, NULL UNION ALL
+	SELECT 'raiserror', 11, NULL UNION ALL
+	SELECT 'sp_db_increased_partitions', 11, NULL UNION ALL
+	SELECT 'databasepropertyex(''isfulltextenabled'')', 11, NULL UNION ALL
+	SELECT 'sp_dbcmptlevel', 11, NULL UNION ALL
+	SELECT 'set ansi_nulls off', 11, NULL UNION ALL
+	SELECT 'set ansi_padding off', 11, NULL UNION ALL
+	SELECT 'set concat_null_yields_null off', 11, NULL UNION ALL
+	SELECT 'set offsets', 11, NULL UNION ALL
+	-- deprecated on sql 2014 and not yet discontinued
+	SELECT 'sys.numbered_procedures', 12, NULL UNION ALL
+	SELECT 'sys.numbered_procedure_parameters', 12, NULL UNION ALL
+	SELECT 'sys.sql_dependencies', 12, NULL UNION ALL
+	SELECT 'sp_db_vardecimal_storage_format', 12, NULL UNION ALL
+	SELECT 'sp_estimated_rowsize_reduction_for_vardecimal', 12, NULL UNION ALL
+	SELECT 'sp_trace_create', 12, NULL UNION ALL
+	SELECT 'sp_trace_setevent', 12, NULL UNION ALL
+	SELECT 'sp_trace_setstatus', 12, NULL UNION ALL
+	SELECT 'fn_trace_geteventinfo', 12, NULL UNION ALL
+	SELECT 'fn_trace_getfilterinfo', 12, NULL UNION ALL
+	SELECT 'fn_trace_gettable', 12, NULL UNION ALL
+	SELECT 'sys.traces', 12, NULL UNION ALL
+	SELECT 'sys.trace_events', 12, NULL UNION ALL
+	SELECT 'sys.trace_event_bindings', 12, NULL UNION ALL
+	SELECT 'sys.trace_categories', 12, NULL UNION ALL
+	SELECT 'sys.trace_columns', 12, NULL UNION ALL
+	SELECT 'sys.trace_subclass_values', 12, NULL UNION ALL
+	-- discontinued on sql 2017
+	SELECT 'sp_addremotelogin', 10, 14 UNION ALL
+	SELECT 'sp_dropremotelogin', 10, 14 UNION ALL
+	SELECT 'sp_helpremotelogin', 10, 14 UNION ALL
+	SELECT 'sp_remoteoption', 10, 14
+
+	UPDATE #tmpdbs0
+	SET isdone = 0;
+
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [state] <> 0 OR [dbid] < 5;
+
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
+
+	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 	BEGIN
-		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Check], '[WARNING: Deprecated features are being used. These features are scheduled to be removed in a future release of SQL Server]' AS [Deviation]
-		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Information], instance_name, cntr_value AS [Times_used_since_startup]
-		FROM sys.dm_os_performance_counters (NOLOCK)
-		WHERE [object_name] LIKE '%Deprecated Features%' AND cntr_value > 0
-		ORDER BY instance_name;
+		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+		BEGIN
+			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+
+			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
+SELECT N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Object_Name], so.type_desc, tk.Keyword, tk.DeprecatedIn, tk.DiscontinuedIn
+FROM sys.sql_modules sm (NOLOCK)
+INNER JOIN sys.objects so (NOLOCK) ON sm.[object_id] = so.[object_id]
+INNER JOIN sys.schemas ss (NOLOCK) ON so.[schema_id] = ss.[schema_id]
+CROSS JOIN ##tblKeywords tk (NOLOCK)
+WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sm.[definition]) COLLATE DATABASE_DEFAULT) > 1
+AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
+
+			BEGIN TRY
+				INSERT INTO #tblDeprecated
+				EXECUTE sp_executesql @sqlcmd
+			END TRY
+			BEGIN CATCH
+				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+				SELECT @ErrorMessage = 'Deprecated or Discontinued Features usage subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+				RAISERROR (@ErrorMessage, 16, 1);
+			END CATCH
+		
+			UPDATE #tmpdbs0
+			SET isdone = 1
+			WHERE [dbid] = @dbid
+		END
+	END;
+	
+	SET @sqlcmd = 'USE [msdb];
+SELECT sj.[name], sjs.step_name, tk.Keyword, tk.DeprecatedIn, tk.DiscontinuedIn
+FROM msdb.dbo.sysjobsteps sjs (NOLOCK)
+INNER JOIN msdb.dbo.sysjobs sj (NOLOCK) ON sjs.job_id = sj.job_id
+CROSS JOIN ##tblKeywords tk (NOLOCK)
+WHERE PATINDEX(''%'' + tk.Keyword + ''%'', LOWER(sjs.[command]) COLLATE DATABASE_DEFAULT) > 1
+AND sjs.[subsystem] IN (''TSQL'',''PowerShell'');'
+
+	BEGIN TRY
+		INSERT INTO #tblDeprecatedJobs
+		EXECUTE sp_executesql @sqlcmd
+	END TRY
+	BEGIN CATCH
+		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+		SELECT @ErrorMessage = 'Deprecated or Discontinued Features usage subsection - Error raised in jobs TRY block. ' + ERROR_MESSAGE()
+		RAISERROR (@ErrorMessage, 16, 1);
+	END CATCH
+
+	IF (SELECT COUNT(*) FROM #tblDeprecated) > 0
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features_usage_in_Objects' AS [Information], DBName, [Schema], [Object], [Type], DeprecatedFeature, 		
+			CASE [DeprecatedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DeprecatedIn],
+			CASE [DiscontinuedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DiscontinuedIn],
+			CASE WHEN [DiscontinuedIn] IS NULL THEN '[INFORMATION: Deprecated Features are being used. Plan to review objects found using deprecated features and replace deprecated constructs]' 
+				ELSE '[WARNING: Discontinued Features are being used. Refactor objects found using discontinued features before migrating to a higher version of SQL Server]' END AS [Comment]
+		FROM #tblDeprecated (NOLOCK);
 	END
 	ELSE
 	BEGIN
-		SELECT 'Instance_checks' AS [Category], 'Deprecated_features' AS [Check], '[OK]' AS [Deviation]
+		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Information], NULL AS [DBName], NULL AS [Schema], NULL AS [Object], NULL AS [Type], 
+			NULL AS [DeprecatedFeature], NULL AS [DeprecatedIn], NULL AS [DiscontinuedIn],
+			'[INFORMATION: Deprecated or Discontinued Features may be in use with ad-hoc code]' AS Comment
 	END;
+	
+	IF (SELECT COUNT(*) FROM #tblDeprecatedJobs) > 0
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features_usage_in_SQLAgent_jobs' AS [Information], JobName, [Step], DeprecatedFeature, 		
+			CASE [DeprecatedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DeprecatedIn],
+			CASE [DiscontinuedIn] WHEN 9 THEN '2005' WHEN 10 THEN '2008/2008R2' WHEN 11 THEN '2012' WHEN 12 THEN '2014' WHEN 13 THEN '2016' WHEN 14 THEN '2017' ELSE NULL END AS [DiscontinuedIn],
+			CASE WHEN [DiscontinuedIn] IS NULL THEN '[INFORMATION: Deprecated Features are being used in SQL Agent jobs. Plan to review job steps found using deprecated features and replace deprecated constructs]' 
+				ELSE '[WARNING: Discontinued Features are being used in SQL Agent jobs. Refactor job steps found using discontinued features before migrating to a higher version of SQL Server]' END AS [Comment]
+		FROM #tblDeprecatedJobs (NOLOCK);
+	END
+	ELSE
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Information], NULL AS [JobName], NULL AS [Step], 
+			NULL AS [DeprecatedFeature], NULL AS [DeprecatedIn], NULL AS [DiscontinuedIn],
+			'[INFORMATION: No Deprecated or Discontinued Features found in SQL Agent jobs]' AS Comment
+	END;
+END
+ELSE
+BEGIN
+	SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Check], '[OK]' AS [Deviation]
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6269,13 +6809,13 @@ END;
 RAISERROR (N'  |-Starting VLF', 10, 1) WITH NOWAIT
 IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1
 BEGIN
-	DECLARE /*@dbid int,*/ @query VARCHAR(1000)/*, @dbname VARCHAR(1000)*/, @count int, @count_used int, @logsize DECIMAL(20,1), @usedlogsize DECIMAL(20,1), @avgvlfsize DECIMAL(20,1)
+	DECLARE /*@dbid int,*/ @query NVARCHAR(1000)/*, @dbname VARCHAR(1000)*/, @count int, @count_used int, @logsize DECIMAL(20,1), @usedlogsize DECIMAL(20,1), @avgvlfsize DECIMAL(20,1)
 	DECLARE @potsize DECIMAL(20,1), @n_iter int, @n_iter_final int, @initgrow DECIMAL(20,1), @n_init_iter int
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
 	DROP TABLE #log_info1;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info1'))
-	CREATE TABLE #log_info1 (dbname VARCHAR(100), 
+	CREATE TABLE #log_info1 (dbname NVARCHAR(100), 
 		Current_log_size_MB DECIMAL(20,1), 
 		Used_Log_size_MB DECIMAL(20,1),
 		Potential_log_size_MB DECIMAL(20,1), 
@@ -6290,7 +6830,7 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
 	DROP TABLE #log_info2;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info2'))
-	CREATE TABLE #log_info2 (dbname VARCHAR(100), 
+	CREATE TABLE #log_info2 (dbname NVARCHAR(100), 
 		Current_VLFs int, 
 		VLF_size_KB DECIMAL(20,1), 
 		growth_iteration int)
@@ -6311,144 +6851,155 @@ BEGIN
 		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
-			
-			IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
-			DROP TABLE #log_info3;
-			IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
-			CREATE TABLE #log_info3 (recoveryunitid int NULL,
-				fileid tinyint,
-				file_size bigint,
-				start_offset bigint,
-				FSeqNo int,
-				[status] tinyint,
-				parity tinyint,
-				create_lsn numeric(25,0))
-			SET @query = 'DBCC LOGINFO (' + '''' + @dbname + ''') WITH NO_INFOMSGS'
-			IF @sqlmajorver < 11
+
+			IF (SELECT CHARINDEX(CHAR(39), @dbname)) > 0
+				OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
+				OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
 			BEGIN
-				INSERT INTO #log_info3 (fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn)
-				EXEC (@query)
+				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(NVARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to potential of SQL Injection'
+				RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
 			END
 			ELSE
 			BEGIN
-				INSERT INTO #log_info3 (recoveryunitid, fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn)
-				EXEC (@query)
-			END
+				IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
+				DROP TABLE #log_info3;
+				IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
+				CREATE TABLE #log_info3 (recoveryunitid int NULL,
+					fileid tinyint,
+					file_size bigint,
+					start_offset bigint,
+					FSeqNo int,
+					[status] tinyint,
+					parity tinyint,
+					create_lsn numeric(25,0))
+				SET @query = N'DBCC LOGINFO (N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + N''') WITH NO_INFOMSGS'
 
-			SET @count = @@ROWCOUNT
-			SET @count_used = (SELECT COUNT(fileid) FROM #log_info3 l WHERE l.[status] = 2)
-			SET @logsize = (SELECT (MIN(l.start_offset) + SUM(l.file_size))/1048576.00 FROM #log_info3 l)
-			SET @usedlogsize = (SELECT (MIN(l.start_offset) + SUM(CASE WHEN l.status <> 0 THEN l.file_size ELSE 0 END))/1048576.00 FROM #log_info3 l)
-			SET @avgvlfsize = (SELECT AVG(l.file_size)/1024.00 FROM #log_info3 l)
+				IF @sqlmajorver < 11
+				BEGIN
+					INSERT INTO #log_info3 (fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn)
+					EXEC (@query)
+				END
+				ELSE
+				BEGIN
+					INSERT INTO #log_info3 (recoveryunitid, fileid, file_size, start_offset, FSeqNo, [status], parity, create_lsn)
+					EXEC (@query)
+				END
 
-			INSERT INTO #log_info2
-			SELECT @dbname, COUNT(create_lsn), MIN(l.file_size)/1024.00,
-				ROW_NUMBER() OVER(ORDER BY l.create_lsn) FROM #log_info3 l 
-			GROUP BY l.create_lsn 
-			ORDER BY l.create_lsn
+				SET @count = @@ROWCOUNT
+				SET @count_used = (SELECT COUNT(fileid) FROM #log_info3 l WHERE l.[status] = 2)
+				SET @logsize = (SELECT (MIN(l.start_offset) + SUM(l.file_size))/1048576.00 FROM #log_info3 l)
+				SET @usedlogsize = (SELECT (MIN(l.start_offset) + SUM(CASE WHEN l.status <> 0 THEN l.file_size ELSE 0 END))/1048576.00 FROM #log_info3 l)
+				SET @avgvlfsize = (SELECT AVG(l.file_size)/1024.00 FROM #log_info3 l)
 
-			DROP TABLE #log_info3;
+				INSERT INTO #log_info2
+				SELECT @dbname, COUNT(create_lsn), MIN(l.file_size)/1024.00,
+					ROW_NUMBER() OVER(ORDER BY l.create_lsn) FROM #log_info3 l 
+				GROUP BY l.create_lsn 
+				ORDER BY l.create_lsn
 
-			-- Grow logs in MB instead of GB because of known issue prior to SQL 2012.
-			-- More detail here: http://www.sqlskills.com/BLOGS/PAUL/post/Bug-log-file-growth-broken-for-multiples-of-4GB.aspx
-			-- and http://connect.microsoft.com/SQLServer/feedback/details/481594/log-growth-not-working-properly-with-specific-growth-sizes-vlfs-also-not-created-appropriately
-			-- or https://connect.microsoft.com/SQLServer/feedback/details/357502/transaction-log-file-size-will-not-grow-exactly-4gb-when-filegrowth-4gb
-			IF @sqlmajorver >= 11
-			BEGIN
-				SET @n_iter = (SELECT CASE WHEN @logsize <= 64 THEN 1
-					WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)
-					WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)
-					WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)
-					WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)
-					WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4096, 0)
-					WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8192, 0)
-					END)
-				SET @potsize = (SELECT CASE WHEN @logsize <= 64 THEN 1*64
-					WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)*256
-					WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)*512
-					WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)*1024
-					WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)*2048
-					WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4096, 0)*4096
-					WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8192, 0)*8192
-					END)
-			END
-			ELSE
-			BEGIN
-				SET @n_iter = (SELECT CASE WHEN @logsize <= 64 THEN 1
-					WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)
-					WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)
-					WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)
-					WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)
-					WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4000, 0)
-					WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8000, 0)
-					END)
-				SET @potsize = (SELECT CASE WHEN @logsize <= 64 THEN 1*64
-					WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)*256
-					WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)*512
-					WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)*1024
-					WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)*2048
-					WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4000, 0)*4000
-					WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8000, 0)*8000
-					END)
-			END
+				DROP TABLE #log_info3;
+
+				-- Grow logs in MB instead of GB because of known issue prior to SQL 2012.
+				-- More detail here: http://www.sqlskills.com/BLOGS/PAUL/post/Bug-log-file-growth-broken-for-multiples-of-4GB.aspx
+				-- and http://connect.microsoft.com/SQLServer/feedback/details/481594/log-growth-not-working-properly-with-specific-growth-sizes-vlfs-also-not-created-appropriately
+				-- or https://connect.microsoft.com/SQLServer/feedback/details/357502/transaction-log-file-size-will-not-grow-exactly-4gb-when-filegrowth-4gb
+				IF @sqlmajorver >= 11
+				BEGIN
+					SET @n_iter = (SELECT CASE WHEN @logsize <= 64 THEN 1
+						WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)
+						WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)
+						WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)
+						WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)
+						WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4096, 0)
+						WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8192, 0)
+						END)
+					SET @potsize = (SELECT CASE WHEN @logsize <= 64 THEN 1*64
+						WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)*256
+						WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)*512
+						WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)*1024
+						WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)*2048
+						WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4096, 0)*4096
+						WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8192, 0)*8192
+						END)
+				END
+				ELSE
+				BEGIN
+					SET @n_iter = (SELECT CASE WHEN @logsize <= 64 THEN 1
+						WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)
+						WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)
+						WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)
+						WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)
+						WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4000, 0)
+						WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8000, 0)
+						END)
+					SET @potsize = (SELECT CASE WHEN @logsize <= 64 THEN 1*64
+						WHEN @logsize > 64 AND @logsize < 256 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/256, 0)*256
+						WHEN @logsize >= 256 AND @logsize < 1024 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/512, 0)*512
+						WHEN @logsize >= 1024 AND @logsize < 4096 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/1024, 0)*1024
+						WHEN @logsize >= 4096 AND @logsize < 8192 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/2048, 0)*2048
+						WHEN @logsize >= 8192 AND @logsize < 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/4000, 0)*4000
+						WHEN @logsize >= 16384 THEN ROUND(CONVERT(FLOAT, ROUND(@logsize, -2))/8000, 0)*8000
+						END)
+				END
 			
-			-- If the proposed log size is smaller than current log, and also smaller than 4GB,
-			-- and there is less than 512MB of diff between the current size and proposed size, add 1 grow.
-			SET @n_iter_final = @n_iter
-			IF @logsize > @potsize AND @potsize <= 4096 AND ABS(@logsize - @potsize) < 512
-			BEGIN
-				SET @n_iter_final = @n_iter + 1
-			END
-			-- If the proposed log size is larger than current log, and also larger than 50GB, 
-			-- and there is less than 1GB of diff between the current size and proposed size, take 1 grow.
-			ELSE IF @logsize < @potsize AND @potsize <= 51200 AND ABS(@logsize - @potsize) > 1024
-			BEGIN
-				SET @n_iter_final = @n_iter - 1
-			END
+				-- If the proposed log size is smaller than current log, and also smaller than 4GB,
+				-- and there is less than 512MB of diff between the current size and proposed size, add 1 grow.
+				SET @n_iter_final = @n_iter
+				IF @logsize > @potsize AND @potsize <= 4096 AND ABS(@logsize - @potsize) < 512
+				BEGIN
+					SET @n_iter_final = @n_iter + 1
+				END
+				-- If the proposed log size is larger than current log, and also larger than 50GB, 
+				-- and there is less than 1GB of diff between the current size and proposed size, take 1 grow.
+				ELSE IF @logsize < @potsize AND @potsize <= 51200 AND ABS(@logsize - @potsize) > 1024
+				BEGIN
+					SET @n_iter_final = @n_iter - 1
+				END
 
-			IF @potsize = 0 
-			BEGIN 
-				SET @potsize = 64 
-			END
-			IF @n_iter = 0 
-			BEGIN 
-				SET @n_iter = 1
-			END
+				IF @potsize = 0 
+				BEGIN 
+					SET @potsize = 64 
+				END
+				IF @n_iter = 0 
+				BEGIN 
+					SET @n_iter = 1
+				END
 			
-			SET @potsize = (SELECT CASE WHEN @n_iter < @n_iter_final THEN @potsize + (@potsize/@n_iter) 
-					WHEN @n_iter > @n_iter_final THEN @potsize - (@potsize/@n_iter) 
-					ELSE @potsize END)
+				SET @potsize = (SELECT CASE WHEN @n_iter < @n_iter_final THEN @potsize + (@potsize/@n_iter) 
+						WHEN @n_iter > @n_iter_final THEN @potsize - (@potsize/@n_iter) 
+						ELSE @potsize END)
 			
-			SET @n_init_iter = @n_iter_final
-			IF @potsize >= 8192
-			BEGIN
-				SET @initgrow = @potsize/@n_iter_final
-			END
-			IF @potsize >= 64 AND @potsize <= 512
-			BEGIN
-				SET @n_init_iter = 1
-				SET @initgrow = 512
-			END
-			IF @potsize > 512 AND @potsize <= 1024
-			BEGIN
-				SET @n_init_iter = 1
-				SET @initgrow = 1023
-			END
-			IF @potsize > 1024 AND @potsize < 8192
-			BEGIN
-				SET @n_init_iter = 1
-				SET @initgrow = @potsize
-			END
+				SET @n_init_iter = @n_iter_final
+				IF @potsize >= 8192
+				BEGIN
+					SET @initgrow = @potsize/@n_iter_final
+				END
+				IF @potsize >= 64 AND @potsize <= 512
+				BEGIN
+					SET @n_init_iter = 1
+					SET @initgrow = 512
+				END
+				IF @potsize > 512 AND @potsize <= 1024
+				BEGIN
+					SET @n_init_iter = 1
+					SET @initgrow = 1023
+				END
+				IF @potsize > 1024 AND @potsize < 8192
+				BEGIN
+					SET @n_init_iter = 1
+					SET @initgrow = @potsize
+				END
 
-			INSERT INTO #log_info1
-			VALUES(@dbname, @logsize, @usedlogsize, @potsize, @count, @count_used, @avgvlfsize, 
-				CASE WHEN @potsize <= 64 THEN (@potsize/(@potsize/@n_init_iter))*4
-					WHEN @potsize > 64 AND @potsize < 1024 THEN (@potsize/(@potsize/@n_init_iter))*8
-					WHEN @potsize >= 1024 THEN (@potsize/(@potsize/@n_init_iter))*16
-					END,
-				@n_init_iter, @initgrow, 
-				CASE WHEN (@potsize/@n_iter_final) <= 1024 THEN (@potsize/@n_iter_final) ELSE 1024 END
-				);
+				INSERT INTO #log_info1
+				VALUES(@dbname, @logsize, @usedlogsize, @potsize, @count, @count_used, @avgvlfsize, 
+					CASE WHEN @potsize <= 64 THEN (@potsize/(@potsize/@n_init_iter))*4
+						WHEN @potsize > 64 AND @potsize < 1024 THEN (@potsize/(@potsize/@n_init_iter))*8
+						WHEN @potsize >= 1024 THEN (@potsize/(@potsize/@n_init_iter))*16
+						END,
+					@n_init_iter, @initgrow, 
+					CASE WHEN (@potsize/@n_iter_final) <= 1024 THEN (@potsize/@n_iter_final) ELSE 1024 END
+					);
+			END;
 
 			UPDATE #tmpdbs0
 			SET isdone = 1
@@ -6903,7 +7454,7 @@ Windows PowerShell has four different execution policies:
 END
 ELSE
 BEGIN
-	RAISERROR('  |- [INFORMATION: "Data files and Logs / tempDB and user Databases in same volume" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
+	RAISERROR('    |- [INFORMATION: "Data files and Logs / tempDB and user Databases in same volume" check was skipped because xp_cmdshell was not allowed]', 10, 1, N'disallow_xp_cmdshell')
 	--RETURN
 END;
 
@@ -6927,7 +7478,7 @@ END
 ELSE 
 BEGIN
 	SELECT 'tempDB_checks' AS [Category], 'tempDB_files' AS [Check], 
-		CASE WHEN @tdb_files < 4 THEN '[WARNING: tempDB has only ' + CONVERT(VARCHAR(10), @tdb_files) + ' file(s). Consider creating between 4 and 8 tempDB data files, 1 per each 2 cores, of the same size]'
+		CASE WHEN @tdb_files < 4 THEN '[WARNING: tempDB has only ' + CONVERT(VARCHAR(10), @tdb_files) + ' file(s). Consider creating between 4 and 8 tempDB data files of the same size, with a minimum of 4]'
 			WHEN @filesizes = 1 AND @tdb_files < (@online_count / 2) AND @tdb_files >= 8 AND @tdb_files % 4 = 0 THEN '[INFORMATION: Number of Data files to Scheduler ratio might not be Optimal. Consider creating 1 data file per each 2 cores, in multiples of 4, all of the same size]'
 			WHEN @filesizes > 1 AND @tdb_files >= 4 AND @tdb_files % 4 > 0 THEN '[WARNING: Data file sizes do not match and Number of data files is not multiple of 4]'
 			WHEN @filesizes = 1 AND @tdb_files >= 4 AND @tdb_files % 4 > 0 THEN '[WARNING: Number of data files is not multiple of 4]'
@@ -7246,13 +7797,15 @@ END'')
 	INSERT INTO #tblWaits
 	SELECT @minctr, wait_type, wait_time_ms, signal_wait_time_ms,(wait_time_ms-signal_wait_time_ms) AS resource_wait_time_ms
 	FROM sys.dm_os_wait_stats (NOLOCK)
-	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP',
-		'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT',
-		'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
-		'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
-		'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
-		'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
-		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP') 
+	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', 
+	'SP_SERVER_DIAGNOSTICS_SLEEP', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP',
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT',
+	'BROKER_TASK_STOP','CLR_MANUAL_EVENT', 'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
+	'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
+	'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
+	'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
+	'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', 
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'WAIT_XTP_OFFLINE_CKPT_NEW_LOG', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP') 
 		AND wait_type NOT LIKE N'SLEEP_%'
 		AND wait_time_ms > 0;
 
@@ -7380,13 +7933,15 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	INSERT INTO #tblWaits
 	SELECT @maxctr, wait_type, wait_time_ms, signal_wait_time_ms,(wait_time_ms-signal_wait_time_ms) AS resource_wait_time_ms
 	FROM sys.dm_os_wait_stats (NOLOCK)
-	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP',
-		'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT',
-		'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
-		'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
-		'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
-		'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
-		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP') 
+	WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', 
+	'SP_SERVER_DIAGNOSTICS_SLEEP', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP',
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT',
+	'BROKER_TASK_STOP','CLR_MANUAL_EVENT', 'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
+	'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
+	'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
+	'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
+	'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', 
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'WAIT_XTP_OFFLINE_CKPT_NEW_LOG', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP') 
 		AND wait_type NOT LIKE N'SLEEP_%'
 		AND wait_time_ms > 0;
 
@@ -7529,31 +8084,40 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		CAST(SUM(W2.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
 		CAST(W1.signal_wait_pct AS DECIMAL(12, 2)) AS signal_wait_pct,
 		CAST(W1.resource_wait_pct AS DECIMAL(12, 2)) AS resource_wait_pct,
-		CASE WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock'
-			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch'
-			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch'
-			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO'
-			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'AlwaysOn - Secondary Synch' 
-			WHEN W1.wait_type LIKE N'HADR_%' THEN N'AlwaysOn'
-			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
-			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' -- Used to indicate a worker is running code that is not under the SQLOS Scheduling;
-			WHEN W1.wait_type IN (N'IO_COMPLETION', N'ASYNC_IO_COMPLETION', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'DISKIO_SUSPEND') THEN N'Other IO'
-			WHEN W1.wait_type IN(N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
+		CASE WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU' 
 			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
-			WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU - Scheduler Yielding'
-			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE') THEN N'CPU - Parallelism'
-			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'WRITELOG') THEN N'Logging'
-			WHEN W1.wait_type IN (N'NET_WAITFOR_PACKET',N'NETWORK_IO') THEN N'Network IO'
-			WHEN W1.wait_type = N'ASYNC_NETWORK_IO' THEN N'Client Network IO'
-			WHEN W1.wait_type IN (N'UTIL_PAGE_ALLOC',N'SOS_VIRTUALMEMORY_LOW',N'CMEMTHREAD', N'SOS_RESERVEDMEMBLOCKLIST') THEN N'Memory' 
-			WHEN W1.wait_type IN (N'RESOURCE_SEMAPHORE_SMALL_QUERY', N'RESOURCE_SEMAPHORE') THEN N'Memory - Hash or Sort'
+			WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock' 
+			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch' 
+			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch' 
+			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO' 
+			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
+			WHEN W1.wait_type LIKE N'HADR_%' OR W1.wait_type LIKE N'PWAIT_HADR_%' THEN N'Always On'
+			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
 			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Memory - Compilation'
-			WHEN W1.wait_type LIKE N'CLR_%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'CLR'
-			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring'
-			WHEN W1.wait_type LIKE N'XACT%' OR W1.wait_type LIKE N'DTC_%' OR W1.wait_type LIKE N'TRAN_MARKLATCH_%' OR W1.wait_type LIKE N'MSQL_XACT_%' OR W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction'
-		--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
-			WHEN W1.wait_type LIKE N'FT_%' THEN N'Full Text'
+			WHEN W1.wait_type IN (N'UTIL_PAGE_ALLOC', N'SOS_VIRTUALMEMORY_LOW', N'SOS_RESERVEDMEMBLOCKLIST', N'RESOURCE_SEMAPHORE', N'CMEMTHREAD', N'CMEMPARTITIONED', N'EE_PMOLOCK', N'MEMORY_ALLOCATION_EXT', N'RESERVED_MEMORY_ALLOCATION_EXT', N'MEMORY_GRANT_UPDATE') THEN N'Memory'
+			WHEN W1.wait_type LIKE N'CLR%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'SQL CLR' 
+			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring' 
+			WHEN W1.wait_type LIKE N'XACT%' or W1.wait_type LIKE N'DTC%' or W1.wait_type LIKE N'TRAN_MARKLATCH_%' or W1.wait_type LIKE N'MSQL_XACT_%' or W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction' 
+			--WHEN W1.wait_type LIKE N'SLEEP_%' or W1.wait_type IN (N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SQLTRACE_WAIT_ENTRIES', N'FT_IFTS_SCHEDULER_IDLE_WAIT', N'XE_DISPATCHER_WAIT', N'REQUEST_FOR_DEADLOCK_SEARCH', N'LOGMGR_QUEUE', N'ONDEMAND_TASK_QUEUE', N'CHECKPOINT_QUEUE', N'XE_TIMER_EVENT') THEN N'Idle' 
+			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' 
+			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
+			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
+			WHEN W1.wait_type IN (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET', N'PROXY_NETWORK_IO', N'EXTERNAL_SCRIPT_NETWORK_IO') THEN N'Network IO' 
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'WAITFOR', N'WAIT_FOR_RESULTS', N'BROKER_RECEIVE_WAITFOR') THEN N'User Wait' 
+			WHEN W1.wait_type IN (N'TRACEWRITE', N'SQLTRACE_LOCK', N'SQLTRACE_FILE_BUFFER', N'SQLTRACE_FILE_WRITE_IO_COMPLETION', N'SQLTRACE_FILE_READ_IO_COMPLETION', N'SQLTRACE_PENDING_BUFFER_WRITERS', N'SQLTRACE_SHUTDOWN', N'QUERY_TRACEOUT', N'TRACE_EVTNOTIF') THEN N'Tracing' 
+			WHEN W1.wait_type LIKE N'FT_%' OR W1.wait_type IN (N'FULLTEXT GATHERER', N'MSSEARCH', N'PWAIT_RESOURCE_SEMAPHORE_FT_PARALLEL_QUERY_SYNC') THEN N'Full Text Search' 
+			WHEN W1.wait_type IN (N'ASYNC_IO_COMPLETION', N'IO_COMPLETION', N'WRITE_COMPLETION', N'IO_QUEUE_LIMIT', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'IO_RETRY') THEN N'Other Disk IO' 
+			WHEN W1.wait_type IN (N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
+			WHEN W1.wait_type LIKE N'SE_REPL_%' or W1.wait_type LIKE N'REPL_%'  or W1.wait_type IN (N'REPLICA_WRITES', N'FCB_REPLICA_WRITE', N'FCB_REPLICA_READ', N'PWAIT_HADRSIM') THEN N'Replication' 
+			WHEN W1.wait_type IN (N'LOG_RATE_GOVERNOR', N'POOL_LOG_RATE_GOVERNOR', N'HADR_THROTTLE_LOG_RATE_GOVERNOR', N'INSTANCE_LOG_RATE_GOVERNOR') THEN N'Log Rate Governor' 
+			--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
 			WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
+			WHEN W1.wait_type = N'WAIT_XTP_OFFLINE_CKPT_LOG_IO' OR W1.wait_type = N'WAIT_XTP_CKPT_CLOSE' THEN 'In-Memory OLTP Logging'
+			WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
+			WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
+			WHEN W1.wait_type LIKE N'PARALLEL_REDO%' THEN N'Parallel Redo'
+			WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 		ELSE N'Other' END AS 'wait_category'
 	FROM #tblFinalWaits AS W1 INNER JOIN #tblFinalWaits AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.wait_type, W1.wait_time_s, W1.pct, W1.signal_wait_time_s, W1.resource_wait_time_s, W1.signal_wait_pct, W1.resource_wait_pct
@@ -7569,13 +8133,15 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		100.0 * wait_time_ms / SUM(wait_time_ms) OVER() AS pct,
 		ROW_NUMBER() OVER(ORDER BY wait_time_ms DESC) AS rn
 		FROM sys.dm_os_wait_stats
-		WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP'
-		, 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','BROKER_TASK_STOP','CLR_MANUAL_EVENT'
-		,'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH'
-		,'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
-		'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
-		'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
-		'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP') 
+		WHERE wait_type NOT IN ('RESOURCE_QUEUE', 'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', 
+	'SP_SERVER_DIAGNOSTICS_SLEEP', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP',
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'LOGMGR_QUEUE','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT',
+	'BROKER_TASK_STOP','CLR_MANUAL_EVENT', 'CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE', 'FT_IFTS_SCHEDULER_IDLE_WAIT','BROKER_TO_FLUSH',
+	'XE_DISPATCHER_WAIT', 'XE_DISPATCHER_JOIN', 'MSQL_XP', 'WAIT_FOR_RESULTS', 'CLR_SEMAPHORE', 'LAZYWRITER_SLEEP', 'SLEEP_TASK',
+	'SLEEP_SYSTEMTASK', 'SQLTRACE_BUFFER_FLUSH', 'WAITFOR', 'BROKER_EVENTHANDLER', 'TRACEWRITE', 'FT_IFTSHC_MUTEX', 'BROKER_RECEIVE_WAITFOR', 
+	'ONDEMAND_TASK_QUEUE', 'DBMIRROR_EVENTS_QUEUE', 'DBMIRRORING_CMD', 'BROKER_TRANSMITTER', 'SQLTRACE_WAIT_ENTRIES', 'SLEEP_BPOOL_FLUSH', 'SQLTRACE_LOCK',
+	'DIRTY_PAGE_POLL', 'HADR_FILESTREAM_IOMGR_IOCOMPLETION', 'SP_SERVER_DIAGNOSTICS_SLEEP', 'QDS_PERSIST_TASK_MAIN_LOOP_SLEEP', 
+	'QDS_CLEANUP_STALE_QUERIES_TASK_MAIN_LOOP_SLEEP', 'WAIT_XTP_OFFLINE_CKPT_NEW_LOG', 'SOSHOST_SLEEP', 'SP_PREEMPTIVE_SERVER_DIAGNOSTICS_SLEEP') 
 			AND wait_type NOT LIKE N'SLEEP_%'
 		GROUP BY wait_type, wait_time_ms, signal_wait_time_ms)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Waits' AS [Information], W1.wait_type, 
@@ -7586,7 +8152,11 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		CAST(SUM(W2.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
 		CAST(W1.signal_wait_pct AS DECIMAL(12, 2)) AS signal_wait_pct,
 		CAST(W1.resource_wait_pct AS DECIMAL(12, 2)) AS resource_wait_pct,
-		CASE WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock'
+			-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/en-us/library/cc917684.aspx
+		CASE WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU' 
+			-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
+			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
+			WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock' 
 			-- LATCH = indicates contention for access to some non-page structures. ACCESS_METHODS_DATASET_PARENT, ACCESS_METHODS_SCAN_RANGE_GENERATOR or NESTING_TRANSACTION_FULL latches indicate parallelism issues;
 			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch'
 			-- PAGELATCH = indicates contention for access to in-memory copies of pages, like PFS, SGAM and GAM; 
@@ -7596,27 +8166,36 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch'
 			-- PAGEIOLATCH = indicates IO problems, or BP pressure.
 			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO'
-			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'AlwaysOn - Secondary Synch' 
-			WHEN W1.wait_type LIKE N'HADR_%' THEN N'AlwaysOn'
+			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
+			WHEN W1.wait_type LIKE N'HADR_%' OR W1.wait_type LIKE N'PWAIT_HADR_%' THEN N'Always On'
 			WHEN W1.wait_type LIKE N'FFT_%' THEN N'FileTable'
+			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Memory - Compilation'
+			WHEN W1.wait_type IN (N'UTIL_PAGE_ALLOC', N'SOS_VIRTUALMEMORY_LOW', N'SOS_RESERVEDMEMBLOCKLIST', N'RESOURCE_SEMAPHORE', N'CMEMTHREAD', N'CMEMPARTITIONED', N'EE_PMOLOCK', N'MEMORY_ALLOCATION_EXT', N'RESERVED_MEMORY_ALLOCATION_EXT', N'MEMORY_GRANT_UPDATE') THEN N'Memory'
+			WHEN W1.wait_type LIKE N'CLR%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'SQL CLR' 
+			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring' 
+			WHEN W1.wait_type LIKE N'XACT%' or W1.wait_type LIKE N'DTC%' or W1.wait_type LIKE N'TRAN_MARKLATCH_%' or W1.wait_type LIKE N'MSQL_XACT_%' or W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction' 
+			--WHEN W1.wait_type LIKE N'SLEEP_%' or W1.wait_type IN (N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SQLTRACE_WAIT_ENTRIES', N'FT_IFTS_SCHEDULER_IDLE_WAIT', N'XE_DISPATCHER_WAIT', N'REQUEST_FOR_DEADLOCK_SEARCH', N'LOGMGR_QUEUE', N'ONDEMAND_TASK_QUEUE', N'CHECKPOINT_QUEUE', N'XE_TIMER_EVENT') THEN N'Idle' 
 			-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
 			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' -- Used to indicate a worker is running code that is not under the SQLOS Scheduling;
+			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
+			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
+			WHEN W1.wait_type IN (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET', N'PROXY_NETWORK_IO', N'EXTERNAL_SCRIPT_NETWORK_IO') THEN N'Network IO' 
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'WAITFOR', N'WAIT_FOR_RESULTS', N'BROKER_RECEIVE_WAITFOR') THEN N'User Wait' 
+			WHEN W1.wait_type IN (N'TRACEWRITE', N'SQLTRACE_LOCK', N'SQLTRACE_FILE_BUFFER', N'SQLTRACE_FILE_WRITE_IO_COMPLETION', N'SQLTRACE_FILE_READ_IO_COMPLETION', N'SQLTRACE_PENDING_BUFFER_WRITERS', N'SQLTRACE_SHUTDOWN', N'QUERY_TRACEOUT', N'TRACE_EVTNOTIF') THEN N'Tracing' 
+			WHEN W1.wait_type LIKE N'FT_%' OR W1.wait_type IN (N'FULLTEXT GATHERER', N'MSSEARCH', N'PWAIT_RESOURCE_SEMAPHORE_FT_PARALLEL_QUERY_SYNC') THEN N'Full Text Search' 
 			-- IO_COMPLETION = usually TempDB spilling; 
 			-- ASYNC_IO_COMPLETION = usually when not using IFI, or waiting on backups.
 			-- DISKIO_SUSPEND = High wait times here indicate the SNAPSHOT BACKUP may be taking longer than expected. Typically the delay is within the VDI application perform the snapshot backup;
-			WHEN W1.wait_type IN (N'IO_COMPLETION', N'ASYNC_IO_COMPLETION', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'DISKIO_SUSPEND') THEN N'Other IO'
+			WHEN W1.wait_type IN (N'ASYNC_IO_COMPLETION', N'IO_COMPLETION', N'WRITE_COMPLETION', N'IO_QUEUE_LIMIT', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'IO_RETRY') THEN N'Other Disk IO' 
 			-- BACKUPIO = check for slow backup media slow, like Tapes or Disks;
 			-- BACKUPBUFFER = usually when backing up to Tape;
 			WHEN W1.wait_type IN(N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
-			-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
-			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
-			-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/en-us/library/cc917684.aspx
-			WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU - Scheduler Yielding'
 			-- Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/en-us/library/ms188743.aspx;
-				-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
-				-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
+			-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
+			-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
 			-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
-			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
 			-- WRITELOG = log management system waiting for a log flush to disk. Examine the IO latency for the log file
 			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'WRITELOG') THEN N'Logging'
 			WHEN W1.wait_type IN (N'NET_WAITFOR_PACKET',N'NETWORK_IO') THEN N'Network IO'
@@ -7631,12 +8210,15 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'CLR_%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'CLR'
 			-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
 			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring'
-			-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS.
 			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Compilation' 
 			WHEN W1.wait_type LIKE N'XACT%' OR W1.wait_type LIKE N'DTC_%' OR W1.wait_type LIKE N'TRAN_MARKLATCH_%' OR W1.wait_type LIKE N'MSQL_XACT_%' OR W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction'
-		--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
-			WHEN W1.wait_type LIKE N'FT_%' THEN N'Full Text'
+			WHEN W1.wait_type IN (N'LOG_RATE_GOVERNOR', N'POOL_LOG_RATE_GOVERNOR', N'HADR_THROTTLE_LOG_RATE_GOVERNOR', N'INSTANCE_LOG_RATE_GOVERNOR') THEN N'Log Rate Governor' 
 			WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
+			WHEN W1.wait_type = N'WAIT_XTP_OFFLINE_CKPT_LOG_IO' OR W1.wait_type = N'WAIT_XTP_CKPT_CLOSE' THEN 'In-Memory OLTP Logging'
+			WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
+			WHEN W1.wait_type LIKE N'XTP%' OR W1.wait_type LIKE N'WAIT_XTP%' THEN N'In-Memory OLTP'
+			WHEN W1.wait_type LIKE N'PARALLEL_REDO%' THEN N'Parallel Redo'
+			WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 		ELSE N'Other' END AS 'wait_category'
 	FROM Waits AS W1 INNER JOIN Waits AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.wait_type, W1.wait_time_s, W1.pct, W1.signal_wait_time_s, W1.resource_wait_time_s, W1.signal_wait_pct, W1.resource_wait_pct
@@ -7666,13 +8248,13 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			OR W1.latch_class LIKE N'ACCESS_METHODS_HOBT_VIRTUAL_ROOT' THEN N'[HoBT - Metadata]'
 		WHEN W1.latch_class LIKE N'ACCESS_METHODS_DATASET_PARENT' 
 			OR W1.latch_class LIKE N'ACCESS_METHODS_SCAN_RANGE_GENERATOR' 
-			OR W1.latch_class LIKE N'NESTING_TRANSACTION_FULL' THEN N'[Parallelism]'
-		WHEN W1.latch_class LIKE N'LOG_MANAGER' THEN N'[IO - Log]'
+			OR W1.latch_class LIKE N'NESTING_TRANSACTION%' THEN N'[Parallelism]'
+		WHEN W1.latch_class LIKE N'LOG_MANAGER' THEN N'[Log IO]'
 		WHEN W1.latch_class LIKE N'TRACE_CONTROLLER' THEN N'[Trace]'
 		WHEN W1.latch_class LIKE N'DBCC_MULTIOBJECT_SCANNER' THEN N'[Parallelism - DBCC CHECK_]'
-		WHEN W1.latch_class LIKE N'FGCB_ADD_REMOVE' THEN N'[IO Operations]'
+		WHEN W1.latch_class LIKE N'FGCB_ADD_REMOVE' THEN N'[Other IO]'
 		WHEN W1.latch_class LIKE N'DATABASE_MIRRORING_CONNECTION' THEN N'[Mirroring - Busy]'
-		WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool - PAGELATCH or PAGEIOLATCH]'
+		WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool]'
 		ELSE N'[Other]' END AS 'latch_category'
 	FROM #tblFinalLatches AS W1 INNER JOIN #tblFinalLatches AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, W1.pct
@@ -7862,8 +8444,8 @@ BEGIN
 			FOR XML PATH(''), TYPE) AS [blocked_batch],
 		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			SUBSTRING(qt2.text, 
-			(CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END),
-			(CASE WHEN er.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er.statement_end_offset/2 END - (CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END))),
+			1+(CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END),
+			1+(CASE WHEN er.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er.statement_end_offset/2 END - (CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END))),
 			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er.sql_handle, ec.most_recent_sql_handle)) AS qt2
@@ -7895,8 +8477,8 @@ BEGIN
 			FOR XML PATH(''), TYPE) AS [blocker_batch],
 		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			SUBSTRING(qt2.text, 
-			(CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END),
-			(CASE WHEN er2.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er2.statement_end_offset/2 END - (CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END))),
+			1+(CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END),
+			1+(CASE WHEN er2.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er2.statement_end_offset/2 END - (CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END))),
 			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er2.sql_handle, ec2.most_recent_sql_handle)) AS qt2 
@@ -8049,7 +8631,7 @@ BEGIN
 				SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + @dbname + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Object_Name], so.type_desc, 
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Object_Name], so.type_desc, 
 	CASE WHEN sm.[definition] LIKE ''%FORCE ORDER%'' THEN ''[FORCE ORDER Hint]''
 	WHEN sm.[definition] LIKE ''%MERGE JOIN%''
 		OR sm.[definition] LIKE ''%LOOP JOIN%''
@@ -8057,10 +8639,11 @@ SELECT ''' + @dbname + ''' AS [DBName], ss.name AS [Schema_Name], so.name AS [Ob
 FROM sys.sql_modules sm
 INNER JOIN sys.objects so ON sm.[object_id] = so.[object_id]
 INNER JOIN sys.schemas ss ON so.[schema_id] = ss.[schema_id]
-WHERE sm.[definition] LIKE ''%FORCE ORDER%''
+WHERE (sm.[definition] LIKE ''%FORCE ORDER%''
 	OR sm.[definition] LIKE ''%MERGE JOIN%''
 	OR sm.[definition] LIKE ''%LOOP JOIN%''
-	OR sm.[definition] LIKE ''%HASH JOIN%'';'
+	OR sm.[definition] LIKE ''%HASH JOIN%'') 
+AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 
 				BEGIN TRY
 					INSERT INTO #tblHints
@@ -8433,7 +9016,7 @@ CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.plan_generation_num DESC');
 	END
-	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver = 13
+	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
 		--CPU 
 		INSERT INTO #tmp_dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
@@ -8529,7 +9112,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		SELECT DISTINCT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
 		FROM #tmp_dm_exec_query_stats;
 	END
-	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver = 13
+	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
 		INSERT INTO #dm_exec_query_stats ([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
 		SELECT DISTINCT [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio]
@@ -8664,7 +9247,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<Warnings UnmatchedIndexes="true"%';
 	END;
 
-	IF (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver = 13
+	IF (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
 		INSERT INTO #qpwarnings
 		-- Note that currently MemoryGrant warnings are only found in actual execution plans
@@ -8794,7 +9377,7 @@ BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 	SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + '
-SELECT ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], ''' + @dbname + ''' AS [database_name], o.[schema_id], t.name AS [schema_name], mst.[object_id], mst.name AS [table_name], FKC.name AS [constraint_name], ''ForeignKey'' As [constraint_type]
+SELECT ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [database_name], o.[schema_id], t.name AS [schema_name], mst.[object_id], mst.name AS [table_name], FKC.name AS [constraint_name], ''ForeignKey'' As [constraint_type]
 FROM sys.foreign_keys FKC (NOLOCK)
 INNER JOIN sys.objects o (NOLOCK) ON FKC.parent_object_id = o.[object_id]
 INNER JOIN sys.tables mst (NOLOCK) ON mst.[object_id] = o.[object_id]
@@ -8802,7 +9385,7 @@ INNER JOIN sys.schemas t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE o.type = ''U'' AND FKC.is_not_trusted = 1 AND FKC.is_not_for_replication = 0
 GROUP BY o.[schema_id], mst.[object_id], FKC.name, t.name, mst.name
 UNION ALL
-SELECT ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], ''' + @dbname + ''' AS [database_name], t.[schema_id], t.name AS [schema_name], mst.[object_id], mst.name AS [table_name], CC.name AS [constraint_name], ''Check'' As [constraint_type]
+SELECT ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [database_name], t.[schema_id], t.name AS [schema_name], mst.[object_id], mst.name AS [table_name], CC.name AS [constraint_name], ''Check'' As [constraint_type]
 FROM sys.check_constraints CC (NOLOCK)
 INNER JOIN sys.objects o (NOLOCK) ON CC.parent_object_id = o.[object_id]
 INNER JOIN sys.tables mst (NOLOCK) ON mst.[object_id] = o.[object_id]
@@ -8898,7 +9481,7 @@ BEGIN
 			IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver > 11) AND @dbcmptlevel > 80
 			BEGIN
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT DISTINCT ''' + @dbname + ''' AS [DatabaseName], ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], mst.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(mst.[object_id]) AS tableName, 
+SELECT DISTINCT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DatabaseName], ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], mst.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(mst.[object_id]) AS tableName, 
 	sp.last_updated, sp.[rows], sp.modification_counter, ss.[stats_id], ss.name AS [stat_name], ss.auto_created, ss.user_created, ss.has_filter, ss.filter_definition, sp.unfiltered_rows, sp.steps
 FROM sys.objects AS o
 	INNER JOIN sys.tables AS mst ON mst.[object_id] = o.[object_id]
@@ -8912,7 +9495,7 @@ WHERE sp.[rows] > 0
 			ELSE
 			BEGIN
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT DISTINCT ''' + @dbname + ''' AS [DatabaseName], ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], mst.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(mst.[object_id]) AS tableName, 
+SELECT DISTINCT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DatabaseName], ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], mst.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(mst.[object_id]) AS tableName, 
 	STATS_DATE(mst.[object_id], ss.stats_id) AS last_updated, SUM(p.[rows]) AS [rows], si.rowmodctr AS modification_counter, ss.stats_id, ss.name AS [stat_name], ss.auto_created, ss.user_created, NULL, NULL, NULL, NULL
 FROM sys.sysindexes AS si
 	INNER JOIN sys.objects AS o ON si.id = o.[object_id]
@@ -9019,7 +9602,7 @@ BEGIN
 				IF @dbcmptlevel > 80
 				BEGIN
 					SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT DISTINCT ''' + @dbname + ''' AS [DatabaseName], ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], mst.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(mst.[object_id]) AS tableName, 
+SELECT DISTINCT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DatabaseName], ''' + CONVERT(VARCHAR(12),@dbid) + ''' AS [databaseID], mst.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(mst.[object_id]) AS tableName, 
 	sp.last_updated, sp.[rows], sp.modification_counter, ss.[stats_id], ss.name AS [stat_name], sp.rows_sampled, ss.auto_created, ss.user_created, ss.has_filter, ss.filter_definition, sp.unfiltered_rows, sp.steps
 FROM sys.objects AS o
 	INNER JOIN sys.tables AS mst ON mst.[object_id] = o.[object_id]
@@ -9050,7 +9633,7 @@ WHERE sp.[rows] > 0
 
 		IF (SELECT COUNT(*) FROM #tblStatsSamp) > 0
 		BEGIN
-			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Check], '[WARNING: Some statistics have sampling rates less than 25 pct, consider updating with a larger sample or fullscan]' AS [Deviation]
+			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Check], '[WARNING: Some statistics have sampling rates less than 25 pct, consider updating with a larger sample or fullscan if key is not uniformly distributed]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Statistics_sampling_lt_25pct' AS [Information], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [tableName] AS [Table_Name], [stats_id] AS [statsID], [stat_name] AS [Statistic_Name], 
 				last_updated, [rows], rows_sampled, CAST((rows_sampled/([rows]*1.00))*100.0 AS DECIMAL(5,2)) AS [Sample_Pct],
 				CASE WHEN su.auto_created = 0 AND su.user_created = 0 THEN 'Index_Statistic'
@@ -9098,14 +9681,14 @@ BEGIN
 		BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + @dbname + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), i.name, ''INDEX'' 
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), i.name, ''INDEX'' 
 FROM sys.indexes i 
 INNER JOIN sys.objects o ON o.[object_id] = i.[object_id] 
 INNER JOIN sys.tables AS mst ON mst.[object_id] = i.[object_id]
 INNER JOIN sys.schemas AS t ON t.[schema_id] = mst.[schema_id]
 WHERE i.is_hypothetical = 1
 UNION ALL
-SELECT ''' + @dbname + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), s.name, ''STATISTICS'' 
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), s.name, ''STATISTICS'' 
 FROM sys.stats s 
 INNER JOIN sys.objects o (NOLOCK) ON o.[object_id] = s.[object_id]
 INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = s.[object_id]
@@ -9226,33 +9809,43 @@ BEGIN
 	BEGIN
 		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN
-			SELECT TOP 1 @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
-			SELECT @sqlcmd = 'SELECT ' + CONVERT(VARCHAR(10), @dbid) + ', ''' + DB_NAME(@dbid) + ''', si.[object_id], mst.[name], si.index_id, si.name, t.name, sp.partition_number, si.[type], si.type_desc, 0
-FROM [' + DB_NAME(@dbid) + '].sys.indexes si
-INNER JOIN [' + DB_NAME(@dbid) + '].sys.partitions sp ON si.[object_id] = sp.[object_id] AND si.index_id = sp.index_id
-INNER JOIN [' + DB_NAME(@dbid) + '].sys.tables AS mst ON mst.[object_id] = si.[object_id]
-INNER JOIN [' + DB_NAME(@dbid) + '].sys.schemas AS t ON t.[schema_id] = mst.[schema_id]
+			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+
+			IF (SELECT CHARINDEX(CHAR(39), @dbname)) > 0
+				OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
+				OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
+			BEGIN
+				SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(VARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to potential of SQL Injection'
+				RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
+			END
+			ELSE
+			BEGIN
+				SELECT @sqlcmd = 'SELECT ' + CONVERT(VARCHAR(10), @dbid) + ', ''' + DB_NAME(@dbid) + ''', si.[object_id], mst.[name], si.index_id, si.name, t.name, sp.partition_number, si.[type], si.type_desc, 0
+FROM [' + @dbname + '].sys.indexes si
+INNER JOIN [' + @dbname + '].sys.partitions sp ON si.[object_id] = sp.[object_id] AND si.index_id = sp.index_id
+INNER JOIN [' + @dbname + '].sys.tables AS mst ON mst.[object_id] = si.[object_id]
+INNER JOIN [' + @dbname + '].sys.schemas AS t ON t.[schema_id] = mst.[schema_id]
 WHERE mst.is_ms_shipped = 0 AND ' + CASE WHEN @sqlmajorver <= 11 THEN ' si.[type] <= 2;' ELSE ' si.[type] IN (0,1,2,5,6,7);' END
 
-			INSERT INTO #tblWorking
-			EXEC sp_executesql @sqlcmd;
+				INSERT INTO #tblWorking
+				EXEC sp_executesql @sqlcmd;
 
-			IF @sqlmajorver >= 12
-			BEGIN
-				SELECT @sqlcmd = 'SELECT @HasInMemOUT = ISNULL((SELECT TOP 1 1 FROM [' + DB_NAME(@dbid) + '].sys.filegroups FG where FG.[type] = ''FX''), 0)'
-				SET @params = N'@HasInMemOUT bit OUTPUT';
-				EXECUTE sp_executesql @sqlcmd, @params, @HasInMemOUT=@HasInMem OUTPUT
-
-				IF @HasInMem = 1
+				IF @sqlmajorver >= 12
 				BEGIN
-					INSERT INTO #tmpIPS_CI ([database_id], [object_id], [index_id], [partition_number], fragmentation, [page_count], [size_MB], record_count, delta_store_hobt_id, row_group_id, [state], state_description)		
-					EXECUTE sp_executesql @ColumnStoreGetIXSQL, @ColumnStoreGetIXSQL_Param, @dbid_In = @dbid, @objectid_In = @objectid, @indexid_In = @indexid, @partition_nr_In = @partition_nr;
+					SELECT @sqlcmd = 'SELECT @HasInMemOUT = ISNULL((SELECT TOP 1 1 FROM [' + @dbname + '].sys.filegroups FG where FG.[type] = ''FX''), 0)'
+					SET @params = N'@HasInMemOUT bit OUTPUT';
+					EXECUTE sp_executesql @sqlcmd, @params, @HasInMemOUT=@HasInMem OUTPUT
 
-					SELECT @ErrorMessage = '    |-Gathering sys.dm_db_xtp_hash_index_stats and sys.dm_db_xtp_nonclustered_index_stats data in ' + DB_NAME(@dbid) + '...'
-					RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
+					IF @HasInMem = 1
+					BEGIN
+						INSERT INTO #tmpIPS_CI ([database_id], [object_id], [index_id], [partition_number], fragmentation, [page_count], [size_MB], record_count, delta_store_hobt_id, row_group_id, [state], state_description)		
+						EXECUTE sp_executesql @ColumnStoreGetIXSQL, @ColumnStoreGetIXSQL_Param, @dbid_In = @dbid, @objectid_In = @objectid, @indexid_In = @indexid, @partition_nr_In = @partition_nr;
 
-					SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-USE [' + DB_NAME(@dbid) + '];
+						SELECT @ErrorMessage = '    |-Gathering sys.dm_db_xtp_hash_index_stats and sys.dm_db_xtp_nonclustered_index_stats data in ' + @dbname + '...'
+						RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
+
+						SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+USE [' + @dbname + '];
 SELECT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id], xis.[object_id], t.name, o.name, xis.index_id, si.name, si.type_desc, xhis.total_bucket_count, xhis.empty_bucket_count, xhis.avg_chain_length, xhis.max_chain_length,
 	SUBSTRING((SELECT '','' + ac.name FROM sys.tables AS st
 		INNER JOIN sys.indexes AS i ON st.[object_id] = i.[object_id]
@@ -9269,17 +9862,17 @@ INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = o.[object_id]
 INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE o.[type] = ''U'''
 
-					BEGIN TRY
-						INSERT INTO #tmpXIS
-						EXECUTE sp_executesql @sqlcmd
-					END TRY
-					BEGIN CATCH						
-						SET @ErrorMessage = '      |-Error ' + CONVERT(VARCHAR(20),ERROR_NUMBER()) + ' has occurred while analyzing hash indexes. Message: ' + ERROR_MESSAGE() + ' (Line Number: ' + CAST(ERROR_LINE() AS VARCHAR(10)) + ')'
-						RAISERROR(@ErrorMessage, 0, 42) WITH NOWAIT;
-					END CATCH
+						BEGIN TRY
+							INSERT INTO #tmpXIS
+							EXECUTE sp_executesql @sqlcmd
+						END TRY
+						BEGIN CATCH						
+							SET @ErrorMessage = '      |-Error ' + CONVERT(VARCHAR(20),ERROR_NUMBER()) + ' has occurred while analyzing hash indexes. Message: ' + ERROR_MESSAGE() + ' (Line Number: ' + CAST(ERROR_LINE() AS VARCHAR(10)) + ')'
+							RAISERROR(@ErrorMessage, 0, 42) WITH NOWAIT;
+						END CATCH
 
-					SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
-USE [' + DB_NAME(@dbid) + '];
+						SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+USE [' + @dbname + '];
 SELECT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id],
 	xis.[object_id], t.name, o.name, xis.index_id, si.name, si.type_desc,
 	xnis.delta_pages, xnis.internal_pages, xnis.leaf_pages, xnis.page_update_count,
@@ -9296,26 +9889,27 @@ INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = o.[object_id]
 INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE o.[type] = ''U'''
 
-					BEGIN TRY
-						INSERT INTO #tmpXNCIS
-						EXECUTE sp_executesql @sqlcmd
-					END TRY
-					BEGIN CATCH						
-						SET @ErrorMessage = '      |-Error ' + CONVERT(VARCHAR(20),ERROR_NUMBER()) + ' has occurred while analyzing nonclustered hash indexes. Message: ' + ERROR_MESSAGE() + ' (Line Number: ' + CAST(ERROR_LINE() AS VARCHAR(10)) + ')'
-						RAISERROR(@ErrorMessage, 0, 42) WITH NOWAIT;
-					END CATCH
-				END;
-				/*ELSE
-				BEGIN
-					SELECT @ErrorMessage = '    |-Skipping ' + DB_NAME(@dbid) + '. No memory optimized filegroup was found...'
-					RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
-				END;*/
+						BEGIN TRY
+							INSERT INTO #tmpXNCIS
+							EXECUTE sp_executesql @sqlcmd
+						END TRY
+						BEGIN CATCH						
+							SET @ErrorMessage = '      |-Error ' + CONVERT(VARCHAR(20),ERROR_NUMBER()) + ' has occurred while analyzing nonclustered hash indexes. Message: ' + ERROR_MESSAGE() + ' (Line Number: ' + CAST(ERROR_LINE() AS VARCHAR(10)) + ')'
+							RAISERROR(@ErrorMessage, 0, 42) WITH NOWAIT;
+						END CATCH
+					END;
+					/*ELSE
+					BEGIN
+						SELECT @ErrorMessage = '    |-Skipping ' + DB_NAME(@dbid) + '. No memory optimized filegroup was found...'
+						RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
+					END;*/
 			END;
+		END;
 			
-			UPDATE #tmpdbs0
-			SET isdone = 1
-			WHERE [dbid] = @dbid;
-		END
+		UPDATE #tmpdbs0
+		SET isdone = 1
+		WHERE [dbid] = @dbid;
+		END;
 	END;
 
 	IF EXISTS (SELECT TOP 1 database_id FROM #tmpXIS WHERE isdone = 0)
@@ -9331,7 +9925,7 @@ WHERE o.[type] = ''U'''
 			EXECUTE sp_executesql @sqlcmd, @params, @distinctCntOUT=@distinctCnt OUTPUT, @OptimBucketCntOUT=@OptimBucketCnt OUTPUT;
 			
 			UPDATE #tmpXIS
-			SET distinctCnt = @distinctCnt, OptimBucketCnt = @OptimBucketCnt, isdone = 1
+			SET DistinctCnt = @distinctCnt, OptimBucketCnt = @OptimBucketCnt, isdone = 1
 			WHERE database_id = @dbid AND [object_id] = @objectid AND [index_id] = @indexid;
 		END;
 	END;
@@ -9428,7 +10022,7 @@ OPTION (MAXDOP 2)'
 		BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], '[WARNING: Some databases have high avg chain lenght (>5) and high empty buckets count (>50 pct). Verify if there are many rows with duplicate index key values or there is a skew in the key values]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
-				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
+				DistinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
 				FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) AS [empty_bucket_pct], avg_chain_length, max_chain_length
 			FROM #tmpXIS
 			WHERE FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) > 50 AND [avg_chain_length] > 5
@@ -9439,14 +10033,14 @@ OPTION (MAXDOP 2)'
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_AvgChain_EmptyBuckets' AS [Check], '[OK]' AS [Deviation]
 		END;
 		
-		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count > distinctCnt) > 0
+		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count > DistinctCnt) > 0
 		BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], '[WARNING: Some databases have a total bucket count larger than the number of distinct rows in the table, which is wasting memory and marginally slowing down full table scans]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
-				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
+				DistinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
 				FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) AS [empty_bucket_pct], avg_chain_length, max_chain_length
 			FROM #tmpXIS
-			WHERE total_bucket_count > distinctCnt
+			WHERE total_bucket_count > DistinctCnt
 			ORDER BY [database_name], [schema_name], table_name, [total_bucket_count] DESC;
 		END
 		ELSE
@@ -9454,14 +10048,14 @@ OPTION (MAXDOP 2)'
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooManyBuckets' AS [Check], '[OK]' AS [Deviation]
 		END;
 
-		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count < distinctCnt) > 0
+		IF (SELECT COUNT(*) FROM #tmpXIS WHERE total_bucket_count < DistinctCnt) > 0
 		BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], '[WARNING: Some databases have a total bucket count smaller than the number of distinct rows in the table, which leads to chaining records]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], DB_NAME([database_id]) AS [database_name], [schema_name], [table_name], [index_name], [type_desc] AS index_type,
-				distinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
+				DistinctCnt AS [distinct_keys], OptimBucketCnt AS [optimal_bucket_count], total_bucket_count, empty_bucket_count, 
 				FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) AS [empty_bucket_pct], avg_chain_length, max_chain_length
 			FROM #tmpXIS
-			WHERE total_bucket_count < distinctCnt
+			WHERE total_bucket_count < DistinctCnt
 			ORDER BY [database_name], [schema_name], table_name, [total_bucket_count] DESC;
 		END
 		ELSE
@@ -9514,15 +10108,15 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
 	DROP TABLE #tblIxs1;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
-	CREATE TABLE #tblIxs1 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
-		[indexID] int, [indexName] VARCHAR(200), [indexType] tinyint, is_primary_key bit, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit, has_filter bit, filter_definition NVARCHAR(max),
+	CREATE TABLE #tblIxs1 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), 
+		[indexID] int, [indexName] NVARCHAR(200), [indexType] tinyint, is_primary_key bit, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit, has_filter bit, filter_definition NVARCHAR(max),
 		KeyCols VARCHAR(4000), KeyColsOrdered VARCHAR(4000), IncludedCols VARCHAR(4000) NULL, IncludedColsOrdered VARCHAR(4000) NULL, AllColsOrdered VARCHAR(4000) NULL, [KeyCols_data_length_bytes] int,
 		CONSTRAINT PK_Ixs PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID]));
 		
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
 	DROP TABLE #tblCode;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblCode'))
-	CREATE TABLE #tblCode ([DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [indexName] VARCHAR(200), type_desc NVARCHAR(60));
+	CREATE TABLE #tblCode ([DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), [indexName] NVARCHAR(200), type_desc NVARCHAR(60));
 
 	UPDATE #tmpdbs1
 	SET isdone = 0;
@@ -9532,7 +10126,7 @@ BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + ';
-SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + @dbname + ''' AS Database_Name,
+SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, N''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name,
 	mst.[object_id] AS objectID, t.name AS schemaName, mst.[name] AS objectName, mi.index_id AS indexID, 
 	mi.[name] AS Index_Name, mi.[type] AS [indexType], mi.is_primary_key, mi.[is_unique_constraint], mi.is_unique, mi.is_disabled,
 	mi.fill_factor, mi.is_padded, ' + CASE WHEN @sqlmajorver > 9 THEN 'mi.has_filter, mi.filter_definition,' ELSE 'NULL, NULL,' END + ' 
@@ -9726,12 +10320,12 @@ In this case, make the appropriate changes in the clustered index (making it uni
 		FETCH NEXT FROM Dup_HardCoded INTO @DatabaseName,@indexName
 		WHILE (@@FETCH_STATUS = 0)
 		BEGIN
-			SET @sqlcmd = 'USE [' + @DatabaseName + '];
-SELECT ''' + @DatabaseName + ''' AS [database], ss.name AS [schemaName], so.name AS [objectName], ''' + @indexName + ''' AS indexName, so.type_desc
+			SET @sqlcmd = N'USE [' + @DatabaseName + N'];
+SELECT ''' + @DatabaseName + N''' AS [database], ss.name AS [schemaName], so.name AS [objectName], ''' + @indexName + N''' AS indexName, so.type_desc
 FROM sys.sql_modules sm
 INNER JOIN sys.objects so ON sm.[object_id] = so.[object_id]
 INNER JOIN sys.schemas ss ON ss.[schema_id] = so.[schema_id]
-WHERE sm.[definition] LIKE ''%' + @indexName + '%'''
+WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 
 			INSERT INTO #tblCode
 			EXECUTE sp_executesql @sqlcmd
@@ -9820,8 +10414,8 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
 	DROP TABLE #tblIxs2;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2'))
-	CREATE TABLE #tblIxs2 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
-		[indexID] int, [indexName] VARCHAR(200), [Hits] bigint NULL, [Reads_Ratio] DECIMAL(5,2), [Writes_Ratio] DECIMAL(5,2),
+	CREATE TABLE #tblIxs2 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), 
+		[indexID] int, [indexName] NVARCHAR(200), [Hits] bigint NULL, [Reads_Ratio] DECIMAL(5,2), [Writes_Ratio] DECIMAL(5,2),
 		user_updates bigint, last_user_seek DATETIME NULL, last_user_scan DATETIME NULL, last_user_lookup DATETIME NULL, 
 		last_user_update DATETIME NULL, is_unique bit, [type] tinyint, is_primary_key bit, is_unique_constraint bit, is_disabled bit,
 		CONSTRAINT PK_Ixs2 PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID]))
@@ -9833,7 +10427,7 @@ BEGIN
 	BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + @dbname + ''' AS Database_Name,
+SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name,
 	mst.[object_id] AS objectID, t.name AS schemaName, mst.[name] AS objectName, si.index_id AS indexID, si.[name] AS Index_Name,
 	(s.user_seeks + s.user_scans + s.user_lookups) AS [Hits],
 	RTRIM(CONVERT(NVARCHAR(10),CAST(CASE WHEN (s.user_seeks + s.user_scans + s.user_lookups) = 0 THEN 0 ELSE CONVERT(REAL, (s.user_seeks + s.user_scans + s.user_lookups)) * 100 /
@@ -9884,7 +10478,7 @@ OPTION (MAXDOP 2);'
 	BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + @dbname + ''' AS Database_Name, 
+SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name, 
 	si.[object_id] AS objectID, t.name AS schemaName, OBJECT_NAME(si.[object_id], ' + CONVERT(VARCHAR(8), @dbid) + ') AS objectName, si.index_id AS indexID, 
 	si.[name] AS Index_Name, 0, 0, 0, 0, NULL, NULL, NULL, NULL,
 	si.is_unique, si.[type], si.is_primary_key, si.is_unique_constraint, si.is_disabled
@@ -10125,9 +10719,9 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
 	DROP TABLE #tblIxs6;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs6'))
-	CREATE TABLE #tblIxs6 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), 
-		[indexID] int, [indexName] VARCHAR(200), [indexType] tinyint, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit,
-		KeyCols VARCHAR(4000), KeyColsOrdered VARCHAR(4000), Key_has_GUID int,
+	CREATE TABLE #tblIxs6 ([databaseID] int, [DatabaseName] sysname, [objectID] int, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), 
+		[indexID] int, [indexName] NVARCHAR(200), [indexType] tinyint, [is_unique_constraint] bit, is_unique bit, is_disabled bit, fill_factor tinyint, is_padded bit,
+		KeyCols NVARCHAR(4000), KeyColsOrdered NVARCHAR(4000), Key_has_GUID int,
 		CONSTRAINT PK_Ixs3 PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID]));
 
 	UPDATE #tmpdbs1
@@ -10138,7 +10732,7 @@ BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + ';
-SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + @dbname + ''' AS Database_Name,
+SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name,
 	mst.[object_id] AS objectID, t.name AS schemaName, mst.[name] AS objectName, mi.index_id AS indexID, 
 	mi.[name] AS Index_Name, mi.[type] AS [indexType], mi.[is_unique_constraint], mi.is_unique, mi.is_disabled,
 	mi.fill_factor, mi.is_padded,
@@ -10210,8 +10804,8 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
 	DROP TABLE #tblFK;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
-	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] VARCHAR(200), [parent_schema_name] VARCHAR(100), 
-	[parent_table_name] VARCHAR(200), parent_columns VARCHAR(4000), [referenced_schema] VARCHAR(100), [referenced_table_name] VARCHAR(200), referenced_columns VARCHAR(4000),
+	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] NVARCHAR(200), [parent_schema_name] NVARCHAR(100), 
+	[parent_table_name] NVARCHAR(200), parent_columns NVARCHAR(4000), [referenced_schema] NVARCHAR(100), [referenced_table_name] NVARCHAR(200), referenced_columns NVARCHAR(4000),
 	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name]))
 	
 	UPDATE #tmpdbs1
@@ -10266,7 +10860,7 @@ INNER JOIN sys.schemas AS t ON t.[schema_id] = mst.[schema_id]
 WHERE i.[type] IN (1,2,5,6) AND i.is_unique_constraint = 0
 	AND mst.is_ms_shipped = 0
 )
-SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + @dbname + ''' AS Database_Name, fk.constraint_name AS constraintName,
+SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name, fk.constraint_name AS constraintName,
 	fk.parent_schema_name AS schemaName, fk.parent_table_name AS tableName,
 	REPLACE(fk.parent_columns,'' ,'','','') AS parentColumns, fk.referenced_schema AS referencedSchemaName,
 	fk.referenced_table_name AS referencedTableName, REPLACE(fk.referenced_columns,'' ,'','','') AS referencedColumns
@@ -10338,17 +10932,17 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
 	DROP TABLE #tblIxs3;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
-	CREATE TABLE #tblIxs3 ([Operation] tinyint, [databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200))
+	CREATE TABLE #tblIxs3 ([Operation] tinyint, [databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200))
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
 	DROP TABLE #tblIxs4;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
-	CREATE TABLE #tblIxs4 ([databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [CntCols] int, [CntIxs] int)
+	CREATE TABLE #tblIxs4 ([databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), [CntCols] int, [CntIxs] int)
 	
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
 	DROP TABLE #tblIxs5;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs5'))
-	CREATE TABLE #tblIxs5 ([databaseID] int, [DatabaseName] sysname, [schemaName] VARCHAR(100), [objectName] VARCHAR(200), [indexName] VARCHAR(200), [indexLocation]  VARCHAR(200))
+	CREATE TABLE #tblIxs5 ([databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200), [indexName] NVARCHAR(200), [indexLocation]  NVARCHAR(200))
 
 	UPDATE #tmpdbs1
 	SET isdone = 0
@@ -10357,7 +10951,7 @@ BEGIN
 	BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT 1 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''',	s.name, t.name
+SELECT 1 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	s.name, t.name
 FROM sys.indexes AS si (NOLOCK)
 INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
 INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
@@ -10365,7 +10959,7 @@ WHERE si.is_hypothetical = 0
 GROUP BY si.[object_id], t.name, s.name
 HAVING COUNT(index_id) = 1 AND MAX(index_id) = 0
 UNION ALL
-SELECT 2 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''',	s.name, t.name
+SELECT 2 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	s.name, t.name
 FROM sys.indexes AS si (NOLOCK) 
 INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
 INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
@@ -10383,7 +10977,7 @@ HAVING COUNT(index_id) > 1 AND MIN(index_id) = 0;'
 		END CATCH
 
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''',	s.name, t.name, COUNT(c.column_id), 
+SELECT ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	s.name, t.name, COUNT(c.column_id), 
 (SELECT COUNT(si.index_id) FROM sys.tables AS t2 INNER JOIN sys.indexes AS si ON si.[object_id] = t2.[object_id]
 	WHERE si.index_id > 0 AND si.[object_id] = t.[object_id] AND si.is_hypothetical = 0
 	GROUP BY si.[object_id])
@@ -10402,7 +10996,7 @@ GROUP BY s.name, t.name, t.[object_id];'
 		END CATCH
 
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT DISTINCT ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + @dbname + ''', s.name, t.name, i.name, ds.name
+SELECT DISTINCT ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''', s.name, t.name, i.name, ds.name
 FROM sys.tables AS t (NOLOCK)
 INNER JOIN sys.indexes AS i (NOLOCK) ON t.[object_id] = i.[object_id] 
 INNER JOIN sys.data_spaces AS ds (NOLOCK) ON ds.data_space_id = i.data_space_id
@@ -10481,7 +11075,7 @@ END;
 IF @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Missing Indexes', 10, 1) WITH NOWAIT
-	DECLARE @IC VARCHAR(4000), @ICWI VARCHAR(4000), @editionCheck bit
+	DECLARE @IC NVARCHAR(4000), @ICWI NVARCHAR(4000), @editionCheck bit
 
 	/* Refer to http://msdn.microsoft.com/en-us/library/ms174396.aspx */	
 	IF (SELECT SERVERPROPERTY('EditionID')) IN (1804890536, 1872460670, 610778273, -2117995310)	
@@ -10570,17 +11164,17 @@ END'')
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexCreation'))
 	CREATE TABLE #IndexCreation (
 		[database_id] int,
-		DBName VARCHAR(255),
-		[Table] VARCHAR(255),
+		DBName NVARCHAR(1000),
+		[Table] NVARCHAR(255),
 		[ix_handle] int,
 		[User_Hits_on_Missing_Index] int,
 		[Estimated_Improvement_Percent] DECIMAL(5,2),
 		[Avg_Total_User_Cost] int,
 		[Unique_Compiles] int,
 		[Score] NUMERIC(19,3),
-		[KeyCols] VARCHAR(1000),
-		[IncludedCols] VARCHAR(4000),
-		[Ix_Name] VARCHAR(255),
+		[KeyCols] NVARCHAR(1000),
+		[IncludedCols] NVARCHAR(4000),
+		[Ix_Name] NVARCHAR(255),
 		[AllCols] NVARCHAR(max),
 		[KeyColsOrdered] NVARCHAR(max),
 		[IncludedColsOrdered] NVARCHAR(max)
@@ -10590,13 +11184,13 @@ END'')
 	DROP TABLE #IndexRedundant;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#IndexRedundant'))
 	CREATE TABLE #IndexRedundant (
-		DBName VARCHAR(255),
-		[Table] VARCHAR(255),
-		[Ix_Name] VARCHAR(255),
+		DBName NVARCHAR(1000),
+		[Table] NVARCHAR(255),
+		[Ix_Name] NVARCHAR(255),
 		[ix_handle] int,
-		[KeyCols] VARCHAR(1000),
-		[IncludedCols] VARCHAR(4000),
-		[Redundant_With] VARCHAR(255)
+		[KeyCols] NVARCHAR(1000),
+		[IncludedCols] NVARCHAR(4000),
+		[Redundant_With] NVARCHAR(255)
 		)
 
 	INSERT INTO #IndexCreation
@@ -10768,12 +11362,12 @@ RAISERROR (N'|-Starting Objects naming conventions Checks', 10, 1) WITH NOWAIT
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
 DROP TABLE #tmpobjectnames;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpobjectnames'))
-CREATE TABLE #tmpobjectnames ([DBName] sysname, [schemaName] VARCHAR(100), [Object] VARCHAR(255), [Col] VARCHAR(255), [type] CHAR(2), type_desc VARCHAR(60));
+CREATE TABLE #tmpobjectnames ([DBName] sysname, [schemaName] NVARCHAR(100), [Object] NVARCHAR(255), [Col] NVARCHAR(255), [type] CHAR(2), type_desc NVARCHAR(60));
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
 DROP TABLE #tmpfinalobjectnames;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpfinalobjectnames'))
-CREATE TABLE #tmpfinalobjectnames ([Deviation] tinyint, [DBName] sysname, [schemaName] VARCHAR(100), [Object] VARCHAR(255), [Col] VARCHAR(255), type_desc VARCHAR(60), [Comment] VARCHAR(500) NULL);
+CREATE TABLE #tmpfinalobjectnames ([Deviation] tinyint, [DBName] sysname, [schemaName] NVARCHAR(100), [Object] NVARCHAR(255), [Col] NVARCHAR(255), type_desc NVARCHAR(60), [Comment] NVARCHAR(500) NULL);
 
 UPDATE #tmpdbs1
 SET isdone = 0
@@ -10782,12 +11376,12 @@ WHILE (SELECT COUNT(id) FROM #tmpdbs1 WHERE isdone = 0) > 0
 BEGIN
 	SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 	SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + @dbname + ''' AS [DBName], s.name, so.name, NULL, type, type_desc
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], s.name, so.name, NULL, type, type_desc
 FROM sys.objects so 
 INNER JOIN sys.schemas s ON so.schema_id = s.schema_id
 WHERE so.is_ms_shipped = 0
 UNION ALL
-SELECT ''' + @dbname + ''' AS [DBName], s.name, so.name, sc.name, ''TC'' AS [type], ''TABLE_COLUMN'' AS [type_desc]
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], s.name, so.name, sc.name, ''TC'' AS [type], ''TABLE_COLUMN'' AS [type_desc]
 FROM sys.columns sc 
 INNER JOIN sys.objects so ON sc.object_id = so.object_id
 INNER JOIN sys.schemas s ON so.schema_id = s.schema_id
@@ -11432,7 +12026,7 @@ RAISERROR (N'  |-Starting DBCC CHECKDB, Direct Catalog Updates and Data Purity',
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
 DROP TABLE #output_dbinfo;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#output_dbinfo'))
-CREATE TABLE #output_dbinfo (ParentObject VARCHAR(255), [Object] VARCHAR(255), Field VARCHAR(255), [value] VARCHAR(255))
+CREATE TABLE #output_dbinfo (ParentObject NVARCHAR(255), [Object] NVARCHAR(255), Field NVARCHAR(255), [value] NVARCHAR(255))
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
 DROP TABLE #dbinfo;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#dbinfo'))
@@ -11442,28 +12036,45 @@ IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1)
 BEGIN
 	--DECLARE @dbname NVARCHAR(255);
 	DECLARE @dbcc bit, @catupd bit, @purity bit;
-	DECLARE curDBs CURSOR FAST_FORWARD FOR SELECT name FROM master.sys.databases (NOLOCK) WHERE is_read_only = 0 AND [state] = 0
+	DECLARE curDBs CURSOR FAST_FORWARD FOR SELECT [name] FROM master.sys.databases (NOLOCK) WHERE is_read_only = 0 AND [state] = 0
 	OPEN curDBs
 	FETCH NEXT FROM curDBs INTO @dbname
 	WHILE (@@FETCH_STATUS = 0)
 	BEGIN
-		SET @dbname = RTRIM(LTRIM(@dbname))
-		INSERT INTO #output_dbinfo
-		EXEC('DBCC DBINFO(''' + @dbname + ''') WITH TABLERESULTS, NO_INFOMSGS')
-		INSERT INTO #dbinfo (dbname, lst_known_checkdb)
-		SELECT @dbname, [value] FROM #output_dbinfo WHERE Field LIKE 'dbi_dbccLastKnownGood%';
-		UPDATE #dbinfo
-		SET #dbinfo.updSysCatalog = #output_dbinfo.[value]
-		FROM #output_dbinfo 
-		WHERE #dbinfo.dbname = @dbname AND #output_dbinfo.Field LIKE 'dbi_updSysCatalog%';
-		UPDATE #dbinfo
-		SET #dbinfo.dbi_createVersion = #output_dbinfo.[value]
-		FROM #output_dbinfo 
-		WHERE #dbinfo.dbname = @dbname AND #output_dbinfo.Field LIKE 'dbi_createVersion%';
-		UPDATE #dbinfo
-		SET #dbinfo.dbi_dbccFlags = #output_dbinfo.[value]
-		FROM #output_dbinfo 
-		WHERE #dbinfo.dbname = @dbname AND #output_dbinfo.Field LIKE 'dbi_dbccFlags%';
+		IF (SELECT CHARINDEX(CHAR(39), @dbname)) > 0
+			OR (SELECT CHARINDEX(CHAR(45), @dbname)) > 0
+			OR (SELECT CHARINDEX(CHAR(47), @dbname)) > 0
+		BEGIN
+			SELECT @ErrorMessage = '    |-Skipping Database ID ' + CONVERT(NVARCHAR, DB_ID(QUOTENAME(@dbname))) + ' due to possible SQL Injection'
+			RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT;
+		END
+		ELSE
+		BEGIN
+			SET @dbname = RTRIM(LTRIM(@dbname))
+			SET @query = N'DBCC DBINFO(N''' + @dbname + N''') WITH TABLERESULTS, NO_INFOMSGS'
+
+			INSERT INTO #output_dbinfo
+			EXEC (@query)
+		
+			INSERT INTO #dbinfo (dbname, lst_known_checkdb)
+			SELECT @dbname, [value] FROM #output_dbinfo WHERE Field LIKE 'dbi_dbccLastKnownGood%';
+		
+			UPDATE #dbinfo
+			SET #dbinfo.updSysCatalog = #output_dbinfo.[value]
+			FROM #output_dbinfo 
+			WHERE #dbinfo.dbname = @dbname AND #output_dbinfo.Field LIKE 'dbi_updSysCatalog%';
+		
+			UPDATE #dbinfo
+			SET #dbinfo.dbi_createVersion = #output_dbinfo.[value]
+			FROM #output_dbinfo 
+			WHERE #dbinfo.dbname = @dbname AND #output_dbinfo.Field LIKE 'dbi_createVersion%';
+		
+			UPDATE #dbinfo
+			SET #dbinfo.dbi_dbccFlags = #output_dbinfo.[value]
+			FROM #output_dbinfo 
+			WHERE #dbinfo.dbname = @dbname AND #output_dbinfo.Field LIKE 'dbi_dbccFlags%';
+		END;
+		
 		TRUNCATE TABLE #output_dbinfo;
 		FETCH NEXT FROM curDBs INTO @dbname
 	END
@@ -11787,10 +12398,10 @@ BEGIN
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Errorlog' AS [Check], '[WARNING: Errorlog contains important messages.]' AS [Deviation];
 
 		;WITH cte_dbcc (err, errcnt, logdate, logmsg) 
-			AS (SELECT CASE WHEN logmsg LIKE 'Error: %' THEN RIGHT(LEFT(#dbcc.logmsg, CHARINDEX(',', #dbcc.logmsg)-1), CHARINDEX(',', #dbcc.logmsg)-8) 
+			AS (SELECT CASE WHEN logmsg LIKE 'Error: [^a-z]%' THEN RIGHT(LEFT(#dbcc.logmsg, CHARINDEX(',', #dbcc.logmsg)-1), CHARINDEX(',', #dbcc.logmsg)-8) 
 					WHEN logmsg LIKE 'SQL Server has encountered % longer than 15 seconds %' THEN CONVERT(CHAR(3),833)
 					WHEN logmsg LIKE 'A significant part of sql server process memory has been paged out%' THEN CONVERT(CHAR(5),17890)
-					ELSE '' END AS err,
+					ELSE NULL END AS err,
 				COUNT(logmsg) AS errcnt, 
 				logdate,
 				CASE WHEN logmsg LIKE 'SQL Server has encountered % longer than 15 seconds %' THEN 'SQL Server has encountered XXX occurrence(s) of IO requests taking longer than 15 seconds to complete on file YYY'
@@ -11853,13 +12464,13 @@ BEGIN
 				WHEN logmsg LIKE 'A significant part of sql server process memory has been paged out%' THEN 'SQL Server process was trimmed by the OS. Preventable if LPIM is granted'
 				WHEN logmsg LIKE '%cachestore flush%' THEN 'CacheStore flush'
 			ELSE '' END AS [Comment],
-			CASE WHEN logmsg LIKE 'Error: %' THEN (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(text,'%.*ls','%'),'%d','%'),'%ls','%'),'%S_MSG','%'),'%S_PGID','%'),'%#016I64x','%'),'%p','%'),'%08x','%'),'%u','%'),'%I64d','%'),'%s','%'),'%ld','%'),'%lx','%'), '%%%', '%') 
+			CASE WHEN logmsg LIKE 'Error: [^a-z]%' THEN (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(text,'%.*ls','%'),'%d','%'),'%ls','%'),'%S_MSG','%'),'%S_PGID','%'),'%#016I64x','%'),'%p','%'),'%08x','%'),'%u','%'),'%I64d','%'),'%s','%'),'%ld','%'),'%lx','%'), '%%%', '%') 
 					FROM sys.messages WHERE message_id = (CONVERT(int, RIGHT(LEFT(cte_dbcc.logmsg, CHARINDEX(',', cte_dbcc.logmsg)-1), CHARINDEX(',', cte_dbcc.logmsg)-8))) AND language_id = @langid) 
 				ELSE '' END AS [Look_for_Message_example]
 		FROM cte_dbcc
 		GROUP BY err, logmsg
 		ORDER BY SUM(errcnt) DESC;
-		
+	
 		IF @logdetail = 1
 		BEGIN
 			SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Errorlog_Detail' AS [Information], logid AS [Errorlog_Id], logdate AS [Logged_Date], spid AS [Process], logmsg AS [Logged_Message], 
@@ -12135,6 +12746,16 @@ IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id]
 DROP TABLE #tmpXNCIS;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpIPS_CI'))
 DROP TABLE #tmpIPS_CI;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmp_dm_io_virtual_file_stats'))
+DROP TABLE #tmp_dm_io_virtual_file_stats;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tmpdbsizes'))
+DROP TABLE ##tmpdbsizes;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecated'))
+DROP TABLE #tblDeprecated;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblDeprecatedJobs'))
+DROP TABLE #tblDeprecatedJobs;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tblKeywords'))
+DROP TABLE ##tblKeywords;
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')

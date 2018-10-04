@@ -322,3 +322,27 @@ v2.1.3 - 10/26/2016 - Fixed conversion issue with Account checks;
 v2.1.4 - 11/08/2016 - Fixed autogrows in last 72h shown in MB instead of KB.
 v2.1.5 - 11/17/2016 - Added support for SQLS erver 2016 SP1 (Enterprise_features_usage, LPIM and IFI checks).
 v2.1.5.1 - 11/23/2016 - Fixed User DBs with non-default options subsection in SQL 2012.
+v2.1.5.2 - 2/23/2017 - Fixed conversion error in Service_Account_checks section.
+v2.1.5.3 - 2/26/2017 - Added SQL 2016 support for AlwaysOn_Replicas information section;
+			Fixed conversion error when multiple TCP ports.
+v2.1.5.4 - 3/28/2017 - Fixed collation issues.
+v2.1.6 - 4/11/2017 - Changed port discovery method for SQL Server 2012 and above.
+v2.1.6.1 - 4/30/2017 - Enhanced wait and latches report section.
+v2.1.7 - 5/10/2017 - Added database size details to Database Information section.
+v2.1.8 - 6/9/2017 - Extended Deprecated and Discontinued features subsection with info from sql modules;
+			Extended trace flags subsection;
+			Added resilience for SQL Injection;
+			Fixed invalid object name error in SQL Server 2005.
+v2.1.8.1 - 6/11/2017 - Added information about query optimizer changes usage at DB level;
+					Extended Deprecated and Discontinued features subsection with info from SQL Agent jobs.
+v2.1.8.2 - 8/23/2017 - Extended search for feature usage in DBs - better determine DB readiness to be moved across editions.
+v2.1.8.3 - 9/7/2017 - Changed Enterprise_Feature_usage to Feature usage all-up;
+						Extended wait type categorization.
+v2.2 - 10/17/2017 - Added support for SQL Server on Linux.
+v2.2.1 - 10/19/2017 - Corrected several issues with support for SQL 2017 (thanks Mark Freeman).
+v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bjoern Steinmetz);
+						Fixed Feature usage subsection when running on SQL 2014 or below;
+						Fixed CPU Affinity bit mask.
+v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
+						Fixed max server memory calculations;
+						Added check for Database Health Detection in Server_checks section (thanks Anders Uhl Pedersen).
