@@ -3056,16 +3056,24 @@ RAISERROR (N'|-Starting Server Checks', 10, 1) WITH NOWAIT
 -- Power plan subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Power plan', 10, 1) WITH NOWAIT
-DECLARE @planguid NVARCHAR(64), @powerkey NVARCHAR(255) 
+DECLARE @planguid NVARCHAR(64), @powerkey1 NVARCHAR(255), @powerkey2 NVARCHAR(255) 
 --SELECT @powerkey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{025A5937-A6BE-4686-A844-36FE4BEC8B6D}'
 --SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
-SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
+SELECT @powerkey1 = 'SOFTWARE\Policies\Microsoft\Power\PowerSettings'
+SELECT @powerkey2 = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
 
 IF CONVERT(DECIMAL(3,1), @osver) >= 6.0
 BEGIN
 	BEGIN TRY
 		--EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey, 'PreferredPlan', @planguid OUTPUT, NO_OUTPUT
-		EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey, 'ActivePowerScheme', @planguid OUTPUT, NO_OUTPUT
+		EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey1, 'ActivePowerScheme', @planguid OUTPUT, NO_OUTPUT
+		
+		-- Check if was set by GPO, if not, look in user settings
+		IF @planguid IS NULL
+		BEGIN
+			EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey2, 'ActivePowerScheme', @planguid OUTPUT, NO_OUTPUT
+		END
+
 	END TRY
 	BEGIN CATCH
 		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
