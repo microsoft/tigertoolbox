@@ -679,7 +679,9 @@ v1.6.6.4 - 6/25/2018 - Tested with Azure SQL Managed Instance;
 						Added extra debug output.
 v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become uncompressed (by d-moloney);
 						Extended row mode counter info data type in debug mode (by d-moloney);
-						Fixed issue with @statsThreshold and large tables (by AndrewG2)
+						Fixed issue with @statsThreshold and large tables (by AndrewG2).
+v1.6.6.6 - 10/28/2018 - Extended 2nd row mode counter info data type in debug mode (by CodyFitzpatrick);
+
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
 										
@@ -1240,7 +1242,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.5';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.6';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -2774,7 +2776,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 				IF @debugMode = 1
 				BEGIN
-					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(10), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(10), CASE WHEN @rows IS NOT NULL AND @rows < @record_count THEN @rows ELSE @record_count END) + ' rows' + CASE WHEN @stats_isincremental = 1 THEN ' on partition ' + CONVERT(NVARCHAR(10), @partitionNumber) ELSE '' END + '...';
+					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(15), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(15), CASE WHEN @rows IS NOT NULL AND @rows < @record_count THEN @rows ELSE @record_count END) + ' rows' + CASE WHEN @stats_isincremental = 1 THEN ' on partition ' + CONVERT(NVARCHAR(15), @partitionNumber) ELSE '' END + '...';
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 					--select @debugMessage
 				END
