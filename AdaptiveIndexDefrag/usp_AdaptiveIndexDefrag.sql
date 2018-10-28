@@ -681,6 +681,7 @@ v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become u
 						Extended row mode counter info data type in debug mode (by d-moloney);
 						Fixed issue with @statsThreshold and large tables (by AndrewG2).
 v1.6.6.6 - 10/28/2018 - Extended 2nd row mode counter info data type in debug mode (by CodyFitzpatrick);
+						Fixed compression data missing in working table (by ravseer).
 
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
