@@ -1715,9 +1715,6 @@ OPTION (MAXDOP 2)'
 						WHERE objectID = @objectID AND indexID = @indexID AND partitionNumber = @partitionNumber
 					END
 				END;
-				
-				IF @debugMode = 1
-				RAISERROR('    Looking up additional index information...', 0, 42) WITH NOWAIT;
 
 				/* Look up index status for various purposes */	
 				SELECT @updateSQL = N'UPDATE ids		
@@ -1730,6 +1727,12 @@ WHERE o.object_id = ids.objectID AND i.index_id = ids.indexID AND i.type > 0
 AND o.object_id NOT IN (SELECT sit.object_id FROM [' + DB_NAME(@dbID) + '].sys.internal_tables AS sit)
 AND ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 
+				IF @debugMode = 1
+				BEGIN
+					RAISERROR('    Looking up additional index information (pass 1)...', 0, 42) WITH NOWAIT;
+					--PRINT @updateSQL
+				END
+				
 				EXECUTE sp_executesql @updateSQL;
 				
 				IF @sqlmajorver = 9
@@ -1743,12 +1746,18 @@ WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 				ELSE
 				BEGIN
 					SELECT @updateSQL = N'UPDATE ids
-SET [record_count] = [rows], [compression_type] = [data_compression_desc] END
+SET [record_count] = [rows], [compression_type] = [data_compression_desc]
 FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
 INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
 WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 				END
 
+				IF @debugMode = 1
+				BEGIN
+					RAISERROR('    Looking up additional index information (pass 2)...', 0, 42) WITH NOWAIT;
+					--PRINT @updateSQL
+				END
+				
 				EXECUTE sp_executesql @updateSQL;
 				
 				IF @debugMode = 1
