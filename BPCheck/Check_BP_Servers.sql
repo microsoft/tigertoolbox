@@ -406,6 +406,7 @@ v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
 						Fixed max server memory calculations;
 						Added check for Database Health Detection in Server_checks section (thanks Anders Uhl Pedersen).
 v2.2.3 - 10/27/2018 - Fixed performance checks duplicate results issue on SQL 2016+. 
+v2.2.3.1 - 10/28/2018 - Fixed variable issue.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -8102,7 +8103,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS. -> http://technet.microsoft.com/en-us/library/cc293620.aspx
 	-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
 	
-	SELECT 'Performance_checks' AS [Category], 'Waits_Last_' + CONVERT(VARCHAR(3), @duration_in) + 's' AS [Information], W1.wait_type, 
+	SELECT 'Performance_checks' AS [Category], 'Waits_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1.wait_type, 
 		CAST(W1.wait_time_s AS DECIMAL(12, 2)) AS wait_time_s,
 		CAST(W1.signal_wait_time_s AS DECIMAL(12, 2)) AS signal_wait_time_s,
 		CAST(W1.resource_wait_time_s AS DECIMAL(12, 2)) AS resource_wait_time_s,
