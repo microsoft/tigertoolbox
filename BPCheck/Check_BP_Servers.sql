@@ -408,7 +408,8 @@ v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
 v2.2.3 - 10/27/2018 - Fixed performance checks duplicate results issue on SQL 2016+. 
 v2.2.3.1 - 10/28/2018 - Fixed variable issue.
 v2.2.3.2 - 10/28/2018 - Enhanced power scheme check (thanks sivey42).
-v2.2.3.3 - 10/29/2018 - Fixed latches syntax error (thanks Dimitri Artemov).
+v2.2.3.4 - 10/29/2018 - Fixed latches syntax error (thanks Dimitri Artemov);
+						Improved handling of conversions.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -548,7 +549,7 @@ RAISERROR (N'Starting Pre-requisites section', 10, 1) WITH NOWAIT
 --------------------------------------------------------------------------------------------------------------------------------
 -- Pre-requisites section
 --------------------------------------------------------------------------------------------------------------------------------
-DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(500), @sqlmajorver int
+DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(600), @sqlmajorver int
 
 /*
 Reference: SERVERPROPERTY for sql major, minor and build versions supported after:
@@ -8247,7 +8248,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		cteLatches2 (latch_class,wait_time_ms,waiting_requests_count) AS (SELECT latch_class,wait_time_ms,waiting_requests_count FROM #tblLatches WHERE [retrieval_time] = @maxctr)
 	INSERT INTO #tblFinalLatches
 	SELECT DISTINCT t1.latch_class,
-			(t2.wait_time_ms-t1.wait_time_ms) / 1000.0 AS wait_time_s,
+			CAST((t2.wait_time_ms-t1.wait_time_ms) / 1000.0 AS DECIMAL(14, 2)) AS wait_time_s,
 			(t2.waiting_requests_count-t1.waiting_requests_count) AS waiting_requests_count,
 			100.0 * (t2.wait_time_ms-t1.wait_time_ms) / SUM(t2.wait_time_ms-t1.wait_time_ms) OVER() AS pct,
 			ROW_NUMBER() OVER(ORDER BY t1.wait_time_ms DESC) AS rn
@@ -8257,9 +8258,9 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	ORDER BY wait_time_s DESC;
 	
 	SELECT 'Performance_checks' AS [Category], 'Latches_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1.latch_class, 
-		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		W1.wait_time_s,
 		W1.waiting_requests_count,
-		CAST (W1.pct AS DECIMAL(14, 2)) AS pct,
+		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
 		CAST(SUM(W2.pct) AS DECIMAL(14, 2)) AS overall_running_pct,
 		CAST ((W1.wait_time_s / W1.waiting_requests_count) AS DECIMAL (14, 4)) AS avg_wait_s,
 	CASE WHEN W1.latch_class LIKE N'ACCESS_METHODS_HOBT_COUNT' 
@@ -8275,7 +8276,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool]'
 		ELSE N'[Other]' END AS 'latch_category'
 	FROM #tblFinalLatches AS W1 INNER JOIN #tblFinalLatches AS W2 ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.latch_class, CAST(W1.wait_time_s AS DECIMAL(14, 2)), W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
+	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
 	HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(14, 2)) < 100; -- percentage threshold
 	
 	;WITH Latches AS
@@ -8359,7 +8360,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			ROW_NUMBER() OVER(ORDER BY t2.spins DESC) AS rn
 	FROM cteSpinlocks1 t1 INNER JOIN cteSpinlocks2 t2 ON t1.name = t2.name
 	GROUP BY t1.name, t1.collisions, t2.collisions, t1.spins, t2.spins, t1.spins_per_collision, t2.spins_per_collision, t1.sleep_time, t2.sleep_time, t1.backoffs, t2.backoffs
-	HAVING CAST(SUM(t2.spins_pct) AS DECIMAL(14, 2)) - CAST(t1.spins_pct AS DECIMAL(14, 2)) > 0
+	HAVING (t2.spins-t1.spins) > 0
 	ORDER BY spins DESC;
 
 	SELECT 'Performance_checks' AS [Category], 'Spinlocks_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], S1.name, 
