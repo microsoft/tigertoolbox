@@ -408,6 +408,7 @@ v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
 v2.2.3 - 10/27/2018 - Fixed performance checks duplicate results issue on SQL 2016+. 
 v2.2.3.1 - 10/28/2018 - Fixed variable issue.
 v2.2.3.2 - 10/28/2018 - Enhanced power scheme check (thanks sivey42).
+v2.2.3.3 - 10/29/2018 - Fixed latches syntax error (thanks Dimitri Artemov).
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -8279,7 +8280,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	
 	;WITH Latches AS
 		(SELECT latch_class,
-			 wait_time_ms / 1000.0 AS wait_time_s,
+			 CAST(wait_time_ms / 1000.0 AS DECIMAL(12, 2)) AS wait_time_s,
 			 waiting_requests_count,
 			 100.0 * wait_time_ms / SUM(wait_time_ms) OVER() AS pct,
 			 ROW_NUMBER() OVER(ORDER BY wait_time_ms DESC) AS rn
@@ -8288,9 +8289,9 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 				AND*/ wait_time_ms > 0
 		)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Latches' AS [Information], W1.latch_class, 
-		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		W1.wait_time_s,
 		W1.waiting_requests_count,
-		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
+		CAST(W1.pct AS DECIMAL(12, 2)) AS pct,
 		CAST(SUM(W1.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
 		CAST((W1.wait_time_s / W1.waiting_requests_count) AS DECIMAL (14, 4)) AS avg_wait_s,
 		CASE WHEN W1.latch_class LIKE N'ACCESS_METHODS_HOBT_COUNT' 
@@ -8308,12 +8309,12 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	FROM Latches AS W1
 	INNER JOIN Latches AS W2
 		ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.latch_class, CAST(W1.wait_time_s AS DECIMAL(12, 2)), W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(12, 2))
+	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(12, 2))
 	HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(12, 2)) < 100; -- percentage threshold
 	
 	;WITH Latches AS
 		(SELECT latch_class,
-			 wait_time_ms / 1000.0 AS wait_time_s,
+			 CAST(wait_time_ms / 1000.0 AS DECIMAL(12, 2)) AS wait_time_s,
 			 waiting_requests_count,
 			 100.0 * wait_time_ms / SUM(wait_time_ms) OVER() AS pct,
 			 ROW_NUMBER() OVER(ORDER BY wait_time_ms DESC) AS rn
@@ -8322,7 +8323,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 				AND wait_time_ms > 0
 		)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Latches_wo_BUFFER' AS [Information], W1.latch_class, 
-		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		W1.wait_time_s,
 		W1.waiting_requests_count,
 		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
 		CAST(SUM(W1.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
@@ -8342,7 +8343,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	FROM Latches AS W1
 	INNER JOIN Latches AS W2
 		ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.latch_class, CAST(W1.wait_time_s AS DECIMAL(12, 2)), W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(12, 2))
+	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(12, 2))
 	HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(12, 2)) < 100; -- percentage threshold
 
 	;WITH cteSpinlocks1 AS (SELECT name, collisions, spins, spins_per_collision, sleep_time, backoffs FROM #tblSpinlocksBefore),
