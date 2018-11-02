@@ -1,0 +1,14 @@
+FROM golang:1.11 
+RUN go version
+
+COPY . /app
+WORKDIR /app
+RUN go get -u github.com/gorilla/mux
+RUN go get -u github.com/gorilla/handlers
+RUN go get -u github.com/denisenkom/go-mssqldb
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o app .
+EXPOSE 8080
+
+RUN chmod +x ./entrypoint-test.sh
+CMD /bin/bash ./entrypoint-test.sh
