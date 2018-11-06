@@ -1,0 +1,30 @@
+version: "3"
+services:
+    web:
+        build: ./app
+        ports:
+            - "8080:8080"
+        depends_on:
+            - db
+    db:
+        image: mcr.microsoft.com/mssql/server
+        environment:
+            SA_PASSWORD: "yourStrongPassw0rd!"
+            ACCEPT_EULA: "Y"
+            MSSQL_AGENT_ENABLED: "true"
+        ports:
+            - "1500:1433"
+    frontend:
+        build: ./frontend
+        ports:
+            - "80:80"
+    migration:
+        image: boxfuse/flyway:latest
+        container_name: flyway_migration
+        volumes:
+        - ./flyway/sql:/flyway/sql
+        - ./flyway/bin:/flyway/bin
+        entrypoint: ["bash", "/flyway/bin/wait-for-it.sh", "--timeout=20", "db:1433", "--", "flyway"]      
+        command: -url=jdbc:sqlserver://db;database=master -user=sa -password=yourStrongPassw0rd! -mixed=true -target=1.1 migrate
+        depends_on:
+        - db

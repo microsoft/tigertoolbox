@@ -1,0 +1,77 @@
+
+---- DEMO #1: Run a single instance of SQL Server in a container
+docker pull mcr.microsoft.com/mssql/server:2017-latest
+
+docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=yourStrongPassw0rd!' \
+   -p 1600:1433 --name sql1 \
+   -d mcr.microsoft.com/mssql/server:2017-latest
+
+docker ps
+docker stop sql1
+docker rm sql1
+
+---- DEMO #2: With the code that we checked out from Git Hub, we can start the application running with multiple components
+----          docker-compose manages multiple containers enabling us to start our application 
+----          This includes a frontend, backend, database and database component that applies the migration
+
+docker-compose build
+docker-compose up
+docker-compose down
+
+---- DEMO #3: Before we make any changes, we should ensure that we can test our app + database
+----          With docker-compose, we start up the database, the migration to set up the database and start the tests 
+docker-compose -f docker-compose-test.yml build
+docker-compose -f docker-compose-test.yml up
+docker-compose -f docker-compose-test.yml down
+
+----DEMO #4: In detail, we show how the migration works with the two previous examples.
+----         This demo outlines how we use flyway to apply a specific migration to SQL Server 
+
+docker-compose -f ./flyway/docker-compose.yml build
+docker-compose -f ./flyway/docker-compose.yml up
+docker-compose -f ./flyway/docker-compose.yml down
+
+----DEMO #5: Assuming we have a change in the database in the form of a .sql file, we want to see if our application works.
+----         we use docker-compose again to start the app with database, this time by applying the new .sql file as well
+----         we also want to enure that our tests are still passing so we run the tests
+
+#Remove 'target=1.1' to docker-compose.yml 
+docker-compose build
+docker-compose up
+docker-compose down
+
+docker-compose -f docker-compose-test.yml build
+docker-compose -f docker-compose-test.yml up
+docker-compose -f docker-compose-test.yml down
+
+
+----DEMO #6: Now lets check this .sql file back into GitHub. 
+----         This will start our CI process. We can see this building in Azure DevOps
+git commit -am "demo checkin"
+git push
+
+
+----DEMO #7: The output from the CI is a container with the latest .sql file that contains our change
+----         This is pushed to my Docker Hub account which I can then write a job to apply this to my Kubernetes cluster
+----         We can now apply a job to Kubernetes which just applies this .sql file to our SQL Server instance with Flyway.
+
+kubectl apply -f ./apply-sql-updates.yml
+
+
+
+
+----RESET DEMOS
+add '-target=1.1' to docker-compose.yml  
+kubectl delete job apply-sql-updates 
+
+----reset the app in Kubernetes by connecting to it and running the following T-SQL
+USE rest_api_example
+GO
+
+ALTER TABLE users ALTER COLUMN phoneNumber DROP MASKED
+ALTER TABLE users ALTER COLUMN email DROP MASKED
+
+USE MASTER 
+GO
+Delete from [master].[dbo].[flyway_schema_history] where version>1.1
+
