@@ -1,0 +1,1 @@
+These are the demo files for PASS Summit 2018 pre-con "Modernizing your SQL Server"
