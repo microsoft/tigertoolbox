@@ -1,9 +1,0 @@
-{
-    "Data Source Path": "F:\\DataLocation\\Data",
-    "Health Level": 3,
-    "Instances": [
-		"Replica1",
-    "Replica2",
-    "Replica3"
-    ]
-}
