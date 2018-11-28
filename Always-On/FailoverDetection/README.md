@@ -1,3 +1,4 @@
-## Always On Availability Groups
-This is the solution repository for the various scripts and Power BI dashboards associated with SQL Server Always On Availability Groups that was created the MSSQLTIGER team.
+## Always On Availability Groups Failover Detector Utility
+Root folder for the FailoverDetector Utility. For more information refer this blog post
+https://blogs.msdn.microsoft.com/sql_server_team/failover-detection-utility-availability-group-failover-analysis-made-easy/
 
