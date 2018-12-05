@@ -1,1 +1,1 @@
-These are the demo files for PASS Summit 2018 pre-con "Modernizing your SQL Server"
+These are the presentations and demo files for the Tiger PASS Summit 2018 sessions.
