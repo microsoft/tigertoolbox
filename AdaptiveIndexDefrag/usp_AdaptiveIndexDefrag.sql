@@ -1889,16 +1889,22 @@ ORDER BY + ' + @defragOrderColumn + ' ' + @defragSortOrder + ', objectID DESC';
 			
 			IF @debugMode = 1
 			RAISERROR('  Getting selected index information...', 0, 42) WITH NOWAIT;
-			
+
 			/* Get object names and info */
 			IF @partitionCount > 1 AND @dealMaxPartition IS NOT NULL AND @editionCheck = 1
 			BEGIN
+				IF @debugMode = 1
+				RAISERROR('  	Partition number specific...', 0, 42) WITH NOWAIT;
+
 				SELECT TOP 1 @objectName = objectName, @schemaName = schemaName, @indexName = indexName, @dbName = dbName, @fragmentation = fragmentation, @partitionNumber = partitionNumber, @pageCount = page_count, @range_scan_count = range_scan_count, @is_primary_key = is_primary_key, @fill_factor = fill_factor, @record_count = record_count, @ixtype = [type], @is_disabled = is_disabled, @is_padded = is_padded, @has_filter = has_filter, @currCompression = [compression_type]
 				FROM dbo.tbl_AdaptiveIndexDefrag_Working
-				WHERE objectID = @objectID AND indexID = @indexID AND dbID = @dbID AND ((@Exec_Print = 1 AND defragDate IS NULL) OR (@Exec_Print = 0 AND defragDate IS NULL AND printStatus = 0));
+				WHERE objectID = @objectID AND indexID = @indexID AND dbID = @dbID AND ((@Exec_Print = 1 AND defragDate IS NULL) OR (@Exec_Print = 0 AND defragDate IS NULL AND printStatus = 0))
+				ORDER BY partitionNumber ASC; -- ensure that we have always the same sequence in order to continue resumeable operations
 			END
 			ELSE
 			BEGIN
+				RAISERROR('  	Not partition number specific...', 0, 42) WITH NOWAIT;
+
 				SELECT TOP 1 @objectName = objectName, @schemaName = schemaName, @indexName = indexName, @dbName = dbName, @fragmentation = fragmentation, @partitionNumber = NULL, @pageCount = page_count, @range_scan_count = range_scan_count, @is_primary_key = is_primary_key, @fill_factor = fill_factor, @record_count = record_count, @ixtype = [type], @is_disabled = is_disabled, @is_padded = is_padded, @has_filter = has_filter, @currCompression = [compression_type]
 				FROM dbo.tbl_AdaptiveIndexDefrag_Working
 				WHERE objectID = @objectID AND indexID = @indexID AND dbID = @dbID AND ((@Exec_Print = 1 AND defragDate IS NULL) OR (@Exec_Print = 0 AND defragDate IS NULL AND printStatus = 0));
@@ -2135,7 +2141,12 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				SELECT TOP 1 @stats_isincremental = [is_incremental] FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working 
 				WHERE dbName = @dbName AND schemaName = @schemaName AND objectName = @objectName AND statsName = @indexName;
 				
-				IF (@sqlmajorver < 13 OR @partitionCount = 1) AND @sqldisablecommand IS NULL AND @ixtype IN (1,2)
+				IF ((SELECT COUNT(*) FROM sys.index_resumable_operations) > 0)
+				BEGIN
+					IF @debugMode = 1
+					RAISERROR('    Found ongoing resumable index operations - skipping all pre-commands...', 0, 42) WITH NOWAIT;
+				END
+				ELSE IF (@sqlmajorver < 13 OR @partitionCount = 1) AND @sqldisablecommand IS NULL AND @ixtype IN (1,2)
 				BEGIN
 					SET @sqlprecommand = N'UPDATE STATISTICS ' + @dbName + N'.' + @schemaName + N'.' + @objectName + N' (' + @indexName + N')'
 					
@@ -2234,10 +2245,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 						SET @sqlprecommand = NULL
 						SET @dateTimeEnd = GETDATE();
 					
-						/* Update log with completion time */	
-						UPDATE dbo.tbl_AdaptiveIndexDefrag_log	
-						SET dateTimeEnd = @dateTimeEnd, durationSeconds = DATEDIFF(second, @dateTimeStart, @dateTimeEnd)
-						WHERE indexDefrag_id = @indexDefrag_id AND dateTimeEnd IS NULL;
+						-- /* Update log with completion time */ --> if logged here, completion time after actual rebuild is not logged	
+						-- UPDATE dbo.tbl_AdaptiveIndexDefrag_log	
+						-- SET dateTimeEnd = @dateTimeEnd, durationSeconds = DATEDIFF(second, @dateTimeStart, @dateTimeEnd)
+						-- WHERE indexDefrag_id = @indexDefrag_id AND dateTimeEnd IS NULL;
 						
 						/* If rebuilding, update statistics log with completion time */
 						IF @partitionCount > 1 AND @dealMaxPartition IS NOT NULL AND @editionCheck = 1
