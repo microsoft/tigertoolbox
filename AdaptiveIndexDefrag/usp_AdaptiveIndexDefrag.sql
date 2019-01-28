@@ -475,6 +475,8 @@ CREATE PROCEDURE dbo.usp_AdaptiveIndexDefrag
 		/* Options are LIMITED, SAMPLED, and DETAILED */
 	, @onlineRebuild bit = 0
 		/* 1 = online rebuild; 0 = offline rebuild; only in Enterprise Edition */
+	, @resumableRebuild bit = 0
+		/* 1 = resumable rebuild; 0 = normal rebuild */		
 	, @sortInTempDB bit = 0	
 		/* 1 = perform sort operation in TempDB; 0 = perform sort operation in the indexes database */
 	, @maxDopRestriction tinyint = NULL
@@ -1872,7 +1874,7 @@ FROM dbo.tbl_AdaptiveIndexDefrag_Working WHERE defragDate IS NULL '
 + CASE WHEN @Exec_Print = 0 THEN 'AND printStatus = 0 ' ELSE '' END + '		
 AND exclusionMask & POWER(2, DATEPART(weekday, GETDATE())-1) = 0
 AND page_count BETWEEN @p_minPageCount AND ISNULL(@p_maxPageCount, page_count)		
-ORDER BY + ' + @defragOrderColumn + ' ' + @defragSortOrder;
+ORDER BY + ' + @defragOrderColumn + ' ' + @defragSortOrder + ', objectID DESC';
 
 			SET @getIndexSQL_Param = N'@objectID_Out int OUTPUT, @indexID_Out int OUTPUT, @dbID_Out int OUTPUT, @p_minPageCount int, @p_maxPageCount int';
 			EXECUTE sp_executesql @getIndexSQL, @getIndexSQL_Param, @p_minPageCount = @minPageCount, @p_maxPageCount = @maxPageCount, @objectID_Out = @objectID OUTPUT, @indexID_Out = @indexID OUTPUT, @dbID_Out = @dbID OUTPUT;
@@ -2093,6 +2095,10 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				IF @fillfactor = 0 AND (@dealMaxPartition IS NULL OR (@dealMaxPartition IS NOT NULL AND @partitionCount = 1)) AND @ixtype IN (1,2)		
 				SET @rebuildcommand = @rebuildcommand + N'FILLFACTOR = 100, ';
 
+				/* Resumable requires an ONLINE rebuild and version >= SQL Server 2017 */
+				IF @sqlmajorver >= 14 AND @onlineRebuild = 1 AND @resumableRebuild = 1
+				SET @rebuildcommand = @rebuildcommand + N'RESUMABLE = ON, ';	
+
 				/* Set sort operation preferences */
 				IF @sortInTempDB = 1 AND @ixtype IN (1,2)
 				SET @rebuildcommand = @rebuildcommand + N'SORT_IN_TEMPDB = ON, ';
@@ -2151,7 +2157,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					ELSE					
 					SET @sqlprecommand = @sqlprecommand + N'; '
 				END
-
+				
 				/* Set Rebuild command */
 				SET @sqlcommand = N'ALTER INDEX ' + @indexName + N' ON ' + @dbName + N'.' + @schemaName + N'.' + @objectName + REPLACE(@rebuildcommand,', )', ')');
 				
