@@ -32,7 +32,7 @@
 
     e.  Verify that there are no lines that being with "T-" in the list
         of Existing parameters:\
-        ![StartupParametersNoFlag.png](/Media/StartupParametersNoFlag.png){width="4.11515748031496in"
+        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png){width="4.11515748031496in"
         height="2.7295472440944883in"}\
         If any exist, highlight them and click "Remove"
 
@@ -105,7 +105,7 @@
         click the "Add" button
 
     f.  The "Existing parameters:" box should now look like this\
-        ![StartupParametersNoFlag.png](/Media/StartupParametersNoFlag.png){width="4.021394356955381in"
+        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png){width="4.021394356955381in"
         height="2.4690944881889765in"}
 
     g.  Click "OK" to close the Properties window, then click "OK" on
