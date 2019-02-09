@@ -52,10 +52,9 @@ author: Pam Lahoud
     double-click the file `SQL2019_CTP23_PerfMon.htm` file to open it in
     Internet Explorer.    
     
-    - Once the file opens, click on the green arrow button to **Unfreeze display**.
-    - You receive a prompt warning *this action will erase the data in the graph*.    
-        Click **Yes** to continue. This resumes the performance counter session 
-        previously saved in preparation for the lab.
+    - Once the file opens, right-click anywhere in the white area of the window to clear the existing data.
+    - You will receive a prompt warning *this action will erase the data in the graph*.    
+        Click **Yes** to continue, then click **Clear** to clear the window in preparation for the lab.
     - Leave it open...
 
 5.  In SSMS, open the following script files:
@@ -73,7 +72,7 @@ author: Pam Lahoud
         `C:\Labs\Memory-OptimizedTempDB`
 
     2.  Go back to the Internet Explorer window that has the Performance
-        Monitor collector open and click the play button to start the
+        Monitor collector open and click the play button (green arrow) to start the
         collection.
 
     3.  From the Command Prompt window, execute
@@ -83,17 +82,18 @@ author: Pam Lahoud
 7.  While the workload is running, watch the counters in Performance
     Monitor. You should see **Batch Requests/sec** around 500 and
     there should be **Page Latch** waits throughout the workload.    
-    You can then go to SSMS and run the various scripts to monitor the workload.   
-    You should see several sessions waiting on `PAGELATCH`, and when using
+    
+    You can then go to SSMS and run the various scripts to monitor the workload.   You should see several sessions waiting on `PAGELATCH`, and when using
     the `02-get object info from page resource sql 2019.sql` you should
     see the sessions are waiting on pages that belong to TempDB system
     tables, most often `sysschobjs`.    
     This is TempDB metadata contention and is the scenario that this 
     SQL Server 2019 improvement is targeted to correct.    
+    
     Feel free to run the workload a few more times to examine
     the different scripts and performance counters. Each time you run
     it, the runtime will be reported in the Command Prompt window. It
-    should take about 1 minute to run.
+    should take about 1 minute to run each time.
 
 8.  Once you have finished examining the contention, make sure the
     Command Prompt scripts are complete and pause the Performance
@@ -104,27 +104,16 @@ author: Pam Lahoud
 
 9.  Turn on Memory-Optimized TempDB:
 
-    1.  Open **SQL Server Configuration Manager**.
-
-    2.  Click "SQL Server Services" in the left pane.
-
-    3.  Right-Click "SQL Server (SQL2019\_CTP23)" and choose
-        ***Properties***.
-
-    4.  Click the ***Startup Parameters*** tab.
-
-    5.  In the "Specify a startup parameter:" box, type "-T3895" and
-        click the "Add" button.
-
-    6.  The "Existing parameters:" box should now look like this:
-
-       ![Startup Parameters With Flag](./media/StartupParametersWithFlag.png "Startup Parameters With Flag")
-
-    7.  Click "OK" to close the *Properties* window, then click "OK" on
-        the Warning box that pops up.
-
-    8.  Restart the SQL Server service by right-clicking on "SQL Server
-        (SQL2019\_CTP23)" and choosing **Restart**.
+    1. Open **SQL Server Configuration Manager**.
+    2. Click "SQL Server Services" in the left pane.
+    3. Right-Click "SQL Server (SQL2019\_CTP23)" and choose ***Properties***.
+    4. Click the ***Startup Parameters*** tab.
+    5. In the "Specify a startup parameter:" box, type "-T3895" and click the "Add" button.
+    6. The "Existing parameters:" box should now look like this:
+    
+        ![Startup Parameters With Flag](./media/StartupParametersWithFlag.png "Startup Parameters With Flag")
+    7. Click "OK" to close the *Properties* window, then click "OK" on the Warning box that pops up.
+    8. Restart the SQL Server service by right-clicking on "SQL Serve (SQL2019\_CTP23)" and choosing **Restart**.
 
 10. Go back to the Performance Monitor collector and click play to start
     the collection.
