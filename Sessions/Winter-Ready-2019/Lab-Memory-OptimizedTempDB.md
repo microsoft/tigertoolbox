@@ -32,8 +32,7 @@
 
     e.  Verify that there are no lines that being with "T-" in the list
         of Existing parameters:\
-        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png){width="4.11515748031496in"
-        height="2.7295472440944883in"}\
+        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png)\
         If any exist, highlight them and click "Remove"
 
     f.  Click "OK" to close the Properties window, then click "OK" on
@@ -105,8 +104,7 @@
         click the "Add" button
 
     f.  The "Existing parameters:" box should now look like this\
-        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png){width="4.021394356955381in"
-        height="2.4690944881889765in"}
+        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png)
 
     g.  Click "OK" to close the Properties window, then click "OK" on
         the Warning box that pops up
@@ -122,7 +120,7 @@
 12. Again, watch the Performance Monitor counters. You should see Batch
     Requests per Second higher this time, around 600, and there should
     be no Page Latch waits.\
-    > [!Note]
+    > **Note:**
     > You may see a small bump of Page Latch waits the first
     time you run the workload after the restart. This should disappear
     the second time you run it.\
@@ -132,7 +130,7 @@
     the workload multiple times. It should run faster this time, around
     52 seconds vs. 1 minute.\
 
-    > [!NOTE]
+    > **Note:**
     > The amount of improvement you will see on a real-world
     workload will depend on how much contention is seen and the size of
     the SQL Server (i.e. how many cores and how much memory). Small
