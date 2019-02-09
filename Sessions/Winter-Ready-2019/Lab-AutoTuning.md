@@ -33,7 +33,7 @@ The following are requirements to run this lab:
 2. Setup Performance Monitor on Windows to track `SQL Statistics/Batch Requests/sec` counter. Alternatively, open the file `C:\Labs\Lab-AutoTuning\SCENARIO\Perfmon.htm` with Internet Explorer. Note you may receive a prompt warning that Internet Explorer blocked ActiveX content. Click on **Allow blocked content**. 
 
     - Once the file opens, click on the green arrow button to **Unfreeze display**.
-    - You receive a prompt warning *this action will erase the data in the graph*. Click **Yes** top continue. This resumes the performance counter session previously saved for convenience.
+    - You receive a prompt warning *this action will erase the data in the graph*. Click **Yes** to continue. This resumes the performance counter session previously saved for convenience.
     - Leave it open...
 
 3. While the scenario workload is running, double-click the file `Regression.cmd` in the same folder to execute it. Notice the drop in the *batch requests/sec* counter which means a performance regression was introduced in the workload.
