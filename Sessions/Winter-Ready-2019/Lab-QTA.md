@@ -18,7 +18,8 @@ Starting with SSMS v18, the new **Query Tuning Assistant (QTA)** feature will gu
 
 ![Recommended database upgrade workflow using QTA](../media/qta-usage.png "Recommended database upgrade workflow using QTA")
 
-Note that QTA does not generate user workload so users must ensure that a representative test workload can be executed on the target instance. 
+> **Note:** 
+> QTA does not generate user workload so users must ensure that a representative test workload can be executed on the target instance. 
 
 ## Lab requirements (pre-installed)
 The following are requirements to run this lab:

@@ -81,13 +81,13 @@ author: Pam Lahoud
         pasting the file name and hitting **Enter**.
 
 7.  While the workload is running, watch the counters in Performance
-    Monitor. You should see *Batch Requests per Second* around 500 and
-    there should be *Page Latch* waits throughout the workload.    
+    Monitor. You should see **Batch Requests/sec** around 500 and
+    there should be **Page Latch** waits throughout the workload.    
     You can then go to SSMS and run the various scripts to monitor the workload.   
-    You should see several sessions waiting on PAGELATCH, and when using
+    You should see several sessions waiting on `PAGELATCH`, and when using
     the `02-get object info from page resource sql 2019.sql` you should
     see the sessions are waiting on pages that belong to TempDB system
-    tables, most often sysschobjs.    
+    tables, most often `sysschobjs`.    
     This is TempDB metadata contention and is the scenario that this 
     SQL Server 2019 improvement is targeted to correct.    
     Feel free to run the workload a few more times to examine
@@ -131,8 +131,8 @@ author: Pam Lahoud
 
 11. Start the workload the same way you did in Step 5.
 
-12. Again, watch the Performance Monitor counters. You should see Batch
-    Requests per Second higher this time, around 600, and there should
+12. Again, watch the Performance Monitor counters. You should see **Batch Requests/sec**
+    higher this time, around 600, and there should
     be no Page Latch waits.   
 
     > **Note:**

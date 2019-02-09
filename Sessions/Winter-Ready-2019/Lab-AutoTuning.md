@@ -52,9 +52,9 @@ The following are requirements to run this lab:
     SET AUTOMATIC_TUNING ( FORCE_LAST_GOOD_PLAN = ON )
     ```
 
-7. double-click the file `Auto_tune.cmd`  in the same folder to execute it. This uses the above command to set automatic plan correct ON for WideWorldImporters, and restarts the workload file `Scenario.cmd`.
+7. Double-click the file `Auto_tune.cmd`  in the same folder to execute it. This uses the above command to set automatic plan correct ON for WideWorldImporters, and restarts the workload file `Scenario.cmd`.
 
 8. Repeat steps 3-5 as above, and note the following:     
-    - In the Performance Monitor windwo you will see the **batch requests/sec** counter dip, but within a second go right back up.    
+    - In the Performance Monitor window you will see the **Batch Requests/sec** counter dip, but within a second go right back up.    
     This is because SQL Server detected the regression and automatically reverted to the last known good query plan found in the Query Store. 
     - If closed, re-open the file `C:\Labs\Lab-AutoTuning\SCENARIO\recommendations.sql` with SQL Server Management Studio or SQL Operations Studio, execute it and notice the *state_transition_reason* column value is now ***LastGoodPlanForced***.
