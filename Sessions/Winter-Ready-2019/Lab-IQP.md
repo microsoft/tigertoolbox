@@ -14,7 +14,7 @@ Intelligent Query Processing in SQL Server 2019 expands upon the Adaptive Query 
 
 The Intelligent Query Processing suite is meant to rectify some of the common query performance problems by taking some automatic corrective approaches during runtime. It leverages a feedback loop based on statistics collected from past executions to improve subsequent executions.  
 
-![Intelligent query processing feature suite](../media/iqpfeaturefamily.png "Intelligent query processing feature suite") 
+![Intelligent query processing feature suite](./media/iqpfeaturefamily.png "Intelligent query processing feature suite") 
 
 ## Lab requirements (pre-installed)
 The following are requirements to run this lab:
@@ -31,7 +31,7 @@ Queries may spill to disk or take too much memory based on poor cardinality esti
 
 1. Open SSMS and connect to the SQL Server 2019 instance (default instance). Click on **New Query** or press CTRL+N.
 
-    ![New Query](../media/new_query.png "New Query") 
+    ![New Query](./media/new_query.png "New Query") 
 
 2. Setup the database to ensure the latest database compatibility level is set, by running the commands below in the query window:
 
@@ -69,7 +69,7 @@ Queries may spill to disk or take too much memory based on poor cardinality esti
 
 4. For the next steps, looking at the query execution plan is needed. Click on **Include Actual Plan** or press CTRL+M.
 
-    ![Include Actual Plan](../media/ActualPlan.png "Include Actual Plan") 
+    ![Include Actual Plan](./media/ActualPlan.png "Include Actual Plan") 
 
 5. Execute the stored procedure once, by running the command below in the query window: 
 
@@ -79,14 +79,14 @@ Queries may spill to disk or take too much memory based on poor cardinality esti
 
 6. Notice the query execution plan, namely the yellow warning sign over the join. Hovering over exposes a number of properties such as the details of a spill to TempDB, which slowed down the query's performance. Spills happen when the granted query memory was not enough to process entirely in memory.
 
-    ![MGF Spill](../media/MGF_Spill.png "MGF Spill") 
+    ![MGF Spill](./media/MGF_Spill.png "MGF Spill") 
 
 7. Right-click the query execution plan root node - the **SELECT** - and click on **Properties**.     
     In the ***Properties*** window, expand **MemoryGrantInfo**. Note that:
     - The property ***LastRequestedMemory*** is zero because this is the first execution. 
     - The current status of whether this query has been adjusted by MGF is exposed by the ***IsMemoryGrantFeedbackAdjusted*** property. In this case value is **NoFirstExecution**. This means there was no adjustment because it is the 1st time the query is executing.
 
-    ![MGF Properties - 1st Exec](../media/MGF_Properties_FirstExec.png "MGF Properties - 1st Exec") 
+    ![MGF Properties - 1st Exec](./media/MGF_Properties_FirstExec.png "MGF Properties - 1st Exec") 
 
 8. Execute the stored procedure again. 
 
@@ -113,7 +113,7 @@ Starting with SQL Server 2019, the behavior is that the compilation of a stateme
 
 1. Open SSMS and connect to the SQL Server 2019 instance (default instance). Click on **New Query** or press CTRL+N.
 
-    ![New Query](../media/new_query.png "New Query") 
+    ![New Query](./media/new_query.png "New Query") 
 
 2. Setup the database to ensure the database compatibility level of SQL Server 2017 is set, by running the commands below in the query window:
 
@@ -131,7 +131,7 @@ Starting with SQL Server 2019, the behavior is that the compilation of a stateme
 
 4. For the next steps, looking at the query execution plan is needed. Click on **Include Actual Plan** or press CTRL+M.
 
-    ![Include Actual Plan](../media/ActualPlan.png "Include Actual Plan") 
+    ![Include Actual Plan](./media/ActualPlan.png "Include Actual Plan") 
 
 5. Execute the command below in the query window: 
 
@@ -167,7 +167,7 @@ Starting with SQL Server 2019, the behavior is that the compilation of a stateme
     - The ***Estimated Number of Rows*** is 1. 
     This indicates the legacy behavior of misusing a TV, with the huge estimation skew.
 
-    ![Table Variable legacy behavior](../media/TV_Legacy.png "Table Variable legacy behavior") 
+    ![Table Variable legacy behavior](./media/TV_Legacy.png "Table Variable legacy behavior") 
 
 
 8. Setup the database to ensure the latest database compatibility level is set, by running the commands below in the query window:
@@ -193,7 +193,7 @@ Starting with SQL Server 2019, the behavior is that the compilation of a stateme
     - The ***Estimated Number of Rows*** is 750000. 
     This indicates the new behavior of TV deferred compilation, with no estimation skew and a better query execution plan, which also executed much faster (~20 seconds).
 
-    ![Table Variable deferred compilation](../media/TV_New.png "Table Variable deferred compilation") 
+    ![Table Variable deferred compilation](./media/TV_New.png "Table Variable deferred compilation") 
 
 ### Batch Mode on Rowstore
 

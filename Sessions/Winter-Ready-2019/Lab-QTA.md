@@ -10,13 +10,13 @@ When migrating from an older version of SQL Server and [upgrading the database c
 
 Starting with SQL Server 2016, all query optimizer changes are gated to the latest database compatibility level, which in combination with Query Store gives you a great level of control over the query performance in the upgrade process if the upgrade follows the recommended workflow seen below. 
 
-![Recommended database upgrade workflow using Query Store](../media/query-store-usage-5.png "Recommended database upgrade workflow using Query Store") 
+![Recommended database upgrade workflow using Query Store](./media/query-store-usage-5.png "Recommended database upgrade workflow using Query Store") 
 
 This control over upgrades was further improved with SQL Server 2017 where [Automatic Tuning](https://docs.microsoft.com/sql/relational-databases/automatic-tuning/automatic-tuning.md) was introduced and allows automating the last step in the recommended workflow above.
 
 Starting with SSMS v18, the new **Query Tuning Assistant (QTA)** feature will guide users through the recommended workflow to keep performance stability during database upgrades. See below how QTA essentially only changes the last steps of the recommended workflow for upgrading the compatibility level using Query Store seen above. Instead of having the option to choose between the currently inneficient execution plan and the last known good execution plan, QTA presents tuning options that are specific for the selected regressed queries, to create a new improved state with tuned execution plans.
 
-![Recommended database upgrade workflow using QTA](../media/qta-usage.png "Recommended database upgrade workflow using QTA")
+![Recommended database upgrade workflow using QTA](./media/qta-usage.png "Recommended database upgrade workflow using QTA")
 
 > **Note:** 
 > QTA does not generate user workload so users must ensure that a representative test workload can be executed on the target instance. 
@@ -42,22 +42,22 @@ The following are requirements to run this lab:
     -  Set the intended target database compatibility level to **140** or **150**. This is the setting that the user database should be at, after the QTA workflow has completed. 
     -  Once complete, click **Next**.
     
-       ![New database upgrade session setup window](../media/qta-new-session-setup.png "New database upgrade setup window")  
+       ![New database upgrade session setup window](./media/qta-new-session-setup.png "New database upgrade setup window")  
   
 4.  In the **Settings** window, two columns show the **Current** state of Query Store in the targeted database, as well as the **Recommended** settings. Click on the **Recommended** button (if not selected by default). 
 
-       ![New database upgrade settings window](../media/qta-new-session-settings.png "New database upgrade settings window")
+       ![New database upgrade settings window](./media/qta-new-session-settings.png "New database upgrade settings window")
 
 5.  The **Tuning** window concludes the session configuration, and instructs on next steps to open and proceed with the session. Once complete, click **Finish**.
 
-    ![New database upgrade tuning window](../media/qta-new-session-tuning.png "New database upgrade tuning window")
+    ![New database upgrade tuning window](./media/qta-new-session-tuning.png "New database upgrade tuning window")
 
 ### 2. Executing the database upgrade workflow
 1.  For the database that is intended to upgrade the database compatibility level (AdventureWorks2012DW), right-click the database name, select **Tasks**, select **Database Upgrade**, and click on **Monitor Sessions**.
 
 2.  The **session management** page lists current and past sessions for the database in scope. Select the desired session, and click on **Details**.
     
-    ![QTA Session Management page](../media/qta-session-management.png "QTA Session Management page")
+    ![QTA Session Management page](./media/qta-session-management.png "QTA Session Management page")
 
 3.  The entry point for a new session is the **Data Collection** step. This step has 3 substeps:
 
@@ -65,15 +65,15 @@ The following are requirements to run this lab:
         
         Open `C:\Labs\Lab-QTA\SCENARIO` and double-click the file `PreUpgrade.cmd` to execute it. Once that workload has completed, check the **Done with workload run** and click **Next**.   
 
-        ![QTA Step 2 Substep 1](../media/qta-step2-substep1.png "QTA Step 2 Substep 1")
+        ![QTA Step 2 Substep 1](./media/qta-step2-substep1.png "QTA Step 2 Substep 1")
 
     2.  **Upgrade Database** will prompt for permission to upgrade the database compatibility level to the desired target. To proceed to the next substep, click **Yes**.
 
-        ![QTA Step 2 Substep 2 - Upgrade database compatibility level](../media/qta-step2-substep2-prompt.png "QTA Step 2 Substep 2 - Upgrade database compatibility level")
+        ![QTA Step 2 Substep 2 - Upgrade database compatibility level](./media/qta-step2-substep2-prompt.png "QTA Step 2 Substep 2 - Upgrade database compatibility level")
 
         The following page confirms that the database compatibility level was successfully upgraded.
 
-        ![QTA Step 2 Substep 2](../media/qta-step2-substep2.png "QTA Step 2 Substep 2")
+        ![QTA Step 2 Substep 2](./media/qta-step2-substep2.png "QTA Step 2 Substep 2")
 
     3.  **Observed Data Collection** requests the user to re-run the representative workload cycle, so that Query Store can collect a comparative baseline that will be used to search for optimization opportunities. Open `C:\Labs\Lab-QTA\SCENARIO` and double-click the file `PostUpgrade.cmd` to execute it.    
 
@@ -81,7 +81,7 @@ The following are requirements to run this lab:
 
         Once that workload has completed, check the **Done with workload run** and click **Next**.
 
-        ![QTA Step 2 Substep 3](../media/qta-step2-substep3.png "QTA Step 2 Substep 3")
+        ![QTA Step 2 Substep 3](./media/qta-step2-substep3.png "QTA Step 2 Substep 3")
 
         For each query, notice:
         - The columns **Baseline Metric** and **Observed Metric**: these show the performance difference between the pre-upgrade and post-upgrade status for the same workload.     
@@ -92,7 +92,7 @@ The following are requirements to run this lab:
 
     Check all queries that are Tunable, and click **Next** to start experimentation. A prompt advises that once QTA moves to the experimentation phase, returning to the View Analysis page will not be possible.
 
-    ![QTA Step 3](../media/qta-step3.png "QTA Step 3")
+    ![QTA Step 3](./media/qta-step3.png "QTA Step 3")
 
 5.  After experimentation is complete, the **View Findings** allows selection of which queries to deploy the proposed optimization as a plan guide. 
 
@@ -104,14 +104,14 @@ The following are requirements to run this lab:
 
     Select all queries in this screen and click on **Deploy**.
 
-    ![QTA Step 4](../media/qta-step4.png "QTA Step 4")
+    ![QTA Step 4](./media/qta-step4.png "QTA Step 4")
 
 6.  **Verification** shows the deployment status of previously selected queries for this session. The list in this page differs from the previous page by changing the **Can Deploy** column to **Can Rollback**.
 
-    ![QTA Step 5](../media/qta-step5.png "QTA Step 5")
+    ![QTA Step 5](./media/qta-step5.png "QTA Step 5")
 
     This allows users to rollback on a proposed optimization if the results in production differed from our experimentation.     
     
     Select a query and click **Rollback**. That query plan guide is removed and the list updated to remove the rolled back query. Note in the picture below that query 8 was removed.
 
-    ![QTA Step 5 - Rollback](../media/qta-step5-rollback.png "QTA Step 5 - Rollback") 
+    ![QTA Step 5 - Rollback](./media/qta-step5-rollback.png "QTA Step 5 - Rollback") 
