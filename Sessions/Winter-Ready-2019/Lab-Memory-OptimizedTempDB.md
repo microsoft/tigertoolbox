@@ -38,7 +38,7 @@ author: Pam Lahoud
     5.  Verify that there are no lines that being with "-T" in the list
         of existing parameters:    
 
-        ![StartupParametersNoFlag.png](../media/StartupParametersNoFlag.png)
+        ![Startup Parameters No Flag](./media/StartupParametersNoFlag.png "Startup Parameters No Flag")
 
         If any exist, highlight them and click "Remove".
 
@@ -118,7 +118,7 @@ author: Pam Lahoud
 
     6.  The "Existing parameters:" box should now look like this:
 
-       ![StartupParametersNoFlag.png](../media/StartupParametersNoFlag.png)
+       ![Startup Parameters With Flag](./media/StartupParametersWithFlag.png "Startup Parameters With Flag")
 
     7.  Click "OK" to close the *Properties* window, then click "OK" on
         the Warning box that pops up.
