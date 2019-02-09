@@ -119,16 +119,16 @@
 
 12. Again, watch the Performance Monitor counters. You should see Batch
     Requests per Second higher this time, around 600, and there should
-    be no Page Latch waits.\
+    be no Page Latch waits.
     > **Note:**
     > You may see a small bump of Page Latch waits the first
     time you run the workload after the restart. This should disappear
-    the second time you run it.\
+    the second time you run it.
     
     Running the scripts from step 6 during the workload should show that
     no sessions are waiting for any resources. Again, feel free to run
     the workload multiple times. It should run faster this time, around
-    52 seconds vs. 1 minute.\
+    52 seconds vs. 1 minute.
 
     > **Note:**
     > The amount of improvement you will see on a real-world
