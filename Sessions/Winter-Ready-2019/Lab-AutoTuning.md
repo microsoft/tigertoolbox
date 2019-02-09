@@ -10,11 +10,11 @@ When migrating from an older version of SQL Server and [upgrading the database c
 
 Starting with SQL Server 2016, all query optimizer changes are gated to the latest database compatibility level, which in combination with Query Store gives you a great level of control over the query performance in the upgrade process if the upgrade follows the recommended workflow seen below. 
 
-![Recommended database upgrade workflow using Query Store](../media/query-store-usage-5.png "Recommended database upgrade workflow using Query Store") 
+![Recommended database upgrade workflow using Query Store](./media/query-store-usage-5.png "Recommended database upgrade workflow using Query Store") 
 
 In SQL Server 2016, users are able to use SSMS Query Store reports to identify **regressed queries** that occur post-database upgrade, and manually force a specific pre-upgrade plan to be used. This maps to the last step in the recommended workflow above. 
 
-![SSMS Query Store Reports](../media/objectexplorerquerystore_sql17.png "SSMS Query Store Reports") 
+![SSMS Query Store Reports](./media/objectexplorerquerystore_sql17.png "SSMS Query Store Reports") 
 
 This control over upgrades was further improved with SQL Server 2017 where [Automatic Tuning](https://docs.microsoft.com/sql/relational-databases/automatic-tuning/automatic-tuning.md) was introduced and allows automating the last step in the recommended workflow above. This lab allows you to see the feature in action.
 
