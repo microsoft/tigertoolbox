@@ -1,3 +1,8 @@
+---
+title: "SQL Server 2019 Memory-Optimized TempDB Lab"
+date: "11/21/2018"
+author: Pam Lahoud
+---
 # SQL Server 2019 Memory-Optimized TempDB Lab
 
 1.  Connect to the Windows VM in Azure using the information provided in
@@ -32,7 +37,7 @@
 
     e.  Verify that there are no lines that being with "T-" in the list
         of Existing parameters:\
-        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png)\
+        ![StartupParametersNoFlag.png](../media/StartupParametersNoFlag.png)\
         If any exist, highlight them and click "Remove"
 
     f.  Click "OK" to close the Properties window, then click "OK" on
@@ -104,7 +109,7 @@
         click the "Add" button
 
     f.  The "Existing parameters:" box should now look like this\
-        ![StartupParametersNoFlag.png](./Media/StartupParametersNoFlag.png)
+        ![StartupParametersNoFlag.png](../media/StartupParametersNoFlag.png)
 
     g.  Click "OK" to close the Properties window, then click "OK" on
         the Warning box that pops up
