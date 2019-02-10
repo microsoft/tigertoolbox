@@ -405,6 +405,11 @@ v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bj
 v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
 						Fixed max server memory calculations;
 						Added check for Database Health Detection in Server_checks section (thanks Anders Uhl Pedersen).
+v2.2.3 - 10/27/2018 - Fixed performance checks duplicate results issue on SQL 2016+. 
+v2.2.3.1 - 10/28/2018 - Fixed variable issue.
+v2.2.3.2 - 10/28/2018 - Enhanced power scheme check (thanks sivey42).
+v2.2.3.4 - 10/29/2018 - Fixed latches syntax error (thanks Dimitri Artemov);
+						Improved handling of conversions.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -544,7 +549,7 @@ RAISERROR (N'Starting Pre-requisites section', 10, 1) WITH NOWAIT
 --------------------------------------------------------------------------------------------------------------------------------
 -- Pre-requisites section
 --------------------------------------------------------------------------------------------------------------------------------
-DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(500), @sqlmajorver int
+DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(600), @sqlmajorver int
 
 /*
 Reference: SERVERPROPERTY for sql major, minor and build versions supported after:
@@ -3056,6 +3061,7 @@ RAISERROR (N'|-Starting Server Checks', 10, 1) WITH NOWAIT
 -- Power plan subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Power plan', 10, 1) WITH NOWAIT
+
 DECLARE @planguid NVARCHAR(64), @powerkey1 NVARCHAR(255), @powerkey2 NVARCHAR(255) 
 --SELECT @powerkey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{025A5937-A6BE-4686-A844-36FE4BEC8B6D}'
 --SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
@@ -3065,15 +3071,13 @@ SELECT @powerkey2 = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
 IF CONVERT(DECIMAL(3,1), @osver) >= 6.0
 BEGIN
 	BEGIN TRY
-		--EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey, 'PreferredPlan', @planguid OUTPUT, NO_OUTPUT
+		-- Check if was set by GPO, if not, look in user settings 
 		EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey1, 'ActivePowerScheme', @planguid OUTPUT, NO_OUTPUT
-		
-		-- Check if was set by GPO, if not, look in user settings
-		IF @planguid IS NULL
-		BEGIN
-			EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey2, 'ActivePowerScheme', @planguid OUTPUT, NO_OUTPUT
-		END
 
+		IF @planguid IS NULL 
+		BEGIN 
+			EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey2, 'ActivePowerScheme', @planguid OUTPUT, NO_OUTPUT 
+		END 
 	END TRY
 	BEGIN CATCH
 		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
@@ -8084,14 +8088,39 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	HAVING (t2.wait_time_ms-t1.wait_time_ms) > 0
 	ORDER BY wait_time_s DESC;
 
+	-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/en-us/library/cc917684.aspx
+	-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
+	-- LATCH = indicates contention for access to some non-page structures. ACCESS_METHODS_DATASET_PARENT, ACCESS_METHODS_SCAN_RANGE_GENERATOR or NESTING_TRANSACTION_FULL latches indicate parallelism issues;
+	-- PAGELATCH = indicates contention for access to in-memory copies of pages, like PFS, SGAM and GAM; 
+	-- PAGELATCH_UP = Does the filegroup have enough files? Contention in PFS?
+	-- PAGELATCH_EX = Contention while doing many UPDATE statements against small tables? 
+	-- PAGELATCH_EX = Many concurrent INSERT statements into a table that has an index on an IDENTITY or NEWSEQUENTIALID column? -> http://blogs.msdn.com/b/blogdoezequiel/archive/2013/05/23/pagelatch-ex-waits-and-heavy-inserts.aspx
+	-- PAGEIOLATCH = indicates IO problems, or BP pressure.
+	-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
+	-- IO_COMPLETION = usually TempDB spilling; 
+	-- ASYNC_IO_COMPLETION = usually when not using IFI, or waiting on backups.
+	-- DISKIO_SUSPEND = High wait times here indicate the SNAPSHOT BACKUP may be taking longer than expected. Typically the delay is within the VDI application perform the snapshot backup;
+	-- BACKUPIO = check for slow backup media slow, like Tapes or Disks;
+	-- BACKUPBUFFER = usually when backing up to Tape;
+	-- Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/en-us/library/ms188743.aspx;
+	-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
+	-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
+	-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
+	-- WRITELOG = log management system waiting for a log flush to disk. Examine the IO latency for the log file
+	-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> http://blogs.msdn.com/b/psssql/archive/2012/12/20/how-it-works-cmemthread-and-debugging-them.aspx
+	-- SOS_RESERVEDMEMBLOCKLIST = look for procedures with a large number of parameters, or queries with a long list of expression values specified in an IN clause, which would require multi-page allocations
+	-- RESOURCE_SEMAPHORE_SMALL_QUERY or RESOURCE_SEMAPHORE = queries are waiting for execution memory. Look for plans with excessive hashing or sorts.
+	-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS. -> http://technet.microsoft.com/en-us/library/cc293620.aspx
+	-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
+	
 	SELECT 'Performance_checks' AS [Category], 'Waits_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1.wait_type, 
-		CAST(W1.wait_time_s AS DECIMAL(12, 2)) AS wait_time_s,
-		CAST(W1.signal_wait_time_s AS DECIMAL(12, 2)) AS signal_wait_time_s,
-		CAST(W1.resource_wait_time_s AS DECIMAL(12, 2)) AS resource_wait_time_s,
-		CAST(W1.pct AS DECIMAL(12, 2)) AS pct,
-		CAST(SUM(W2.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
-		CAST(W1.signal_wait_pct AS DECIMAL(12, 2)) AS signal_wait_pct,
-		CAST(W1.resource_wait_pct AS DECIMAL(12, 2)) AS resource_wait_pct,
+		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		CAST(W1.signal_wait_time_s AS DECIMAL(14, 2)) AS signal_wait_time_s,
+		CAST(W1.resource_wait_time_s AS DECIMAL(14, 2)) AS resource_wait_time_s,
+		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
+		CAST(SUM(W2.pct) AS DECIMAL(14, 2)) AS overall_running_pct,
+		CAST(W1.signal_wait_pct AS DECIMAL(14, 2)) AS signal_wait_pct,
+		CAST(W1.resource_wait_pct AS DECIMAL(14, 2)) AS resource_wait_pct,
 		CASE WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU' 
 			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
 			WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock' 
@@ -8106,7 +8135,6 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'CLR%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'SQL CLR' 
 			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring' 
 			WHEN W1.wait_type LIKE N'XACT%' or W1.wait_type LIKE N'DTC%' or W1.wait_type LIKE N'TRAN_MARKLATCH_%' or W1.wait_type LIKE N'MSQL_XACT_%' or W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction' 
-			--WHEN W1.wait_type LIKE N'SLEEP_%' or W1.wait_type IN (N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SQLTRACE_WAIT_ENTRIES', N'FT_IFTS_SCHEDULER_IDLE_WAIT', N'XE_DISPATCHER_WAIT', N'REQUEST_FOR_DEADLOCK_SEARCH', N'LOGMGR_QUEUE', N'ONDEMAND_TASK_QUEUE', N'CHECKPOINT_QUEUE', N'XE_TIMER_EVENT') THEN N'Idle' 
 			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' 
 			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
 			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
@@ -8119,7 +8147,6 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type IN (N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
 			WHEN W1.wait_type LIKE N'SE_REPL_%' or W1.wait_type LIKE N'REPL_%'  or W1.wait_type IN (N'REPLICA_WRITES', N'FCB_REPLICA_WRITE', N'FCB_REPLICA_READ', N'PWAIT_HADRSIM') THEN N'Replication' 
 			WHEN W1.wait_type IN (N'LOG_RATE_GOVERNOR', N'POOL_LOG_RATE_GOVERNOR', N'HADR_THROTTLE_LOG_RATE_GOVERNOR', N'INSTANCE_LOG_RATE_GOVERNOR') THEN N'Log Rate Governor' 
-			--	WHEN W1.wait_type LIKE N'SLEEP_%' OR W1.wait_type IN(N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'WAITFOR', N'WAIT_FOR_RESULTS', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SLEEP_TASK', N'SLEEP_SYSTEMTASK') THEN N'Sleep'
 			WHEN W1.wait_type = N'REPLICA_WRITE' THEN 'Snapshots'
 			WHEN W1.wait_type = N'WAIT_XTP_OFFLINE_CKPT_LOG_IO' OR W1.wait_type = N'WAIT_XTP_CKPT_CLOSE' THEN 'In-Memory OLTP Logging'
 			WHEN W1.wait_type LIKE N'QDS%' THEN N'Query Store'
@@ -8128,9 +8155,12 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 		ELSE N'Other' END AS 'wait_category'
 	FROM #tblFinalWaits AS W1 INNER JOIN #tblFinalWaits AS W2 ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.wait_type, W1.wait_time_s, W1.pct, W1.signal_wait_time_s, W1.resource_wait_time_s, W1.signal_wait_pct, W1.resource_wait_pct
-	HAVING W1.wait_time_s >= 0.01 AND (SUM(W2.pct)-W1.pct) < 100  -- percentage threshold
-	ORDER BY W1.rn; 
+	GROUP BY W1.rn, W1.wait_type, CAST(W1.wait_time_s AS DECIMAL(14, 2)), CAST(W1.pct AS DECIMAL(14, 2)), CAST(W1.signal_wait_time_s AS DECIMAL(14, 2)), CAST(W1.resource_wait_time_s AS DECIMAL(14, 2)), CAST(W1.signal_wait_pct AS DECIMAL(14, 2)), CAST(W1.resource_wait_pct AS DECIMAL(14, 2))
+	HAVING CAST(W1.wait_time_s as DECIMAL(14, 2)) >= 0.01 AND (SUM(W2.pct)-CAST(W1.pct AS DECIMAL(14, 2))) < 100  -- percentage threshold
+	ORDER BY W1.rn 
+	
+	SET @params = N'@maxservermemIN bigint, @minservermemIN bigint, @systemmemIN bigint, @systemfreememIN bigint, @commit_targetIN bigint, @committedIN bigint';
+	EXECUTE sp_executesql @sqlcmd, @params, @maxservermemIN=@maxservermem
 
 	;WITH Waits AS
 	(SELECT wait_type, wait_time_ms / 1000. AS wait_time_s,
@@ -8153,26 +8183,18 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			AND wait_type NOT LIKE N'SLEEP_%'
 		GROUP BY wait_type, wait_time_ms, signal_wait_time_ms)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Waits' AS [Information], W1.wait_type, 
-		CAST(W1.wait_time_s AS DECIMAL(12, 2)) AS wait_time_s,
-		CAST(W1.signal_wait_time_s AS DECIMAL(12, 2)) AS signal_wait_time_s,
-		CAST(W1.resource_wait_time_s AS DECIMAL(12, 2)) AS resource_wait_time_s,
-		CAST(W1.pct AS DECIMAL(12, 2)) AS pct,
-		CAST(SUM(W2.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
-		CAST(W1.signal_wait_pct AS DECIMAL(12, 2)) AS signal_wait_pct,
-		CAST(W1.resource_wait_pct AS DECIMAL(12, 2)) AS resource_wait_pct,
-			-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/en-us/library/cc917684.aspx
+		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		CAST(W1.signal_wait_time_s AS DECIMAL(14, 2)) AS signal_wait_time_s,
+		CAST(W1.resource_wait_time_s AS DECIMAL(14, 2)) AS resource_wait_time_s,
+		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
+		CAST(SUM(W2.pct) AS DECIMAL(14, 2)) AS overall_running_pct,
+		CAST(W1.signal_wait_pct AS DECIMAL(14, 2)) AS signal_wait_pct,
+		CAST(W1.resource_wait_pct AS DECIMAL(14, 2)) AS resource_wait_pct,
 		CASE WHEN W1.wait_type = N'SOS_SCHEDULER_YIELD' THEN N'CPU' 
-			-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
 			WHEN W1.wait_type = N'THREADPOOL' THEN 'CPU - Unavailable Worker Threads'
 			WHEN W1.wait_type LIKE N'LCK_%' OR W1.wait_type = N'LOCK' THEN N'Lock' 
-			-- LATCH = indicates contention for access to some non-page structures. ACCESS_METHODS_DATASET_PARENT, ACCESS_METHODS_SCAN_RANGE_GENERATOR or NESTING_TRANSACTION_FULL latches indicate parallelism issues;
 			WHEN W1.wait_type LIKE N'LATCH_%' THEN N'Latch'
-			-- PAGELATCH = indicates contention for access to in-memory copies of pages, like PFS, SGAM and GAM; 
-			-- PAGELATCH_UP = Does the filegroup have enough files? Contention in PFS?
-			-- PAGELATCH_EX = Contention while doing many UPDATE statements against small tables? 
-			-- PAGELATCH_EX = Many concurrent INSERT statements into a table that has an index on an IDENTITY or NEWSEQUENTIALID column? -> http://blogs.msdn.com/b/blogdoezequiel/archive/2013/05/23/pagelatch-ex-waits-and-heavy-inserts.aspx
 			WHEN W1.wait_type LIKE N'PAGELATCH_%' THEN N'Buffer Latch'
-			-- PAGEIOLATCH = indicates IO problems, or BP pressure.
 			WHEN W1.wait_type LIKE N'PAGEIOLATCH_%' THEN N'Buffer IO'
 			WHEN W1.wait_type LIKE N'HADR_SYNC_COMMIT' THEN N'Always On - Secondary Synch' 
 			WHEN W1.wait_type LIKE N'HADR_%' OR W1.wait_type LIKE N'PWAIT_HADR_%' THEN N'Always On'
@@ -8182,8 +8204,6 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'CLR%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'SQL CLR' 
 			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring' 
 			WHEN W1.wait_type LIKE N'XACT%' or W1.wait_type LIKE N'DTC%' or W1.wait_type LIKE N'TRAN_MARKLATCH_%' or W1.wait_type LIKE N'MSQL_XACT_%' or W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction' 
-			--WHEN W1.wait_type LIKE N'SLEEP_%' or W1.wait_type IN (N'LAZYWRITER_SLEEP', N'SQLTRACE_BUFFER_FLUSH', N'SQLTRACE_INCREMENTAL_FLUSH_SLEEP', N'SQLTRACE_WAIT_ENTRIES', N'FT_IFTS_SCHEDULER_IDLE_WAIT', N'XE_DISPATCHER_WAIT', N'REQUEST_FOR_DEADLOCK_SEARCH', N'LOGMGR_QUEUE', N'ONDEMAND_TASK_QUEUE', N'CHECKPOINT_QUEUE', N'XE_TIMER_EVENT') THEN N'Idle' 
-			-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
 			WHEN W1.wait_type LIKE N'PREEMPTIVE_%' THEN N'External APIs or XPs' -- Used to indicate a worker is running code that is not under the SQLOS Scheduling;
 			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
 			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
@@ -8192,31 +8212,16 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type IN (N'WAITFOR', N'WAIT_FOR_RESULTS', N'BROKER_RECEIVE_WAITFOR') THEN N'User Wait' 
 			WHEN W1.wait_type IN (N'TRACEWRITE', N'SQLTRACE_LOCK', N'SQLTRACE_FILE_BUFFER', N'SQLTRACE_FILE_WRITE_IO_COMPLETION', N'SQLTRACE_FILE_READ_IO_COMPLETION', N'SQLTRACE_PENDING_BUFFER_WRITERS', N'SQLTRACE_SHUTDOWN', N'QUERY_TRACEOUT', N'TRACE_EVTNOTIF') THEN N'Tracing' 
 			WHEN W1.wait_type LIKE N'FT_%' OR W1.wait_type IN (N'FULLTEXT GATHERER', N'MSSEARCH', N'PWAIT_RESOURCE_SEMAPHORE_FT_PARALLEL_QUERY_SYNC') THEN N'Full Text Search' 
-			-- IO_COMPLETION = usually TempDB spilling; 
-			-- ASYNC_IO_COMPLETION = usually when not using IFI, or waiting on backups.
-			-- DISKIO_SUSPEND = High wait times here indicate the SNAPSHOT BACKUP may be taking longer than expected. Typically the delay is within the VDI application perform the snapshot backup;
 			WHEN W1.wait_type IN (N'ASYNC_IO_COMPLETION', N'IO_COMPLETION', N'WRITE_COMPLETION', N'IO_QUEUE_LIMIT', /*N'HADR_FILESTREAM_IOMGR_IOCOMPLETION',*/ N'IO_RETRY') THEN N'Other Disk IO' 
-			-- BACKUPIO = check for slow backup media slow, like Tapes or Disks;
-			-- BACKUPBUFFER = usually when backing up to Tape;
 			WHEN W1.wait_type IN(N'BACKUPIO', N'BACKUPBUFFER') THEN 'Backup IO'
-			-- Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/en-us/library/ms188743.aspx;
-			-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
-			-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
-			-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
 			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
-			-- WRITELOG = log management system waiting for a log flush to disk. Examine the IO latency for the log file
 			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'WRITELOG') THEN N'Logging'
 			WHEN W1.wait_type IN (N'NET_WAITFOR_PACKET',N'NETWORK_IO') THEN N'Network IO'
 			WHEN W1.wait_type = N'ASYNC_NETWORK_IO' THEN N'Client Network IO'
-			-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> http://blogs.msdn.com/b/psssql/archive/2012/12/20/how-it-works-cmemthread-and-debugging-them.aspx
-			-- SOS_RESERVEDMEMBLOCKLIST = look for procedures with a large number of parameters, or queries with a long list of expression values specified in an IN clause, which would require multi-page allocations
 			WHEN W1.wait_type IN (N'UTIL_PAGE_ALLOC',N'SOS_VIRTUALMEMORY_LOW',N'CMEMTHREAD', N'SOS_RESERVEDMEMBLOCKLIST') THEN N'Memory' 
-			-- RESOURCE_SEMAPHORE_SMALL_QUERY or RESOURCE_SEMAPHORE = queries are waiting for execution memory. Look for plans with excessive hashing or sorts.
 			WHEN W1.wait_type IN (N'RESOURCE_SEMAPHORE_SMALL_QUERY', N'RESOURCE_SEMAPHORE') THEN N'Memory - Hash or Sort'
-			-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS. -> http://technet.microsoft.com/en-us/library/cc293620.aspx
 			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Memory - Compilation'
 			WHEN W1.wait_type LIKE N'CLR_%' OR W1.wait_type LIKE N'SQLCLR%' THEN N'CLR'
-			-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
 			WHEN W1.wait_type LIKE N'DBMIRROR%' OR W1.wait_type = N'MIRROR_SEND_MESSAGE' THEN N'Mirroring'
 			WHEN W1.wait_type LIKE N'RESOURCE_SEMAPHORE_%' OR W1.wait_type LIKE N'RESOURCE_SEMAPHORE_QUERY_COMPILE' THEN N'Compilation' 
 			WHEN W1.wait_type LIKE N'XACT%' OR W1.wait_type LIKE N'DTC_%' OR W1.wait_type LIKE N'TRAN_MARKLATCH_%' OR W1.wait_type LIKE N'MSQL_XACT_%' OR W1.wait_type = N'TRANSACTION_MUTEX' THEN N'Transaction'
@@ -8229,15 +8234,24 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'COLUMNSTORE%' THEN N'Columnstore'
 		ELSE N'Other' END AS 'wait_category'
 	FROM Waits AS W1 INNER JOIN Waits AS W2 ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.wait_type, W1.wait_time_s, W1.pct, W1.signal_wait_time_s, W1.resource_wait_time_s, W1.signal_wait_pct, W1.resource_wait_pct
-	HAVING W1.wait_time_s >= 0.01 AND (SUM(W2.pct)-W1.pct) < 100  -- percentage threshold
+	GROUP BY W1.rn, W1.wait_type, CAST(W1.wait_time_s AS DECIMAL(14, 2)), CAST(W1.pct AS DECIMAL(14, 2)), CAST(W1.signal_wait_time_s AS DECIMAL(14, 2)), CAST(W1.resource_wait_time_s AS DECIMAL(14, 2)), CAST(W1.signal_wait_pct AS DECIMAL(14, 2)), CAST(W1.resource_wait_pct AS DECIMAL(14, 2))
+	HAVING CAST(W1.wait_time_s as DECIMAL(14, 2)) >= 0.01 AND (SUM(W2.pct)-CAST(W1.pct AS DECIMAL(14, 2))) < 100  -- percentage threshold
 	ORDER BY W1.rn;
+
+	-- ACCESS_METHODS_HOBT_VIRTUAL_ROOT = This latch is used to access the metadata for an index that contains the page ID of the index's root page. Contention on this latch can occur when a B-tree root page split occurs (requiring the latch in EX mode) and threads wanting to navigate down the B-tree (requiring the latch in SH mode) have to wait. This could be from very fast population of a small index using many concurrent connections, with or without page splits from random key values causing cascading page splits (from leaf to root).
+	-- ACCESS_METHODS_HOBT_COUNT = This latch is used to flush out page and row count deltas for a HoBt (Heap-or-B-tree) to the Storage Engine metadata tables. Contention would indicate *lots* of small, concurrent DML operations on a single table. 
+	-- ACCESS_METHODS_DATASET_PARENT and ACCESS_METHODS_SCAN_RANGE_GENERATOR = These two latches are used during parallel scans to give each thread a range of page IDs to scan. The LATCH_XX waits for these latches will typically appear with CXPACKET waits and PAGEIOLATCH_XX waits (if the data being scanned is not memory-resident). Use normal parallelism troubleshooting methods to investigate further (e.g. is the parallelism warranted? maybe increase 'cost threshold for parallelism', lower MAXDOP, use a MAXDOP hint, use Resource Governor to limit DOP using a workload group with a MAX_DOP limit. Did a plan change from index seeks to parallel table scans because a tipping point was reached or a plan recompiled with an atypical SP parameter or poor statistics? Do NOT knee-jerk and set server MAXDOP to 1 – that's some of the worst advice I see on the Internet.);
+	-- NESTING_TRANSACTION_FULL  = This latch, along with NESTING_TRANSACTION_READONLY, is used to control access to transaction description structures (called an XDES) for parallel nested transactions. The _FULL is for a transaction that's 'active', i.e. it's changed the database (usually for an index build/rebuild), and that makes the _READONLY description obvious. A query that involves a parallel operator must start a sub-transaction for each parallel thread that is used – these transactions are sub-transactions of the parallel nested transaction. For contention on these, I'd investigate unwanted parallelism but I don't have a definite "it's usually this problem". Also check out the comments for some info about these also sometimes being a problem when RCSI is used.
+	-- LOG_MANAGER = you see this latch it is almost certainly because a transaction log is growing because it could not clear/truncate for some reason. Find the database where the log is growing and then figure out what's preventing log clearing using sys.databases.
+	-- DBCC_MULTIOBJECT_SCANNER  = This latch appears on Enterprise Edition when DBCC CHECK_ commands are allowed to run in parallel. It is used by threads to request the next data file page to process. Late last year this was identified as a major contention point inside DBCC CHECK* and there was work done to reduce the contention and make DBCC CHECK* run faster.
+	-- http://blogs.msdn.com/b/psssql/archive/2012/02/23/a-faster-checkdb-part-ii.aspx
+	-- FGCB_ADD_REMOVE = FGCB stands for File Group Control Block. This latch is required whenever a file is added or dropped from the filegroup, whenever a file is grown (manually or automatically), when recalculating proportional-fill weightings, and when cycling through the files in the filegroup as part of round-robin allocation. If you're seeing this, the most common cause is that there's a lot of file auto-growth happening. It could also be from a filegroup with lots of file (e.g. the primary filegroup in tempdb) where there are thousands of concurrent connections doing allocations. The proportional-fill weightings are recalculated every 8192 allocations, so there's the possibility of a slowdown with frequent recalculations over many files.
 
 	;WITH cteLatches1 (latch_class,wait_time_ms,waiting_requests_count) AS (SELECT latch_class,wait_time_ms,waiting_requests_count FROM #tblLatches WHERE [retrieval_time] = @minctr),
 		cteLatches2 (latch_class,wait_time_ms,waiting_requests_count) AS (SELECT latch_class,wait_time_ms,waiting_requests_count FROM #tblLatches WHERE [retrieval_time] = @maxctr)
 	INSERT INTO #tblFinalLatches
 	SELECT DISTINCT t1.latch_class,
-			(t2.wait_time_ms-t1.wait_time_ms) / 1000.0 AS wait_time_s,
+			CAST((t2.wait_time_ms-t1.wait_time_ms) / 1000.0 AS DECIMAL(14, 2)) AS wait_time_s,
 			(t2.waiting_requests_count-t1.waiting_requests_count) AS waiting_requests_count,
 			100.0 * (t2.wait_time_ms-t1.wait_time_ms) / SUM(t2.wait_time_ms-t1.wait_time_ms) OVER() AS pct,
 			ROW_NUMBER() OVER(ORDER BY t1.wait_time_ms DESC) AS rn
@@ -8245,12 +8259,12 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	GROUP BY t1.latch_class, t1.wait_time_ms, t2.wait_time_ms, t1.waiting_requests_count, t2.waiting_requests_count
 	HAVING (t2.wait_time_ms-t1.wait_time_ms) > 0
 	ORDER BY wait_time_s DESC;
-
+	
 	SELECT 'Performance_checks' AS [Category], 'Latches_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1.latch_class, 
-		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		W1.wait_time_s,
 		W1.waiting_requests_count,
-		CAST (W1.pct AS DECIMAL(14, 2)) AS pct,
-		CAST(SUM(W1.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
+		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
+		CAST(SUM(W2.pct) AS DECIMAL(14, 2)) AS overall_running_pct,
 		CAST ((W1.wait_time_s / W1.waiting_requests_count) AS DECIMAL (14, 4)) AS avg_wait_s,
 	CASE WHEN W1.latch_class LIKE N'ACCESS_METHODS_HOBT_COUNT' 
 			OR W1.latch_class LIKE N'ACCESS_METHODS_HOBT_VIRTUAL_ROOT' THEN N'[HoBT - Metadata]'
@@ -8265,12 +8279,12 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 		WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool]'
 		ELSE N'[Other]' END AS 'latch_category'
 	FROM #tblFinalLatches AS W1 INNER JOIN #tblFinalLatches AS W2 ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, W1.pct
-	HAVING SUM (W2.pct) - W1.pct < 100; -- percentage threshold
+	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
+	HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(14, 2)) < 100; -- percentage threshold
 	
 	;WITH Latches AS
 		(SELECT latch_class,
-			 wait_time_ms / 1000.0 AS wait_time_s,
+			 CAST(wait_time_ms / 1000.0 AS DECIMAL(14, 2)) AS wait_time_s,
 			 waiting_requests_count,
 			 100.0 * wait_time_ms / SUM(wait_time_ms) OVER() AS pct,
 			 ROW_NUMBER() OVER(ORDER BY wait_time_ms DESC) AS rn
@@ -8279,27 +8293,19 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 				AND*/ wait_time_ms > 0
 		)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Latches' AS [Information], W1.latch_class, 
-		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		W1.wait_time_s,
 		W1.waiting_requests_count,
 		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
-		CAST(SUM(W1.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
+		CAST(SUM(W2.pct) AS DECIMAL(14, 2)) AS overall_running_pct,
 		CAST((W1.wait_time_s / W1.waiting_requests_count) AS DECIMAL (14, 4)) AS avg_wait_s,
-			-- ACCESS_METHODS_HOBT_VIRTUAL_ROOT = This latch is used to access the metadata for an index that contains the page ID of the index's root page. Contention on this latch can occur when a B-tree root page split occurs (requiring the latch in EX mode) and threads wanting to navigate down the B-tree (requiring the latch in SH mode) have to wait. This could be from very fast population of a small index using many concurrent connections, with or without page splits from random key values causing cascading page splits (from leaf to root).
-			-- ACCESS_METHODS_HOBT_COUNT = This latch is used to flush out page and row count deltas for a HoBt (Heap-or-B-tree) to the Storage Engine metadata tables. Contention would indicate *lots* of small, concurrent DML operations on a single table. 
 		CASE WHEN W1.latch_class LIKE N'ACCESS_METHODS_HOBT_COUNT' 
 			OR W1.latch_class LIKE N'ACCESS_METHODS_HOBT_VIRTUAL_ROOT' THEN N'[HoBT - Metadata]'
-			-- ACCESS_METHODS_DATASET_PARENT and ACCESS_METHODS_SCAN_RANGE_GENERATOR = These two latches are used during parallel scans to give each thread a range of page IDs to scan. The LATCH_XX waits for these latches will typically appear with CXPACKET waits and PAGEIOLATCH_XX waits (if the data being scanned is not memory-resident). Use normal parallelism troubleshooting methods to investigate further (e.g. is the parallelism warranted? maybe increase 'cost threshold for parallelism', lower MAXDOP, use a MAXDOP hint, use Resource Governor to limit DOP using a workload group with a MAX_DOP limit. Did a plan change from index seeks to parallel table scans because a tipping point was reached or a plan recompiled with an atypical SP parameter or poor statistics? Do NOT knee-jerk and set server MAXDOP to 1 – that's some of the worst advice I see on the Internet.);
-			-- NESTING_TRANSACTION_FULL  = This latch, along with NESTING_TRANSACTION_READONLY, is used to control access to transaction description structures (called an XDES) for parallel nested transactions. The _FULL is for a transaction that's 'active', i.e. it's changed the database (usually for an index build/rebuild), and that makes the _READONLY description obvious. A query that involves a parallel operator must start a sub-transaction for each parallel thread that is used – these transactions are sub-transactions of the parallel nested transaction. For contention on these, I'd investigate unwanted parallelism but I don't have a definite "it's usually this problem". Also check out the comments for some info about these also sometimes being a problem when RCSI is used.
 			WHEN W1.latch_class LIKE N'ACCESS_METHODS_DATASET_PARENT' 
 				OR W1.latch_class LIKE N'ACCESS_METHODS_SCAN_RANGE_GENERATOR' 
 				OR W1.latch_class LIKE N'NESTING_TRANSACTION_FULL' THEN N'[Parallelism]'
-			-- LOG_MANAGER = you see this latch it is almost certainly because a transaction log is growing because it could not clear/truncate for some reason. Find the database where the log is growing and then figure out what's preventing log clearing using sys.databases.
 			WHEN W1.latch_class LIKE N'LOG_MANAGER' THEN N'[IO - Log]'
 			WHEN W1.latch_class LIKE N'TRACE_CONTROLLER' THEN N'[Trace]'
-			-- DBCC_MULTIOBJECT_SCANNER  = This latch appears on Enterprise Edition when DBCC CHECK_ commands are allowed to run in parallel. It is used by threads to request the next data file page to process. Late last year this was identified as a major contention point inside DBCC CHECK* and there was work done to reduce the contention and make DBCC CHECK* run faster.
-			-- http://blogs.msdn.com/b/psssql/archive/2012/02/23/a-faster-checkdb-part-ii.aspx
 			WHEN W1.latch_class LIKE N'DBCC_MULTIOBJECT_SCANNER ' THEN N'[Parallelism - DBCC CHECK_]'
-			-- FGCB_ADD_REMOVE = FGCB stands for File Group Control Block. This latch is required whenever a file is added or dropped from the filegroup, whenever a file is grown (manually or automatically), when recalculating proportional-fill weightings, and when cycling through the files in the filegroup as part of round-robin allocation. If you're seeing this, the most common cause is that there's a lot of file auto-growth happening. It could also be from a filegroup with lots of file (e.g. the primary filegroup in tempdb) where there are thousands of concurrent connections doing allocations. The proportional-fill weightings are recalculated every 8192 allocations, so there's the possibility of a slowdown with frequent recalculations over many files.
 			WHEN W1.latch_class LIKE N'FGCB_ADD_REMOVE' THEN N'[IO Operations]'
 			WHEN W1.latch_class LIKE N'DATABASE_MIRRORING_CONNECTION ' THEN N'[Mirroring - Busy]'
 			WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool - PAGELATCH or PAGEIOLATCH]'
@@ -8307,12 +8313,12 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	FROM Latches AS W1
 	INNER JOIN Latches AS W2
 		ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, W1.pct
-	HAVING SUM (W2.pct) - W1.pct < 100; -- percentage threshold
+	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
+	HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(14, 2)) < 100; -- percentage threshold
 	
 	;WITH Latches AS
 		(SELECT latch_class,
-			 wait_time_ms / 1000.0 AS wait_time_s,
+			 CAST(wait_time_ms / 1000.0 AS DECIMAL(14, 2)) AS wait_time_s,
 			 waiting_requests_count,
 			 100.0 * wait_time_ms / SUM(wait_time_ms) OVER() AS pct,
 			 ROW_NUMBER() OVER(ORDER BY wait_time_ms DESC) AS rn
@@ -8321,27 +8327,19 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 				AND wait_time_ms > 0
 		)
 	SELECT 'Performance_checks' AS [Category], 'Cumulative_Latches_wo_BUFFER' AS [Information], W1.latch_class, 
-		CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
+		W1.wait_time_s,
 		W1.waiting_requests_count,
 		CAST(W1.pct AS DECIMAL(14, 2)) AS pct,
-		CAST(SUM(W1.pct) AS DECIMAL(12, 2)) AS overall_running_pct,
+		CAST(SUM(W2.pct) AS DECIMAL(14, 2)) AS overall_running_pct,
 		CAST((W1.wait_time_s / W1.waiting_requests_count) AS DECIMAL (14, 4)) AS avg_wait_s,
-			-- ACCESS_METHODS_HOBT_VIRTUAL_ROOT = This latch is used to access the metadata for an index that contains the page ID of the index's root page. Contention on this latch can occur when a B-tree root page split occurs (requiring the latch in EX mode) and threads wanting to navigate down the B-tree (requiring the latch in SH mode) have to wait. This could be from very fast population of a small index using many concurrent connections, with or without page splits from random key values causing cascading page splits (from leaf to root).
-			-- ACCESS_METHODS_HOBT_COUNT = This latch is used to flush out page and row count deltas for a HoBt (Heap-or-B-tree) to the Storage Engine metadata tables. Contention would indicate *lots* of small, concurrent DML operations on a single table. 
 		CASE WHEN W1.latch_class LIKE N'ACCESS_METHODS_HOBT_COUNT' 
 			OR W1.latch_class LIKE N'ACCESS_METHODS_HOBT_VIRTUAL_ROOT' THEN N'[HoBT - Metadata]'
-			-- ACCESS_METHODS_DATASET_PARENT and ACCESS_METHODS_SCAN_RANGE_GENERATOR = These two latches are used during parallel scans to give each thread a range of page IDs to scan. The LATCH_XX waits for these latches will typically appear with CXPACKET waits and PAGEIOLATCH_XX waits (if the data being scanned is not memory-resident). Use normal parallelism troubleshooting methods to investigate further (e.g. is the parallelism warranted? maybe increase 'cost threshold for parallelism', lower MAXDOP, use a MAXDOP hint, use Resource Governor to limit DOP using a workload group with a MAX_DOP limit. Did a plan change from index seeks to parallel table scans because a tipping point was reached or a plan recompiled with an atypical SP parameter or poor statistics? Do NOT knee-jerk and set server MAXDOP to 1 – that's some of the worst advice I see on the Internet.);
-			-- NESTING_TRANSACTION_FULL  = This latch, along with NESTING_TRANSACTION_READONLY, is used to control access to transaction description structures (called an XDES) for parallel nested transactions. The _FULL is for a transaction that's 'active', i.e. it's changed the database (usually for an index build/rebuild), and that makes the _READONLY description obvious. A query that involves a parallel operator must start a sub-transaction for each parallel thread that is used – these transactions are sub-transactions of the parallel nested transaction. For contention on these, I'd investigate unwanted parallelism but I don't have a definite "it's usually this problem". Also check out the comments for some info about these also sometimes being a problem when RCSI is used.
 			WHEN W1.latch_class LIKE N'ACCESS_METHODS_DATASET_PARENT' 
 				OR W1.latch_class LIKE N'ACCESS_METHODS_SCAN_RANGE_GENERATOR' 
 				OR W1.latch_class LIKE N'NESTING_TRANSACTION_FULL' THEN N'[Parallelism]'
-			-- LOG_MANAGER = you see this latch it is almost certainly because a transaction log is growing because it could not clear/truncate for some reason. Find the database where the log is growing and then figure out what's preventing log clearing using sys.databases.
 			WHEN W1.latch_class LIKE N'LOG_MANAGER' THEN N'[IO - Log]'
 			WHEN W1.latch_class LIKE N'TRACE_CONTROLLER' THEN N'[Trace]'
-			-- DBCC_MULTIOBJECT_SCANNER  = This latch appears on Enterprise Edition when DBCC CHECK_ commands are allowed to run in parallel. It is used by threads to request the next data file page to process. Late last year this was identified as a major contention point inside DBCC CHECK* and there was work done to reduce the contention and make DBCC CHECK* run faster.
-			-- http://blogs.msdn.com/b/psssql/archive/2012/02/23/a-faster-checkdb-part-ii.aspx
 			WHEN W1.latch_class LIKE N'DBCC_MULTIOBJECT_SCANNER ' THEN N'[Parallelism - DBCC CHECK_]'
-			-- FGCB_ADD_REMOVE = FGCB stands for File Group Control Block. This latch is required whenever a file is added or dropped from the filegroup, whenever a file is grown (manually or automatically), when recalculating proportional-fill weightings, and when cycling through the files in the filegroup as part of round-robin allocation. If you're seeing this, the most common cause is that there's a lot of file auto-growth happening. It could also be from a filegroup with lots of file (e.g. the primary filegroup in tempdb) where there are thousands of concurrent connections doing allocations. The proportional-fill weightings are recalculated every 8192 allocations, so there's the possibility of a slowdown with frequent recalculations over many files.
 			WHEN W1.latch_class LIKE N'FGCB_ADD_REMOVE' THEN N'[IO Operations]'
 			WHEN W1.latch_class LIKE N'DATABASE_MIRRORING_CONNECTION ' THEN N'[Mirroring - Busy]'
 			WHEN W1.latch_class LIKE N'BUFFER' THEN N'[Buffer Pool - PAGELATCH or PAGEIOLATCH]'
@@ -8349,8 +8347,8 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	FROM Latches AS W1
 	INNER JOIN Latches AS W2
 		ON W2.rn <= W1.rn
-	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, W1.pct
-	HAVING SUM (W2.pct) - W1.pct < 100; -- percentage threshold
+	GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
+	HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(14, 2)) < 100; -- percentage threshold
 
 	;WITH cteSpinlocks1 AS (SELECT name, collisions, spins, spins_per_collision, sleep_time, backoffs FROM #tblSpinlocksBefore),
 		cteSpinlocks2 AS (SELECT name, collisions, spins, spins_per_collision, sleep_time, backoffs FROM #tblSpinlocksAfter)
@@ -8371,10 +8369,10 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	SELECT 'Performance_checks' AS [Category], 'Spinlocks_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], S1.name, 
 		S1.collisions, S1.spins, S1.spins_per_collision, S1.sleep_time, S1.backoffs,
 		CAST(S1.spins_pct AS DECIMAL(14, 2)) AS spins_pct,
-		CAST(SUM(S1.spins_pct) AS DECIMAL(12, 2)) AS overall_running_spins_pct
+		CAST(SUM(S2.spins_pct) AS DECIMAL(14, 2)) AS overall_running_spins_pct
 	FROM #tblFinalSpinlocks AS S1 INNER JOIN #tblFinalSpinlocks AS S2 ON S2.rn <= S1.rn
 	GROUP BY S1.rn, S1.name, S1.collisions, S1.spins, S1.spins_per_collision, S1.sleep_time, S1.backoffs, S1.spins_pct
-	HAVING SUM(S2.spins_pct) - S1.spins_pct < 100 -- percentage threshold
+	HAVING CAST(SUM(S2.spins_pct) AS DECIMAL(14, 2)) - CAST(S1.spins_pct AS DECIMAL(14, 2)) < 100 -- percentage threshold
 	ORDER BY spins DESC;
 END;
 
