@@ -27,7 +27,7 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
 
   **Step 2.3 -** Execute the below command to get a list of all the deployments in your namespace. 
   
-  `kubectl get all -n ag1`
+  `kubectl get all -n <namespace_name>`
     
 **Step 3 -** Connect to the SQL Server Primary Replica to create a database and add the database to the Availability Group.
 
