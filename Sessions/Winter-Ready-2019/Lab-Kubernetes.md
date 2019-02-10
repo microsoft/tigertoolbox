@@ -4,7 +4,7 @@ Date: "2/9/2019"
 Author: Sourabh Agarwal
 Purpose: In this lab you will deploy multiple SQL Server pods along with Availability Groups on a Kubernetes Cluster in Azure using Azure Kubernetes Services
 ---
-## SQL Server High Availability On Kubernetes
+## SQL Server High Availability On Kubernetes Lab
 
 1. Connecting to the kubernetes Kubernetes Cluster
 
@@ -27,15 +27,9 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
         > The Primary Replica Service provides the same functionality as an AG listener, while the secondary replica service provides load balancing capability across the readable secondaries.    
         > It may take a few minutes (generally less than 5 minutes) for the entire deployment to finish.
 
-<<<<<<< HEAD
-  **Step 2.3 -** Execute the below command to get a list of all the deployments in your namespace. 
-  
-  `kubectl get all -n <namespace_name>`
-=======
     3. Execute the below command to get a list of all the deployments in your namespace: 
     
         `kubectl get all -n ag1`
->>>>>>> parent of 579f544... Revert "Fixed typos and standardized formatting"
     
 3. Connect to the SQL Server Primary Replica to create a database and add the database to the Availability Group.
 
