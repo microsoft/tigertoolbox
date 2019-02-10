@@ -10,7 +10,7 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
 
 2. Deploying SQL Server pods using kubectl and the SQL manifest file. For this deployment you'll be using the `SQl_Server_Deployment.yaml` file, which is available under `C:\Labs`. 
  
-    1. Create Kubernetes secret for SQL Server SA password and Master Key Password. All SQL Server Pods use these passwords. In the following commands replace *<YourStrongPassword>* with a valid Strong Password within double quotes "":
+    1. Create Kubernetes secret for SQL Server SA password and Master Key Password. All SQL Server Pods use these passwords. In the following commands replace "YourStrongPassword" with a valid Strong Password within double quotes "":
   
         `kubectl create namespace ag1`   
           
