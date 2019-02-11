@@ -66,29 +66,22 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
     The Service has the following naming convention - **svc/AGName-primary**.    
     Connect to the external IP using SSMS or Azure Data Studio. To connect, please use SQL Authentication with login "sa" and the SAPASSWORD used in the step 2.1
   
-    Open a new query window and run the following commands:
+    Open a new query window and run the following commands to create a new database and add the database to the Availability Group.
     
     ```SQL
     CREATE DATABASE TestDB1
-    
     GO
-    
     ALTER DATABASE TestDB1 SET RECOVERY FULL
-    
     GO
-    
     BACKUP DATABASE TestDB1 TO DISK = 'Nul'
-    
-    GO
-    
-    ALTER AVAILABILITY GROUP <AG_Name> ADD DATABASE TestDB1
-    
     GO
     ```
-
-    > **Note:** Replace the *AG_Name* in the script above with the name of your Availability Group. If you didn't make any changes to the yaml file, then replace *AG_Name* with AG1.
+    > **Note:** Replace the *AG_Name* in the command below with the name of your Availability Group. If you didn't make any changes to the yaml file, then replace *AG_Name* with AG1.
     
-   The script above creates a Database *TestDB1* on the Primary Replica of the AG and adds the database to the Availability Group.
+    ```SQL
+    ALTER AVAILABILITY GROUP <AG_Name> ADD DATABASE TestDB1    
+    GO
+    ``` 
  
 4. Initiate Automatic Failover of the AG by crashing the Primary Replica of the AG. 
  
@@ -100,11 +93,10 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
     ```
  
     From a cmd window, execute the below command to crash the primary replica pod:
+    > **Note:** Please replace the *primary_replica_pod_name* in the command below, with the ServerName from the output of the above `Select @@SERVERNAME` command. Also replace the *namespace_name* with the name of your namespace. 
  
-    `kubectl delete pod <primary_replica_pod_name> -n <namespace_name>`
-    
-    > **Note:** Please replace the Primary Replica Name from the output of the previous command. Also replace the <namespace_name> with the name of your namespace. 
-    
+    `kubectl delete pod primary_replica_pod_name -n namespace_name`
+     
     Killing the primary replica pod will initiate an automatic Failover of the AG to one of the synchronous secondary replicas. Reconnect to the Primary Replica IP and execute the below command again: 
     
     ```SQL
