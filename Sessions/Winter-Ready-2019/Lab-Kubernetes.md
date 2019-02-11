@@ -62,7 +62,7 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
 
     From the output of above command, identify the External IP address associated with the AG primary relica service.    
     The Service has the following naming convention - **svc/AGName-primary**.    
-    Connect to the external IP and the password from step 2.1, using SSMS or Azure Data Studio.
+    Connect to the external IP using SSMS or Azure Data Studio. To connect, please use SQL Authentication with login "sa" and the SAPASSWORD used in the step 2.1
   
     Open a new query window and run the following commands:
     
