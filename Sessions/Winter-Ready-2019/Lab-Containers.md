@@ -5,23 +5,30 @@ author: Vin Yu
 ---
 # SQL Server Containers Lab
 
+This lab use the **Putty** program, but you can use any ssh program you want.
+
 ## Pre Lab
 1. Install docker engine by running the following:
 
 ```
 sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+```
 
+```
 sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-
+```
+```
 sudo yum install http://mirror.centos.org/centos/7/extras/x86_64/Packages/pigz-2.3.3-1.el7.centos.x86_64.rpm
-
+```
+```
 sudo yum install docker-ce
 ```
 
 check status of docker engine:
+
 ```
 sudo systemctl status docker
- ```
+```
 
 if is not running, start it by running:
 ``` 
@@ -51,7 +58,8 @@ In this section you will run SQL Server in a container and connect to it with SS
 sudo docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=YourStrong!Passw0rd' \
       -p 1500:1433 --name sql1 \
       -d microsoft/mssql-server-linux:2017-latest
- ```
+
+```
 
 > Tip: edit commands in a text editor prior to pasting in the terminal to easily edit the commands.
 >
