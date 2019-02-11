@@ -30,10 +30,10 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
         
      4. Execute the command below to get the access credentials of the managed kubernetes service cluster. Please replace the *Resource_Group_Name* and *Kubernetes_Cluster_Name* with the correct Resource_Group_Name and Kubernetes_Cluster_Name.
      
-        `az aks get-credentials --resource-group=Resource_Group_Name--name=Kubernetes_Cluster_Name`
+        `az aks get-credentials --resource-group=Resource_Group_Name --name=Kubernetes_Cluster_Name`
         
 
-2. Deploying SQL Server pods using kubectl and the SQL manifest file. For this deployment you'll be using the `SQl_Server_Deployment.yaml` file. This file is present in the following zip folder `C:\Labs\Lab_Kubernetes.zip`. 
+2. Deploying SQL Server pods using kubectl and the SQL manifest file. For this deployment you'll be using the `SQl_Server_Deployment.yaml` file. This file is present in the following folder `C:\Labs\Lab_Kubernetes\`. 
  
     1. Create Kubernetes secret for SQL Server SA password and Master Key Password. All SQL Server Pods use these passwords. In the following commands replace "YourStrongPassword" with a valid Strong Password within double quotes "":
   
