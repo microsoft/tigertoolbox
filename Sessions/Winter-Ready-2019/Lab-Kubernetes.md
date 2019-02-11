@@ -6,9 +6,36 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
 ---
 ## SQL Server High Availability On Kubernetes Lab
 
-1. Connecting to the kubernetes Kubernetes Cluster
+1. Connect to the kubernetes Kubernetes Cluster using Azure CLI and Kubectl.exe
 
-2. Deploying SQL Server pods using kubectl and the SQL manifest file. For this deployment you'll be using the `SQl_Server_Deployment.yaml` file, which is available under `C:\Labs`. 
+    1. Connect to the WIndows VM in the lab. 
+    
+    2. Open a command prompt window and execute the below command.
+    
+       `az login`
+     
+       Running the above command will open the Azure sign-in page. Sign-in using the Azure Credentials from the resources section of the Lab. **Please do not use your Corp Credentials for this**. 
+       
+       ![Azure_Information.jpg](./media/Azure_Infomation.jpg)
+       
+       Using the information from the resources section of the labs, set Azure CLI default resource group and subscription names. Please replace *Subscription_Name_From_Resources_Section* and *Resource_Group_Name_Resources_Section* in the below commands with the actual subscription and 
+       
+       `az account set -s Subscription_Name_From_Resources_Section`
+       
+       `az configure --defaults group= Resource_Group_Name_From_Resources_Section`
+       
+     3. Get details of the kubernetes cluster using Azure CLI. In the same command window as above, execute the following command 
+     
+        `az aks list -o table `
+        
+        From the outout of the command above note down the name (output of the Name column) of the Kubernetes Managed Service.
+        
+     4. Execute the command below to get the access credentials of the managed kubernetes service cluster. Please replace the *Resource_Group_Name* and *Kubernetes_Cluster_Name* with the correct Resource_Group_Name and Kubernetes_Cluster_Name.
+     
+        `az aks get-credentials --resource-group=Resource_Group_Name--name=Kubernetes_Cluster_Name`
+        
+
+2. Deploying SQL Server pods using kubectl and the SQL manifest file. For this deployment you'll be using the `SQl_Server_Deployment.yaml` file. This file is present in the following zip folder `C:\Labs\Lab_Kubernetes.zip`. 
  
     1. Create Kubernetes secret for SQL Server SA password and Master Key Password. All SQL Server Pods use these passwords. In the following commands replace "YourStrongPassword" with a valid Strong Password within double quotes "":
   
