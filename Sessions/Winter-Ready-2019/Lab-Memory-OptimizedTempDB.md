@@ -9,10 +9,10 @@ author: Pam Lahoud
 
 2.  Open SQL Server Management Studio (SSMS) and connect to the **HkTempDBTestVM\\SQL2019\_CTP23** instance. Verify that the **AdventureWorks** database exists. If it does not, perform the following steps:
 
-    1.  Open and execute the script `C:\Labs\Memory-OptimizedTempDB\00-AdventureWorks\_Setup.sql`.    
+    1.  Open and execute the script `C:\Labs\MemoryOptimizedTempDB\00-AdventureWorks\_Setup.sql`.    
         This will restore the AdventureWorks database and make configuration changes needed for the rest of the lab.
 
-    2.  Open and execute the script `C:\Labs\Memory-OptimizedTempDB\01-SalesAnalysis\_Optimized.sql` to create the **SalesAnalysis\_Optimized** stored procedure.
+    2.  Open and execute the script `C:\Labs\MemoryOptimizedTempDB\01-SalesAnalysis\_Optimized.sql` to create the **SalesAnalysis\_Optimized** stored procedure.
 
 3.  Verify that there are no startup trace flags set:
 
@@ -35,7 +35,7 @@ author: Pam Lahoud
 
     7.  Restart the SQL Server service by right-clicking on "SQL Server (SQL2019\_CTP23)" and choosing **Restart**.
 
-4.  Browse to the `C:\Labs\Memory-OptimizedTempDB` folder and double-click the file `SQL2019_CTP23_PerfMon.htm` file to open it in Internet Explorer.    
+4.  Browse to the `C:\Labs\MemoryOptimizedTempDB` folder and double-click the file `SQL2019_CTP23_PerfMon.htm` file to open it in Internet Explorer.    
     
     - Once the file opens, right-click anywhere in the white area of the window to clear the existing data.
     - You will receive a prompt warning *this action will erase the data in the graph*.    
@@ -52,11 +52,11 @@ author: Pam Lahoud
 
 6.  Start the workload:
 
-    1.  Open a Command Prompt and browse to `C:\Labs\Memory-OptimizedTempDB`
+    1.  Open a Command Prompt and browse to `C:\Labs\MemoryOptimizedTempDB`
 
     2.  Go back to the Internet Explorer window that has the Performance Monitor collector open and click the play button (green arrow) to start the collection.
 
-    3.  From the Command Prompt window, execute `SQL2019_CTP21_Run_SalesAnalysis_Optimized.bat` by typing or pasting the file name and hitting **Enter**.
+    3.  From the Command Prompt window, execute `SQL2019_CTP23_Run_SalesAnalysis_Optimized.bat` by typing or pasting the file name and hitting **Enter**.
 
 7.  While the workload is running, watch the counters in Performance Monitor. You should see **Batch Requests/sec** around 500 and there should be **Page Latch** waits throughout the workload.    
     
