@@ -109,3 +109,9 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
     SELECT @@SERVERNAME
     GO
     ```
+    
+    In the output you'll notice that the Primary Replica is now hosted on a different SQL Server Pod. 
+
+## Conclusion 
+
+In this lab you created a SQL Server Availability Group deployment with three replicas on a AKS kubernetes cluster. You also tested the automatic failover of the AG by crashing the primary replica of the AG. 
