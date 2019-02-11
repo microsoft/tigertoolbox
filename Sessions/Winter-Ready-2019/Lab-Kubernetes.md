@@ -8,11 +8,13 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
 
 1. Connect to the kubernetes Kubernetes Cluster using Azure CLI and Kubectl.exe
 
-    1. Sign in to the Azure Subscription using Azure CLI. Open a command prompt window and execute the below command.
+    1. Connect to the WIndows VM in the lab. 
+    
+    2. Open a command prompt window and execute the below command.
     
        `az login`
      
-       Running the above command will open an Azure sign-in page. Signin using the Azure Credentials from the resources section of the Lab. 
+       Running the above command will open the Azure sign-in page. Sign-in using the Azure Credentials from the resources section of the Lab. **Please do not use your Corp Credentials for this**. 
        
        ![Azure_Information.jpg](./media/Azure_Infomation.jpg)
        
@@ -22,13 +24,13 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
        
        `az configure --defaults group= Resource_Group_Name_From_Resources_Section`
        
-     2. Get details of the kubernetes cluster using Azure CLI. In the same command window as above, execute the following command 
+     3. Get details of the kubernetes cluster using Azure CLI. In the same command window as above, execute the following command 
      
         `az aks list -o table `
         
         From the outout of the command above note down the name (output of the Name column) of the Kubernetes Managed Service.
         
-     3. Get access credentials of the managed kubernetes service. Execute the command below. Please replace the *Resource_Group_Name* and *Kubernetes_Cluster_Name* with the correct Resource_Group_Name and Kubernetes_Cluster_Name.
+     4. Execute the command below to get the access credentials of the managed kubernetes service cluster. Please replace the *Resource_Group_Name* and *Kubernetes_Cluster_Name* with the correct Resource_Group_Name and Kubernetes_Cluster_Name.
      
         `az aks get-credentials --resource-group=Resource_Group_Name--name=Kubernetes_Cluster_Name`
         
