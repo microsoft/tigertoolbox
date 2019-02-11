@@ -14,15 +14,13 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
     
        `az login`
      
-       Running the above command will open the Azure sign-in page. Sign-in using the Azure Credentials from the resources section of the Lab. **Please do not use your Corp Credentials for this**. 
+       Running the above command will open the Azure sign-in page. Sign-in using the Azure Credentials from the **resources tab of the On-Demand Lab Window**. *Please **DO NOT** use your Corp Credentials for this connection*. 
        
-       ![Azure_Information.jpg](./media/Azure_Infomation.jpg)
+       Using the information from the resources section of the labs, set Azure CLI default resource group and subscription names. Please replace *Subscription_Name_From_Resources_Tab* and *Resource_Group_Name_Resources_Tab* in the below commands with the actual subscription and 
        
-       Using the information from the resources section of the labs, set Azure CLI default resource group and subscription names. Please replace *Subscription_Name_From_Resources_Section* and *Resource_Group_Name_Resources_Section* in the below commands with the actual subscription and 
+       `az account set -s Subscription_Name_From_Resources_Tab`
        
-       `az account set -s Subscription_Name_From_Resources_Section`
-       
-       `az configure --defaults group= Resource_Group_Name_From_Resources_Section`
+       `az configure --defaults group= Resource_Group_Name_From_Resources_Tab`
        
      3. Get details of the kubernetes cluster using Azure CLI. In the same command window as above, execute the following command 
      
