@@ -34,15 +34,15 @@ if is not running, start it by running:
 ``` 
 sudo systemctl start docker
 ```
+
 >Note: for this lab, we are installing docker for CentOS, this will work on CentOS or RHEL due to the similarity of the OS’s. For production usage on RHEL, install Docker EE for RHEL: https://docs.docker.com/install/linux/docker-ee/rhel/.
  
 2. clone this repo by running the following:
 
-    Note: If you have already done this in the prelab you can skip this step
-
 ```
 sudo yum install git
-git clone https://github.com/Microsoft/sqllinuxlabs.git
+git clone https://github.com/Microsoft/tigertoolbox.git
+unzip tigertoolbox/Sessions/Winter-Ready-2019/Labs/Lab-Containers.zip
 ```
 ---
 
@@ -80,7 +80,6 @@ Open SSMS or Ops studio and connect to the SQL Server in container instance by c
 ```
 <host IP>, 1500
 ```
->Note: If you are running this in an Azure VM, the host IP is the public Azure VM IP. You will also need to open port 1500 external traffic. [go here to learn how to open ports in Azure VMs](/open_azure_vm_port)
 
 ![GettingStartedOpsStudio.PNG](./media/Container-GettingStartedOpsStudio.png)
 
