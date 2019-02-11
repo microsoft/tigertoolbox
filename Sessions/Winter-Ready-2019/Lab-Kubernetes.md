@@ -68,16 +68,25 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
     
     ```SQL
     CREATE DATABASE TestDB1
+    
     GO
+    
     ALTER DATABASE TestDB1 SET RECOVERY FULL
+    
     GO
+    
     BACKUP DATABASE TestDB1 TO DISK = 'Nul'
+    
     GO
+    
     ALTER AVAILABILITY GROUP <AG_Name> ADD DATABASE TestDB1
+    
     GO
     ```
 
-    > **Note:** Replace the <AG_Name> in the script above with the name of your Availability Group.
+    > **Note:** Replace the *AG_Name* in the script above with the name of your Availability Group. If you didn't make any changes to the yaml file, then replace *AG_Name* with AG1.
+    
+   The script above creates a Database on the Primary Replica of the AG and adds it Availability Group.
  
 4. Initiate Automatic Failover of the AG by crashing the Primary Replica of the AG. 
  
