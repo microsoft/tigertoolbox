@@ -45,7 +45,7 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
   
     2. Deploy SQL Server pods using the `SQL_Server_Deployment.yaml` file. Deploy the SQL Server pods in the same namespace as the previous step. The default deployment uses namespace *ag1*. If you are using a different namespace, open the `SQL_Server_Deployment.yaml` file and replace **ALL** occurrences of "ag1".
 
-        `Kubectl apply -f <"Localtion of SQL Server Deployment YAML file"> -n ag1`
+        `Kubectl apply -f "C:\Labs\Lab-Kubernetes\SQl_Server_Deployment.yaml" -n ag1`
   
         > **Note:** The script creates the SQL Server operator along with 3 SQL Server Pods with an Availability Group.     
         > The script also creates 5 kubernetes service (3 for the SQL Server pods, 1 for AG Primary Replica and 1 for AG Secondary Replica).    
@@ -56,11 +56,13 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
     
         `kubectl get all -n ag1`
         
-     ![Kubectl_Get_all_output.jpg](./media/Kubectl_Get_all_output.jpg)
+        ![Kubectl_Get_all_output.jpg](./media/Kubectl_Get_all_output.jpg)
+     
+     >Note: Since deployment can take a few minutes, please run the `Kubectl get all' again if you do not see the containers running or the external IP's assigned. 
     
 3. Connect to the SQL Server Primary Replica to create a database and add the database to the Availability Group.
 
-    From the output of above command, identify the External IP address associated with the AG primary relica service.    
+    From the output of above command, identify the External IP address associated with the AG primary replica service.    
     The Service has the following naming convention - **svc/AGName-primary**.    
     Connect to the external IP using SSMS or Azure Data Studio. To connect, please use SQL Authentication with login "sa" and the SAPASSWORD used in the step 2.1
   
@@ -86,7 +88,7 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
 
     > **Note:** Replace the *AG_Name* in the script above with the name of your Availability Group. If you didn't make any changes to the yaml file, then replace *AG_Name* with AG1.
     
-   The script above creates a Database on the Primary Replica of the AG and adds it Availability Group.
+   The script above creates a Database *TestDB1* on the Primary Replica of the AG and adds the database to the Availability Group.
  
 4. Initiate Automatic Failover of the AG by crashing the Primary Replica of the AG. 
  
