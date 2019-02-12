@@ -47,11 +47,14 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
 
         `Kubectl apply -f "C:\Labs\Lab-Kubernetes\SQl_Server_Deployment.yaml" -n ag1`
   
-        > **Note:** The script creates the SQL Server operator along with 3 SQL Server Pods with an Availability Group.     
-        > The script also creates 5 kubernetes service (3 for the SQL Server pods, 1 for AG Primary Replica and 1 for AG Secondary Replica).    
-        > The Primary Replica Service provides the same functionality as an AG listener, while the secondary replica service provides load balancing capability across the readable secondaries.    
-        > It may take a few minutes (generally less than 5 minutes) for the entire deployment to finish.
-
+        > **Note:** The script creates the SQL Server operator along with 3 SQL Server Pods with an Availability Group. The script also creates 5 kubernetes service (3 for the SQL Server pods, 1 for AG Primary Replica and 1 for AG Secondary Replica). The Primary Replica Service provides the same functionality as an AG listener, while the secondary replica service provides load balancing capability across the readable secondaries. It may take a few minutes (generally less than 5 minutes) for the entire deployment to finish.
+        
+        You may encounter the following errors when you execute the above `kubectl apply` command. 
+        
+        ![Deployment_Error.jpg](./media/Deployment_Error.jpg)
+        
+        If you do encounter this error, please wait for a couple of minutes and reexecute the `kubectl apply` command. 
+        
     3. Execute the below command to get a list of all the deployments in your namespace: 
     
         `kubectl get all -n ag1`
