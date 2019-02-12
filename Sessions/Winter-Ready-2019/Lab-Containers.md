@@ -10,19 +10,14 @@ This lab use the **Putty** program, but you can use any ssh program you want.
 ## Pre Lab
 1. Install docker engine by running the following:
 
-```
-sudo yum install -y yum-utils device-mapper-persistent-data lvm2
-```
 
-```
-sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-```
-```
-sudo yum install http://mirror.centos.org/centos/7/extras/x86_64/Packages/pigz-2.3.3-1.el7.centos.x86_64.rpm
-```
-```
-sudo yum install docker-ce
-```
+`sudo yum install -y yum-utils device-mapper-persistent-data lvm2`
+
+`sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo`
+
+`sudo yum install http://mirror.centos.org/centos/7/extras/x86_64/Packages/pigz-2.3.3-1.el7.centos.x86_64.rpm`
+
+`sudo yum install docker-ce`
 
 check status of docker engine:
 
@@ -39,11 +34,10 @@ sudo systemctl start docker
  
 2. clone this repo by running the following:
 
-```
-sudo yum install git
-git clone https://github.com/Microsoft/tigertoolbox.git
-unzip tigertoolbox/Sessions/Winter-Ready-2019/Labs/Lab-Containers.zip
-```
+`sudo yum install git`
+`git clone https://github.com/Microsoft/tigertoolbox.git`
+`unzip tigertoolbox/Sessions/Winter-Ready-2019/Labs/Lab-Containers.zip`
+
 ---
 
 ## Lab
