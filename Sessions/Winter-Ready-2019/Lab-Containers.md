@@ -31,7 +31,9 @@ if is not running, start it by running:
 2. clone this repo by running the following:
 
 `sudo yum install git`
+
 `git clone https://github.com/Microsoft/tigertoolbox.git`
+
 `unzip tigertoolbox/Sessions/Winter-Ready-2019/Labs/Lab-Containers.zip`
 
 ---
@@ -44,6 +46,7 @@ In this section you will run SQL Server in a container and connect to it with SS
  
 #### Steps
 1. Change the `SA_PASSWORD` in the command below and run it in your terminal:
+
 ``` 
 sudo docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=YourStrong!Passw0rd' \
       -p 1500:1433 --name sql1 \
