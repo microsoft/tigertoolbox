@@ -308,23 +308,17 @@ Now you will learn the great compatibility story of SQL Server on Linux by resto
 
     Depending on your network speed this should take no more than a few minutes
 
-2. Copy and restore the WideWorldImporters database. Copy the **cpwwi.sh**, **restorewwi.sh**, and **restorewwi_linux.sql** files from the downloaded zip of the gitHub repo into your home directory on Linux. MobaXterm provides drag and drop capabilities to do this. Copy these files and drop them into the "explorer" pane in MobaXterm on the left hand side from your ssh session.
+2. Copy and restore the WideWorldImporters database. Copy the **restorewwi_linux.sql** files from **c:\Labs\Labs-Linux** into your home directory on Linux. MobaXterm provides drag and drop capabilities to do this. Copy these files and drop them into the "explorer" pane in MobaXterm on the left hand side from your ssh session.
 
-    Note: You can skip this step if you have already cloned the git repo in the prelab. If you have done this, the scripts in this lab are in the **sqllinuxlab** subdirectory. You can copy them into your home directory or edit them to ensure you have the right path for the WideWorldImporters backup file.
+3. Copy the backup file to the SQL Server directory so it can access the file and change permissions on the backup file by executing the following command in the bash shell
 
-3. Run the following commands from the bash shell to make the scripts executable (supply the root password if prompted)
+    `sudo cp WideWorldImporters-Full.bak /var/opt/mssql`
 
-    `sudo chmod u+x cpwwi.sh`
+    `sudo chown mssql:mssql /var/opt/mssql/WideWorldImporters-Full.bak`
 
-    `sudo chmod u+x restorewwi.sh`
+4. Now restore the database by executing the following command from the bash shell
 
-4. Copy the backup file to the SQL Server directory so it can access the file and change permissions on the backup file by executing the following command in the bash shell
-
-    `./cpwwi.sh`
-
-5. Now restore the database by executing the following command from the bash shell
-
-    `./restorewwi.sh`
+    `/opt/mssql-tools/bin/sqlcmd -Usa -irestorewwi_linux.sql`
 
 6. When this command completes successfully the output in your ssh session should look like the following
 
