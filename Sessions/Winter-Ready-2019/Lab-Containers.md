@@ -234,9 +234,9 @@ If you connect to the instance, you should see that the database was restored.
 > -- https://docs.docker.com/get-started/part2/#your-new-development-environment
 ---
 
- ### 4. Run a Containerized Application with SQL Server
+### 4. Run a Containerized Application with SQL Server
  
- #### Introduction
+#### Introduction
   
 Most applications involve multiple containers. 
 

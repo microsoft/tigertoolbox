@@ -308,12 +308,13 @@ Now you will learn the great compatibility story of SQL Server on Linux by resto
 
     Depending on your network speed this should take no more than a few minutes
 
-2. Copy and restore the WideWorldImporters database. Copy the **restorewwi_linux.sql** files from **c:\Labs-Linux** into your home directory on Linux. MobaXterm provides drag and drop capabilities to do this. Copy these files and drop them into the "explorer" pane in MobaXterm on the left hand side from your ssh session.
+2. Copy and restore the WideWorldImporters database. Copy the **restorewwi_linux.sql** files from **c:\Labs\Labs-Linux** into your home directory on Linux. MobaXterm provides drag and drop capabilities to do this. Copy these files and drop them into the "explorer" pane in MobaXterm on the left hand side from your ssh session.
 
 3. Copy the backup file to the SQL Server directory so it can access the file and change permissions on the backup file by executing the following command in the bash shell
 
     `sudo cp WideWorldImporters-Full.bak /var/opt/mssql`
-    `sudo chown mssql:mssql /var/opt/mssql/WideWorldImporters-Full.bakh`
+
+    `sudo chown mssql:mssql /var/opt/mssql/WideWorldImporters-Full.bak`
 
 4. Now restore the database by executing the following command from the bash shell
 
