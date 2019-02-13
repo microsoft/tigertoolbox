@@ -9,10 +9,10 @@ author: Pam Lahoud
 
 2.  Open SQL Server Management Studio (SSMS) and connect to the **HkTempDBTestVM\\SQL2019\_CTP23** instance. Verify that the **AdventureWorks** database exists. If it does not, perform the following steps:
 
-    1.  Open and execute the script `C:\Labs\MemoryOptimizedTempDB\00-AdventureWorks\_Setup.sql`.    
+    1.  Open and execute the script `C:\Labs\MemoryOptimizedTempDB\00-AdventureWorks_Setup.sql`.    
         This will restore the AdventureWorks database and make configuration changes needed for the rest of the lab.
 
-    2.  Open and execute the script `C:\Labs\MemoryOptimizedTempDB\01-SalesAnalysis\_Optimized.sql` to create the **SalesAnalysis\_Optimized** stored procedure.
+    2.  Open and execute the script `C:\Labs\MemoryOptimizedTempDB\01-SalesAnalysis_Optimized.sql` to create the **SalesAnalysis\_Optimized** stored procedure.
 
 3.  Verify that there are no startup trace flags set:
 
