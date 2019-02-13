@@ -16,9 +16,9 @@ Purpose: In this lab you will deploy multiple SQL Server pods along with Availab
      
        Running the above command will open the Azure sign-in page. Sign-in using the Azure Credentials from the **resources tab of the On-Demand Lab Window**. *Please **DO NOT** use your Corp Credentials for this connection*. 
        
-       Using the information from the resources section of the labs, set Azure CLI default resource group and subscription names. Please replace *Subscription_Name_From_Resources_Tab* and *Resource_Group_Name_Resources_Tab* in the below commands with the actual subscription and 
+       Using the information from the resources section of the labs, set Azure CLI default resource group and subscription names. Please replace *Subscription_ID_From_Resources_Tab* and *Resource_Group_Name_Resources_Tab* in the below commands with the actual subscription and 
        
-       `az account set -s Subscription_Name_From_Resources_Tab`
+       `az account set -s Subscription_ID_From_Resources_Tab`
        
        `az configure --defaults group= Resource_Group_Name_From_Resources_Tab`
        
