@@ -410,6 +410,7 @@ v2.2.3.1 - 10/28/2018 - Fixed variable issue.
 v2.2.3.2 - 10/28/2018 - Enhanced power scheme check (thanks sivey42).
 v2.2.3.4 - 10/29/2018 - Fixed latches syntax error (thanks Dimitri Artemov);
 						Improved handling of conversions.
+v2.2.3.5 - 03/04/2019 - Fixed issue with function after last community merge.
 
 PURPOSE: Checks SQL Server in scope for some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
 
@@ -880,7 +881,7 @@ BEGIN
 	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSReleaseDate';
 	INSERT INTO @machineinfo
 	EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
-END
+END;
 
 SELECT @SystemManufacturer = [Data] FROM @machineinfo WHERE [Value] = 'SystemManufacturer';
 
@@ -1017,7 +1018,7 @@ END;
 -- Instance info subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
-DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(255), @cpucount int, @numa int
+DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(64), @cpuover32 int
 
 IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
@@ -1484,7 +1485,7 @@ WHERE dbsize.[type_desc] = ''ROWS''
 ORDER BY [Database_Name]	
 OPTION (RECOMPILE)'
 END
-ELSE IF @sqlmajorver = 14
+ELSE IF @sqlmajorver >= 14
 BEGIN
 	SET @sqlcmd = N'SELECT ''Information'' AS [Category], ''Databases'' AS [Information],
 	db.[name] AS [Database_Name], SUSER_SNAME(db.owner_sid) AS [Owner_Name], db.[database_id], 
@@ -4943,6 +4944,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		WHEN @sqlmajorver = 12 THEN '2014'
 		WHEN @sqlmajorver = 13 THEN '2016'
 		WHEN @sqlmajorver = 14 THEN '2017'
+		WHEN @sqlmajorver = 15 THEN '2019'
 	END AS [Product_Major_Version],
 	CONVERT(VARCHAR(128), SERVERPROPERTY('ProductLevel')) AS Product_Level,
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductBuildType')) ELSE 'NA' END AS Product_Build_Type,
@@ -5203,6 +5205,15 @@ END;
 -- All supported TFs: http://msdn.microsoft.com/library/ms188396.aspx
 IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1)
 BEGIN
+	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 174)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: TF174  disables the background columnstore compression task]' 
+			AS [Deviation], TraceFlag
+		FROM @tracestatus 
+		WHERE [Global] = 1 AND TraceFlag = 634
+	END;
+
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 634)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
@@ -8154,10 +8165,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	FROM #tblFinalWaits AS W1 INNER JOIN #tblFinalWaits AS W2 ON W2.rn <= W1.rn
 	GROUP BY W1.rn, W1.wait_type, CAST(W1.wait_time_s AS DECIMAL(14, 2)), CAST(W1.pct AS DECIMAL(14, 2)), CAST(W1.signal_wait_time_s AS DECIMAL(14, 2)), CAST(W1.resource_wait_time_s AS DECIMAL(14, 2)), CAST(W1.signal_wait_pct AS DECIMAL(14, 2)), CAST(W1.resource_wait_pct AS DECIMAL(14, 2))
 	HAVING CAST(W1.wait_time_s as DECIMAL(14, 2)) >= 0.01 AND (SUM(W2.pct)-CAST(W1.pct AS DECIMAL(14, 2))) < 100  -- percentage threshold
-	ORDER BY W1.rn 
-	
-	SET @params = N'@maxservermemIN bigint, @minservermemIN bigint, @systemmemIN bigint, @systemfreememIN bigint, @commit_targetIN bigint, @committedIN bigint';
-	EXECUTE sp_executesql @sqlcmd, @params, @maxservermemIN=@maxservermem
+	ORDER BY W1.rn;
 
 	;WITH Waits AS
 	(SELECT wait_type, wait_time_ms / 1000. AS wait_time_s,
