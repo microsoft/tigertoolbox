@@ -10816,8 +10816,7 @@ BEGIN
 	DROP TABLE #tblFK;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
 	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] NVARCHAR(200), [parent_schema_name] NVARCHAR(100), 
-	[parent_table_name] NVARCHAR(200), parent_columns NVARCHAR(4000), [referenced_schema] NVARCHAR(100), [referenced_table_name] NVARCHAR(200), referenced_columns NVARCHAR(4000),
-	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name]))
+	[parent_table_name] NVARCHAR(200), parent_columns NVARCHAR(4000), [referenced_schema] NVARCHAR(100), [referenced_table_name] NVARCHAR(200), referenced_columns NVARCHAR(4000))
 	
 	UPDATE #tmpdbs1
 	SET isdone = 0
