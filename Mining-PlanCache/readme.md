@@ -25,7 +25,6 @@ It may be important to review this information against the current indexes, veri
 Last but not least, in an OLTP environment, never create redundant indexes.  
 
 ```sql
--- Querying the plan cache for missing indexes
 SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; 
 WITH XMLNAMESPACES (DEFAULT 'http://schemas.microsoft.com/sqlserver/2004/07/showplan'), 
 	PlanMissingIndexes AS (SELECT query_plan, cp.usecounts, cp.refcounts, cp.plan_handle
@@ -122,7 +121,7 @@ OPTION(RECOMPILE, MAXDOP 1);
 GO
 ```
 
-# Finding plans with Batch Sorts
+## Finding plans with Batch Sorts
 
 Optimized Nested Loops (or Batch Sort) is effectively an optimization aimed at minimizing I/O during a nested loop when the inner side table is large, regardless of it being parallelized or not.
 The presence of this optimization in a given plan may not be very obvious when you look at an execution plan, given the sort itself is hidden, but you can see this by looking in the plan XML, and looking for the attribute Optimized, meaning the Nested Loop join may try to reorder the input rows to improve I/O performance. You can read more about this [here](https://blogs.msdn.microsoft.com/sql_server_team/addressing-large-memory-grant-requests-from-optimized-nested-loops/).
