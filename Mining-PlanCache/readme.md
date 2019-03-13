@@ -1,6 +1,6 @@
 # Exploring the Plan Cache
 
-Microsoft provides a type of service related to performnace troubleshooting called a SQL Performance Tuning and Optimization Clinic. This is directed at finding and resolving issues with your server configuration, database design and/or T-SQL coding from a performance standpoint, right there in your workplace. In this scope, it makes sense to explore what’s going on with your cached plans, for one, especially for SQL Server versions where the Query Store is not available.
+Most of the queries below are also part of the Performance and Best Practices Check (http://aka.ms/BPCheck). It may make sense to explore what’s going on with your cached plans, especially for SQL Server versions where the Query Store is not available.
 
 Fixing performance issues by having a proper database design, indexing and well written code is not only better but also much less expensive that upgrading your servers hardware, as a way to minimize performance issues. 
 
