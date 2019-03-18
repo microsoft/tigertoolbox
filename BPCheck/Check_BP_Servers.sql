@@ -5218,7 +5218,7 @@ BEGIN
 			'[INFORMATION: TF652 disables read-aheads during scans]' --http://support.microsoft.com/en-us/kb/920093
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
-		WHERE [Global] = 1 AND TraceFlag = 634
+		WHERE [Global] = 1 AND TraceFlag = 652
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 661)
