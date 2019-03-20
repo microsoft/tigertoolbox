@@ -1,8 +1,6 @@
 USE [master]
 GO
 
-DECLARE @custompath NVARCHAR(500), @allow_xpcmdshell bit, @ptochecks bit, @duration tinyint, @logdetail bit, @diskfrag bit, @ixfrag bit, @ixfragscanmode VARCHAR(8), @bpool_consumer bit, @gen_scripts bit, @dbScope VARCHAR(256), @spn_check bit
-
 /* Best Practices Check - pedro.lopes@microsoft.com (http://aka.ms/BPCheck; http://aka.ms/sqlinsights)
 
 READ ME - Important options for executing BPCheck
@@ -32,6 +30,11 @@ Set @dbScope to the appropriate list of database IDs if there's a need to have a
 	Leave NULL for all databases
 */
 
+/*
+Example:
+
+DECLARE @custompath NVARCHAR(500), @allow_xpcmdshell bit, @ptochecks bit, @duration tinyint, @logdetail bit, @diskfrag bit, @ixfrag bit, @ixfragscanmode VARCHAR(8), @bpool_consumer bit, @gen_scripts bit, @dbScope VARCHAR(256), @spn_check bit
+
 SET @duration = 90
 SET @ptochecks = 1 --(1 = ON; 0 = OFF)
 --SET @custompath = 'C:\<temp_location>'
@@ -44,6 +47,9 @@ SET @logdetail = 0 --(1 = ON; 0 = OFF)
 SET @bpool_consumer = 1 --(1 = ON; 0 = OFF)
 SET @gen_scripts = 0 --(1 = ON; 0 = OFF)
 SET @dbScope = NULL --(NULL = All DBs)
+
+EXEC bp_check @custompath, @allow_xpcmdshell, @ptochecks, @duration, @logdetail, @diskfrag, @ixfrag, @ixfragscanmode, @bpool_consumer, @gen_scripts, @dbScope, @spn_check
+*/
 
 /*
 DESCRIPTION: This script checks for skews in the most common best practices from SQL Server 2005 onwards.
@@ -539,7 +545,9 @@ IMPORTANT pre-requisites:
  Otherwise some checks will be bypassed and warnings will be shown.
 - Powershell must be installed to run checks that access disk configurations, as well as allow execution of remote signed or unsigned scripts.
 */
-
+GO
+CREATE PROCEDURE bp_check @custompath NVARCHAR(500), @allow_xpcmdshell bit, @ptochecks bit, @duration tinyint, @logdetail bit, @diskfrag bit, @ixfrag bit, @ixfragscanmode VARCHAR(8), @bpool_consumer bit, @gen_scripts bit, @dbScope VARCHAR(256), @spn_check bit
+AS BEGIN
 SET NOCOUNT ON;
 SET ANSI_WARNINGS ON;
 SET QUOTED_IDENTIFIER ON;
@@ -12775,4 +12783,5 @@ EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
 RAISERROR (N'All done!', 10, 1) WITH NOWAIT
+END
 GO
