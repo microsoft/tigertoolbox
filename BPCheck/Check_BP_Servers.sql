@@ -3062,9 +3062,12 @@ RAISERROR (N'|-Starting Server Checks', 10, 1) WITH NOWAIT
 -- Power plan subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Power plan', 10, 1) WITH NOWAIT
-DECLARE @planguid NVARCHAR(64), @powerkey1 NVARCHAR(255), @powerkey2 NVARCHAR(255)
-SELECT @powerkey1 = 'SOFTWARE\Policies\Microsoft\Power\PowerSettings' , 
-	@powerkey2 = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes' 
+
+DECLARE @planguid NVARCHAR(64), @powerkey1 NVARCHAR(255), @powerkey2 NVARCHAR(255) 
+--SELECT @powerkey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{025A5937-A6BE-4686-A844-36FE4BEC8B6D}'
+--SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
+SELECT @powerkey1 = 'SOFTWARE\Policies\Microsoft\Power\PowerSettings'
+SELECT @powerkey2 = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
 
 IF CONVERT(DECIMAL(3,1), @osver) >= 6.0
 BEGIN
