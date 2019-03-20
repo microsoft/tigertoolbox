@@ -352,3 +352,6 @@ v2.2.3.2 - 10/28/2018 - Enhanced power scheme check (thanks sivey42).
 v2.2.3.4 - 10/29/2018 - Fixed latches syntax error (thanks Dimitri Artemov);
 						Improved handling of conversions.
 v2.2.3.5 - 03/04/2019 - Fixed issue with function after last community merge.
+v2.2.3.6 - 03/20/2019 - Added several community updates (Thanks Aleksei Guzev and Michal Sadowski);
+						Removed change log from code;
+						Refactored as Stored Procedure (Thanks Jovan Popovic).
