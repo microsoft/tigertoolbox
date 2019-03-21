@@ -25,7 +25,10 @@ AS
 /*
 BP Check READ ME - http://aka.ms/BPCheck;
 
-Checks SQL Server in scope for Performance issues and some of most common skewed Best Practices. Valid from SQL Server 2005 onwards.
+Checks SQL Server in scope for Performance issues and some of most common skewed Best Practices. 
+
+Supports SQL Server (starting with SQL Server 2008) and Azure SQL Database Managed Instance. 
+Note: Does not support Azure SQL Database single database or Elastic Pool. 
 
 Important parameters for executing BPCheck:
 Set @custompath below and set the custom desired path for .ps1 files. 
