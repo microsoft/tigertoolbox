@@ -355,3 +355,5 @@ v2.2.3.5 - 03/04/2019 - Fixed issue with function after last community merge.
 v2.2.3.6 - 03/20/2019 - Added several community updates (Thanks Aleksei Guzev and Michal Sadowski);
 						Removed change log from code;
 						Refactored as Stored Procedure (Thanks Jovan Popovic).
+v2.2.3.7 - 03/27/2019 - Fixed bug in HA section with Azure SQL DB Managed Instance (Thanks Jovan Popovic);
+						Fixed MaxDOP section to account for new (soon to be documented) recommendations.

@@ -215,7 +215,7 @@ SELECT @server = RTRIM(CONVERT(VARCHAR(128), SERVERPROPERTY('MachineName')))
 --SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
 SELECT @sqlminorver = CONVERT(int, (@@microsoftversion / 0x10000) & 0xff);
 SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
-SELECT @clustered = CONVERT(bit,ISNULL(SERVERPROPERTY('IsClustered'),0))
+SELECT @clustered = CONVERT(bit,ISNULL(SERVERPROPERTY('IsClustered'),0));
 
 -- Test Powershell policy
 IF @allow_xpcmdshell = 1
@@ -479,8 +479,8 @@ END;
 IF @sqlmajorver > 10
 BEGIN
 	DECLARE @IsHadrEnabled tinyint, @HadrManagerStatus tinyint
-	SELECT @IsHadrEnabled = CONVERT(tinyint, SERVERPROPERTY('IsHadrEnabled'))
-	SELECT @HadrManagerStatus = CONVERT(tinyint, SERVERPROPERTY('HadrManagerStatus'))
+	SELECT @IsHadrEnabled = CASE WHEN SERVERPROPERTY('EngineEdition') = 8 THEN 1 ELSE CONVERT(tinyint, SERVERPROPERTY('IsHadrEnabled')) END;
+	SELECT @HadrManagerStatus = CASE WHEN SERVERPROPERTY('EngineEdition') = 8 THEN 1 ELSE CONVERT(tinyint, SERVERPROPERTY('HadrManagerStatus')) END;
 	
 	SELECT 'Information' AS [Category], 'AlwaysOn_AG' AS [Information], 
 		CASE @IsHadrEnabled WHEN 0 THEN 'Disabled'
@@ -1640,22 +1640,26 @@ BEGIN
 END
 */
 
+-- MaxDOP should be between 8 and 16. This is handled specifically on NUMA scenarios below.
 SELECT @affined_cpus = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64;
 --SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
 	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)]'
 		WHEN @numa = 1 AND @affined_cpus > 8 AND ([value] = 0 OR [value] > 8) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
-		WHEN @numa > 1 AND (@cpucount/@numa) < 8 AND ([value] = 0 OR [value] > (@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
-		WHEN @numa > 1 AND (@cpucount/@numa) >= 8 AND ([value] = 0 OR [value] > 8 OR [value] > (@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @numa > 1 AND (@cpucount/@numa)/8 <= 2 AND ([value] = 0 OR [value] > (@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @numa > 1 AND (@cpucount/@numa)/8 > 2 AND ([value] = 0 OR [value] > (@cpucount/@numa)/2) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
 		ELSE '[OK]'
 	END AS [Deviation]
 FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
 
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information], 
 	CASE WHEN [value] > @affined_cpus THEN @affined_cpus
+		-- If not NUMA, then MaxDOP = 8
 		WHEN @numa = 1 AND @affined_cpus > 8 AND ([value] = 0 OR [value] > 8) THEN 8
-		WHEN @numa > 1 AND (@cpucount/@numa) < 8 AND ([value] = 0 OR [value] > (@cpucount/@numa)) THEN @cpucount/@numa
-		WHEN @numa > 1 AND (@cpucount/@numa) >= 8 AND ([value] = 0 OR [value] > 8 OR [value] > (@cpucount/@numa)) THEN 8
+		-- If NUMA and # logical CPUs per NUMA up to 16, then MaxDOP is set as # logical CPUs per NUMA, up to 8 
+		WHEN @numa > 1 AND (@cpucount/@numa)/8 <= 2 AND ([value] = 0 OR [value] > (@cpucount/@numa)) THEN @cpucount/@numa
+		-- If NUMA and # logical CPUs per NUMA > 16, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
+		WHEN @numa > 1 AND (@cpucount/@numa)/8 > 2 AND ([value] = 0 OR [value] > (@cpucount/@numa)/2) THEN (@cpucount/@numa)/2
 		ELSE 0
 	END AS [Recommended_MaxDOP],
 	[value] AS [Current_MaxDOP], @cpucount AS [Available_Processors], @affined_cpus AS [Affined_Processors], 
@@ -2085,7 +2089,7 @@ ORDER BY SUM(mcch.removed_all_rounds_count) DESC, mcch.[type];'
 		-- Note: in case of NUMA architecture, more than one entry per database is expected
 
 		SET @sqlcmd = 'SELECT ''Memory_checks'' AS [Category], ''Buffer_Pool_Consumers'' AS [Information], 
-	COUNT_BIG(DISTINCT page_id)*8/1024 AS total_pages_MB, 
+	numa_node, COUNT_BIG(DISTINCT page_id)*8/1024 AS total_pages_MB, 
 	CASE database_id WHEN 32767 THEN ''ResourceDB'' ELSE DB_NAME(database_id) END AS database_name,
 	SUM(CONVERT(BIGINT,row_count))/COUNT_BIG(DISTINCT page_id) AS avg_row_count_per_page, 
 	SUM(CONVERT(BIGINT, free_space_in_bytes))/COUNT_BIG(DISTINCT page_id) AS avg_free_space_bytes_per_page
