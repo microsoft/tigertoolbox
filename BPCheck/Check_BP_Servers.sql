@@ -482,6 +482,11 @@ BEGIN
 	SELECT @IsHadrEnabled = CONVERT(tinyint, SERVERPROPERTY('IsHadrEnabled'))
 	SELECT @HadrManagerStatus = CONVERT(tinyint, SERVERPROPERTY('HadrManagerStatus'))
 	
+	IF (SERVERPROPERTY('EngineEdition')=8) BEGIN
+		SET @IsHadrEnabled = 1;
+		SET @HadrManagerStatus = 1;
+	END
+
 	SELECT 'Information' AS [Category], 'AlwaysOn_AG' AS [Information], 
 		CASE @IsHadrEnabled WHEN 0 THEN 'Disabled'
 			WHEN 1 THEN 'Enabled' END AS [AlwaysOn_Availability_Groups],
