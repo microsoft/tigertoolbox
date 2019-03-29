@@ -10485,7 +10485,7 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
 	DROP TABLE #tblIxs3;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs3'))
-	CREATE TABLE #tblIxs3 ([Operation] tinyint, [databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200))
+	CREATE TABLE #tblIxs3 ([Operation] tinyint, [databaseID] int, [DatabaseName] sysname, [schemaName] NVARCHAR(100), [objectName] NVARCHAR(200),[Rows] BIGINT)
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs4'))
 	DROP TABLE #tblIxs4;
@@ -10504,18 +10504,22 @@ BEGIN
 	BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT 1 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	s.name, t.name
+SELECT 1 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	
+s.name, t.name, SUM(P.rows)
 FROM sys.indexes AS si (NOLOCK)
 INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
 INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
+INNER JOIN sys.partitions p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
 WHERE si.is_hypothetical = 0
 GROUP BY si.[object_id], t.name, s.name
 HAVING COUNT(index_id) = 1 AND MAX(index_id) = 0
 UNION ALL
-SELECT 2 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	s.name, t.name
+SELECT 2 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	
+s.name, t.name, SUM(P.rows)
 FROM sys.indexes AS si (NOLOCK) 
 INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
 INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
+INNER JOIN sys.partitions p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
 WHERE si.is_hypothetical = 0
 GROUP BY t.name, s.name
 HAVING COUNT(index_id) > 1 AND MIN(index_id) = 0;'
@@ -10583,7 +10587,7 @@ WHERE t.[type] = ''U''
 	IF (SELECT COUNT(*) FROM #tblIxs3 WHERE [Operation] = 1) > 0
 	BEGIN
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_Indexes' AS [Check], '[WARNING: Some tables do not have indexes]' AS [Deviation]
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_Indexes' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name] FROM #tblIxs3 WHERE [Operation] = 1
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_Indexes' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name], [Rows] AS [Row_Count] FROM #tblIxs3 WHERE [Operation] = 1
 	END
 	ELSE
 	BEGIN
@@ -10593,7 +10597,7 @@ WHERE t.[type] = ''U''
 	IF (SELECT COUNT(*) FROM #tblIxs3 WHERE [Operation] = 2) > 0
 	BEGIN
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_CL_Index' AS [Check], '[WARNING: Some tables do not have a clustered index, but have non-clustered index(es)]' AS [Deviation]
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_CL_Index' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name] FROM #tblIxs3 WHERE [Operation] = 2
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Tables_with_no_CL_Index' AS [Check], [DatabaseName] AS [Database_Name], schemaName AS [Schema_Name], [objectName] AS [Table_Name], [Rows] AS [Row_Count] FROM #tblIxs3 WHERE [Operation] = 2
 	END
 	ELSE
 	BEGIN
