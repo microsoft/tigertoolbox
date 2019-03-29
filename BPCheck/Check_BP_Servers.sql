@@ -1613,7 +1613,18 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 
 	SELECT @sqlcmd = 'DELETE FROM #tmpdbs1 WHERE [dbid] NOT IN (' + REPLACE(@dbScope,' ','') + ')'
 	EXEC sp_executesql @sqlcmd;
-END;
+END
+ELSE
+BEGIN
+	SELECT @sqlcmd = 'SELECT [dbid], [dbname] 
+FROM #tmpdbs0 (NOLOCK) 
+WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
+	AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)'
+	
+	INSERT INTO #tmpdbs_userchoice ([dbid], [dbname])
+	EXEC sp_executesql @sqlcmd;
+	 
+END
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Checks section
