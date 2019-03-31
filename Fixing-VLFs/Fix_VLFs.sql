@@ -85,7 +85,8 @@ BEGIN
 	PRINT 'SELECT name, (size*8)/1024 AS log_MB FROM [' + @dbname + '].dbo.sysfiles WHERE (64 & status) = 64'
 	PRINT '--'
 	SET @recmodel = CONVERT(NVARCHAR, DATABASEPROPERTYEX(@dbname,'Recovery'))
-	IF @recmodel <> 'SIMPLE'
+	IF @recmodel <> 'SIMPLE' 
+	AND SERVERPROPERTY('EngineEdition') <> 8 -- This cannot be applied on Managed Instance
 	BEGIN
 		PRINT '-- If the log has not shrunk, you must backup the transaction log next.'
 		PRINT '-- Repeat the backup and shrink process alternatively until you get the desired log size (about 1MB).'
