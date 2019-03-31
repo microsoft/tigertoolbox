@@ -2123,7 +2123,7 @@ WHERE type NOT IN (''CACHESTORE_COLUMNSTOREOBJECTPOOL'',''CACHESTORE_CLRPROC'','
 	''MEMORYCLERK_SQLBUFFERPOOL'',''MEMORYCLERK_SQLCLR'',''MEMORYCLERK_SQLGENERAL'',''MEMORYCLERK_SQLLOGPOOL'',''MEMORYCLERK_SQLOPTIMIZER'',
 	''MEMORYCLERK_SQLQUERYCOMPILE'',''MEMORYCLERK_SQLQUERYEXEC'',''MEMORYCLERK_SQLQUERYPLAN'',''MEMORYCLERK_SQLSTORENG'',''MEMORYCLERK_XTP'',
 	''OBJECTSTORE_LOCK_MANAGER'',''OBJECTSTORE_SNI_PACKET'',''USERSTORE_DBMETADATA'',''USERSTORE_OBJPERM'')
-ORDER BY Alloc_Mem_KB'
+ORDER BY Alloc_Mem_KB DESC'
 	EXECUTE sp_executesql @sqlcmd;
 	
 	IF @sqlmajorver >= 12
@@ -10799,7 +10799,8 @@ END'')
 		CASE WHEN IC.[Score] >= 100000 THEN 'Y' ELSE 'N' END AS [Generate_Script]
 		FROM #IndexCreation IC
 		--WHERE [Score] >= 100000
-		ORDER BY IC.DBName, IC.[Score] DESC, IC.[User_Hits_on_Missing_Index], IC.[Estimated_Improvement_Percent];
+		--ORDER BY IC.DBName, IC.[Score] DESC, IC.[User_Hits_on_Missing_Index], IC.[Estimated_Improvement_Percent];
+		 ORDER BY IC.[Score] DESC;
 		
 		SELECT DISTINCT 'Index_and_Stats_checks' AS [Category], 'Missing_Indexes' AS [Check], 'Possibly_redundant_IXs_in_list' AS Comments, I.DBName AS [Database_Name], I.[Table] AS [Table_Name], 
 			I.[Ix_Name] AS [Index_Name], I.[KeyCols], I.[IncludedCols]
