@@ -357,3 +357,7 @@ v2.2.3.6 - 03/20/2019 - Added several community updates (Thanks Aleksei Guzev an
 						Refactored as Stored Procedure (Thanks Jovan Popovic).
 v2.2.3.7 - 03/27/2019 - Fixed bug in HA section with Azure SQL DB Managed Instance (Thanks Jovan Popovic);
 						Fixed MaxDOP section to account for new (soon to be documented) recommendations.
+v2.4 - 03/31/2019 - Improved displayed information in missing index check (Thanks Petar Trbos);
+						Added row count information on empty tables and tables without CL (Thanks Petar Trbos);
+						Disabled unsupported high VLF fix for Azure SQL Database Managed Instance (Thanks Jovan Popovic);
+						Improved MaxDOP section to account for new, soon to be Microosft's official documented recommendations.
