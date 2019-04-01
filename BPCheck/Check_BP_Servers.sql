@@ -527,7 +527,7 @@ END;
 -- Linked servers info subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Linked servers info', 10, 1) WITH NOWAIT
-IF (SELECT COUNT(*) FROM sys.servers AS s INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id LEFT OUTER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id WHERE s.is_linked = 1) > 0
+IF (SELECT COUNT(*) FROM sys.servers AS s INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id WHERE s.is_linked = 1) > 0
 BEGIN
 	SET @sqlcmd = 'SELECT ''Information'' AS [Category], ''Linked_servers'' AS [Information], s.name, s.product, 
 	s.provider, s.data_source, s.location, s.provider_string, s.catalog, s.connect_timeout, 
@@ -540,7 +540,7 @@ BEGIN
 	l.remote_name, l.modify_date AS [linked_login_modify_date]
 FROM sys.servers AS s (NOLOCK)
 INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id
-LEFT OUTER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
+INNER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
 WHERE s.is_linked = 1'
 	EXECUTE sp_executesql @sqlcmd
 END
