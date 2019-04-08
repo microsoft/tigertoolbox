@@ -1,4 +1,4 @@
-** usp_whatsup**
+**usp_WhatsUp**
 
 **Purpose:** Understand what's up with your SQL Server and get all sorts of useful troubleshooting information such as:
 -  A snapshot on running sessions/requests; 
