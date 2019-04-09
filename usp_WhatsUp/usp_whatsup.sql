@@ -1,5 +1,7 @@
 -- 2012-04-07 Pedro Lopes (Microsoft) (http://aka.ms/tigertoolbox/)
 
+-- Replace CREATE PROCEDURE with ALTER PROCEDURE or CREATE OR ALTER PROCEDURE to allow new changes to the SP if the SP is already present.
+
 CREATE PROCEDURE usp_whatsup @sqluptime bit = 1, @requests bit = 1, @blocking bit = 1, @spstats bit = 0, @qrystats bit = 0, @trstats bit = 0, @fnstats bit = 0
 AS
 
@@ -7,30 +9,29 @@ AS
 
 SET NOCOUNT ON;
 
-DECLARE @sqlmajorver int, @sqlbuild int, @sqlcmd NVARCHAR(500), @params NVARCHAR(500)
+DECLARE @sqlmajorver int, @sqlbuild int, @sqlcmd VARCHAR(8000), @sqlcmdup NVARCHAR(500), @params NVARCHAR(500)
 SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
 SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
 	
 IF @sqluptime = 1
 BEGIN
-	DECLARE @UpTime VARCHAR(12), @StartDate DATETIME, 
+	DECLARE @UpTime VARCHAR(12), @StartDate DATETIME
 
 	IF @sqlmajorver = 9
 	BEGIN
-		SET @sqlcmd = N'SELECT @StartDateOUT = login_time, @UpTimeOUT = DATEDIFF(mi, login_time, GETDATE()) FROM master..sysprocesses WHERE spid = 1';
+		SET @sqlcmdup = N'SELECT @StartDateOUT = login_time, @UpTimeOUT = DATEDIFF(mi, login_time, GETDATE()) FROM master..sysprocesses WHERE spid = 1';
 	END
 	ELSE
 	BEGIN
-		SET @sqlcmd = N'SELECT @StartDateOUT = sqlserver_start_time, @UpTimeOUT = DATEDIFF(mi,sqlserver_start_time,GETDATE()) FROM sys.dm_os_sys_info';
+		SET @sqlcmdup = N'SELECT @StartDateOUT = sqlserver_start_time, @UpTimeOUT = DATEDIFF(mi,sqlserver_start_time,GETDATE()) FROM sys.dm_os_sys_info';
 	END
 
 	SET @params = N'@StartDateOUT DATETIME OUTPUT, @UpTimeOUT VARCHAR(12) OUTPUT';
 
-	EXECUTE sp_executesql @sqlcmd, @params, @StartDateOUT=@StartDate OUTPUT, @UpTimeOUT=@UpTime OUTPUT;
+	EXECUTE sp_executesql @sqlcmdup, @params, @StartDateOUT=@StartDate OUTPUT, @UpTimeOUT=@UpTime OUTPUT;
 
 	SELECT 'Uptime_Information' AS [Information], GETDATE() AS [Current_Time], @StartDate AS Last_Startup, CONVERT(VARCHAR(4),@UpTime/60/24) + 'd ' + CONVERT(VARCHAR(4),@UpTime/60%24) + 'h ' + CONVERT(VARCHAR(4),@UpTime%60) + 'm' AS Uptime
 
-	--SELECT DATEDIFF(hh,'2011-09-08 11:35:00',GETDATE()) AS since_lst_clear 
 END;
 
 -- Running Sessions/Requests Report
