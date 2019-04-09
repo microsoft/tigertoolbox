@@ -34,6 +34,6 @@ In the output, you will find the following information in 6 sections:
 -  04/02/2019 Added support for sys.dm_exec_query_plan_stats and trigger/function stats section.
 -  04/08/2019 Made into a stored procedure usp_whatsup instead of adhoc script for ease of use.
 -  04/09/2019 Changed the variable @sqlcmd NVARCHAR(500) to VARCHAR(8000) to prevent "Common table expression defined but not used." error (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
-			Removed the extra "," that was throwing parsing error (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
-			Added create proc and alter note to allow new changes to the SP if the SP is already present (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
-			Changed parameter @uptime to @uptimesql (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin)).
+    Removed the extra "," that was throwing parsing error (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
+    Added create proc and alter note to allow new changes to the SP if the SP is already present (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
+    Changed parameter @uptime to @uptimesql (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin)).
