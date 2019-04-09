@@ -37,4 +37,5 @@ In the output, you will find the following information in 6 sections:
    -  Changed the variable @sqlcmd NVARCHAR(500) to VARCHAR(8000) to prevent "Common table expression defined but not used." error (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
    -  Removed the extra "," that was throwing parsing error (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
    -  Added create proc and alter note to allow new changes to the SP if the SP is already present (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
-   -  Changed parameter @uptime to @uptimesql (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin)).
+   -  Changed parameter @uptime to @uptimesql (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
+   -  Fixed unbound column in Function stats section.

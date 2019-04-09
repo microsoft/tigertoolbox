@@ -583,7 +583,7 @@ BEGIN
 	CASE WHEN fs.database_id = 32767 THEN NULL ELSE OBJECT_NAME(fs.[object_id], fs.database_id) END AS ObjectName,
 	type_desc,
 	(SELECT qt.text AS [text()] 
-		FROM sys.dm_exec_function_stats (NOLOCK) fs2 CROSS APPLY sys.dm_exec_sql_text(ts2.sql_handle) qt 
+		FROM sys.dm_exec_function_stats (NOLOCK) fs2 CROSS APPLY sys.dm_exec_sql_text(fs2.sql_handle) qt 
 		WHERE fs2.database_id = fs.database_id AND fs2.[object_id] = fs.[object_id] 
 		FOR XML PATH(''''), TYPE) AS [sqltext],
 	qp.query_plan,
