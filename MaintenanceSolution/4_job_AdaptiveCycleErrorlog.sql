@@ -69,6 +69,7 @@ EXEC @ReturnCode = msdb.dbo.sp_add_jobstep @job_id=@jobId, @step_name=N'Adaptive
 		@retry_interval=0, 
 		@os_run_priority=0, @subsystem=N'TSQL', 
 		@command=N'SET NOCOUNT ON;
+SET DATEFORMAT mdy;
 DECLARE @CycleMessage VARCHAR(255), @return_value int, @Output VARCHAR(32)
 DECLARE @ErrorLogs TABLE (ArchiveNumber tinyint, DateCreated DATETIME, LogFileSizeBytes int)
 INSERT into @ErrorLogs (ArchiveNumber, DateCreated, LogFileSizeBytes )

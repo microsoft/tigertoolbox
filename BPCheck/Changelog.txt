@@ -346,3 +346,18 @@ v2.2.2 - 10/26/2017 - Corrected auto soft NUMA reporting wrong status (thanks Bj
 v2.2.2.1 - 1/11/2018 - Fixed issues with unicode characters (thanks Brent Ozar);
 						Fixed max server memory calculations;
 						Added check for Database Health Detection in Server_checks section (thanks Anders Uhl Pedersen).
+v2.2.3 - 10/27/2018 - Fixed performance checks duplicate results issue on SQL 2016+. 
+v2.2.3.1 - 10/28/2018 - Fixed variable issue.
+v2.2.3.2 - 10/28/2018 - Enhanced power scheme check (thanks sivey42).
+v2.2.3.4 - 10/29/2018 - Fixed latches syntax error (thanks Dimitri Artemov);
+						Improved handling of conversions.
+v2.2.3.5 - 03/04/2019 - Fixed issue with function after last community merge.
+v2.2.3.6 - 03/20/2019 - Added several community updates (Thanks Aleksei Guzev and Michal Sadowski);
+						Removed change log from code;
+						Refactored as Stored Procedure (Thanks Jovan Popovic).
+v2.2.3.7 - 03/27/2019 - Fixed bug in HA section with Azure SQL DB Managed Instance (Thanks Jovan Popovic);
+						Fixed MaxDOP section to account for new (soon to be documented) recommendations.
+v2.4 - 03/31/2019 - Improved displayed information in missing index check (Thanks Petar Trbos);
+						Added row count information on empty tables and tables without CL (Thanks Petar Trbos);
+						Disabled unsupported high VLF fix for Azure SQL Database Managed Instance (Thanks Jovan Popovic);
+						Improved MaxDOP section to account for new, soon to be Microosft's official documented recommendations.

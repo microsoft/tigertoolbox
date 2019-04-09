@@ -679,7 +679,10 @@ v1.6.6.4 - 6/25/2018 - Tested with Azure SQL Managed Instance;
 						Added extra debug output.
 v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become uncompressed (by d-moloney);
 						Extended row mode counter info data type in debug mode (by d-moloney);
-						Fixed issue with @statsThreshold and large tables (by AndrewG2)
+						Fixed issue with @statsThreshold and large tables (by AndrewG2).
+v1.6.6.6 - 10/28/2018 - Extended 2nd row mode counter info data type in debug mode (by CodyFitzpatrick);
+						Fixed compression data missing in working table (by ravseer).
+
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
 										
@@ -1240,7 +1243,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.5';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.6';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1712,9 +1715,6 @@ OPTION (MAXDOP 2)'
 						WHERE objectID = @objectID AND indexID = @indexID AND partitionNumber = @partitionNumber
 					END
 				END;
-				
-				IF @debugMode = 1
-				RAISERROR('    Looking up additional index information...', 0, 42) WITH NOWAIT;
 
 				/* Look up index status for various purposes */	
 				SELECT @updateSQL = N'UPDATE ids		
@@ -1727,27 +1727,38 @@ WHERE o.object_id = ids.objectID AND i.index_id = ids.indexID AND i.type > 0
 AND o.object_id NOT IN (SELECT sit.object_id FROM [' + DB_NAME(@dbID) + '].sys.internal_tables AS sit)
 AND ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 
+				IF @debugMode = 1
+				BEGIN
+					RAISERROR('    Looking up additional index information (pass 1)...', 0, 42) WITH NOWAIT;
+					--PRINT @updateSQL
+				END
+				
 				EXECUTE sp_executesql @updateSQL;
 				
-				IF @scanMode = 'LIMITED'
+				IF @sqlmajorver = 9
 				BEGIN
-					IF @sqlmajorver = 9
-					BEGIN
-						SELECT @updateSQL = N'UPDATE ids
-	SET [record_count] = [rows], [compression_type] = N''''
-	FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
-	INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
-	WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
-					END
-					ELSE
-					BEGIN
-						SELECT @updateSQL = N'UPDATE ids
-	SET [record_count] = [rows], [compression_type] = [data_compression_desc] END
-	FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
-	INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
-	WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
-					END
+					SELECT @updateSQL = N'UPDATE ids
+SET [record_count] = [rows], [compression_type] = N''''
+FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
+INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
+WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
 				END
+				ELSE
+				BEGIN
+					SELECT @updateSQL = N'UPDATE ids
+SET [record_count] = [rows], [compression_type] = [data_compression_desc]
+FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Working ids WITH (NOLOCK)
+INNER JOIN [' + DB_NAME(@dbID) + '].sys.partitions AS p WITH (NOLOCK) ON ids.objectID = p.[object_id] AND ids.indexID = p.index_id AND ids.partitionNumber = p.partition_number
+WHERE ids.[dbID] = ' + CAST(@dbID AS NVARCHAR(10));
+				END
+
+				IF @debugMode = 1
+				BEGIN
+					RAISERROR('    Looking up additional index information (pass 2)...', 0, 42) WITH NOWAIT;
+					--PRINT @updateSQL
+				END
+				
+				EXECUTE sp_executesql @updateSQL;
 				
 				IF @debugMode = 1
 				RAISERROR('    Looking up additional statistic information...', 0, 42) WITH NOWAIT;
@@ -2774,7 +2785,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 				IF @debugMode = 1
 				BEGIN
-					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(10), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(10), CASE WHEN @rows IS NOT NULL AND @rows < @record_count THEN @rows ELSE @record_count END) + ' rows' + CASE WHEN @stats_isincremental = 1 THEN ' on partition ' + CONVERT(NVARCHAR(10), @partitionNumber) ELSE '' END + '...';
+					SELECT @debugMessage = '     Found a row modification counter of ' + CONVERT(NVARCHAR(15), @rowmodctr) + ' and ' + CONVERT(NVARCHAR(15), CASE WHEN @rows IS NOT NULL AND @rows < @record_count THEN @rows ELSE @record_count END) + ' rows' + CASE WHEN @stats_isincremental = 1 THEN ' on partition ' + CONVERT(NVARCHAR(15), @partitionNumber) ELSE '' END + '...';
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 					--select @debugMessage
 				END
