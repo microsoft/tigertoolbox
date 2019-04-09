@@ -1,6 +1,6 @@
 -- 2012-04-07 Pedro Lopes (Microsoft) (http://aka.ms/tigertoolbox/)
 
-CREATE PROCEDURE usp_whatsup @uptime bit = 1, @requests bit = 1, @blocking bit = 1, @spstats bit = 0, @qrystats bit = 0, @trstats bit = 0, @fnstats bit = 0
+CREATE PROCEDURE usp_whatsup @sqluptime bit = 1, @requests bit = 1, @blocking bit = 1, @spstats bit = 0, @qrystats bit = 0, @trstats bit = 0, @fnstats bit = 0
 AS
 
 -- Returns running sessions/requests; blocking information; sessions that have been granted locks or waiting for locks; and optionally SP/Query/Trigger/Function execution stats.
@@ -11,7 +11,7 @@ DECLARE @sqlmajorver int, @sqlbuild int, @sqlcmd NVARCHAR(500), @params NVARCHAR
 SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
 SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
 	
-IF @uptime = 1
+IF @sqluptime = 1
 BEGIN
 	DECLARE @UpTime VARCHAR(12), @StartDate DATETIME, 
 
