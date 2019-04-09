@@ -491,6 +491,42 @@ BEGIN
 	ORDER BY blocked_spid, is_head_blocker DESC, blocked_spid_wait_time_ms DESC, blocker_spid
 END;
 
+-- Query stats
+IF @qrystats = 1 AND @sqlmajorver >= 11
+BEGIN 
+	SELECT @sqlcmd = N'SELECT CASE WHEN CONVERT(int,pa.value) = 32767 THEN ''ResourceDB'' ELSE DB_NAME(CONVERT(int,pa.value)) END AS DatabaseName,
+	(SELECT st.text AS [text()] FROM sys.dm_exec_sql_text(qs.plan_handle) AS st FOR XML PATH(''''), TYPE) AS [sqltext],
+	qs.creation_time AS cached_time,
+	qs.last_execution_time,
+	qs.execution_count,
+	qs.total_elapsed_time/qs.execution_count AS avg_elapsed_time,
+	qs.last_elapsed_time,
+	qs.total_worker_time/qs.execution_count AS avg_cpu_time,
+	qs.last_worker_time AS last_cpu_time,
+	qs.min_worker_time AS min_cpu_time, qs.max_worker_time AS max_cpu_time,
+	qs.total_logical_reads/qs.execution_count AS avg_logical_reads,
+	qs.last_logical_reads, qs.min_logical_reads, qs.max_logical_reads,
+	qs.total_physical_reads/qs.execution_count AS avg_physical_reads,
+	qs.last_physical_reads, qs.min_physical_reads, qs.max_physical_reads,
+	qs.total_logical_writes/qs.execution_count AS avg_logical_writes,
+	qs.last_logical_writes, qs.min_logical_writes, qs.max_logical_writes' + CASE WHEN @sqlmajorver >= 13 THEN ',
+	CASE WHEN qs.total_grant_kb IS NOT NULL THEN qs.total_grant_kb/qs.execution_count ELSE -1 END AS avg_grant_kb,
+	CASE WHEN qs.total_used_grant_kb IS NOT NULL THEN qs.total_used_grant_kb/qs.execution_count ELSE -1 END AS avg_used_grant_kb,
+	COALESCE(((qs.total_used_grant_kb * 100.00) / NULLIF(qs.total_grant_kb,0)), 0) AS grant2used_ratio,
+	CASE WHEN qs.total_ideal_grant_kb IS NOT NULL THEN qs.total_ideal_grant_kb/qs.execution_count ELSE -1 END AS avg_ideal_grant_kb,
+	CASE WHEN qs.total_dop IS NOT NULL THEN qs.total_dop/qs.execution_count ELSE -1 END AS avg_dop,
+	CASE WHEN qs.total_reserved_threads IS NOT NULL THEN qs.total_reserved_threads/qs.execution_count ELSE -1 END AS avg_reserved_threads,
+	CASE WHEN qs.total_used_threads IS NOT NULL THEN qs.total_used_threads/qs.execution_count ELSE -1 END AS avg_used_threads' ELSE '' END + 
+	CASE WHEN @sqlmajorver >= 15 OR (@sqlmajorver = 13 AND @sqlbuild >= 5026) OR (@sqlmajorver = 14 AND @sqlbuild >= 3015) THEN ',
+	CASE WHEN qs.total_columnstore_segment_reads IS NOT NULL THEN qs.total_columnstore_segment_reads/qs.execution_count ELSE -1 END AS avg_columnstore_segment_reads,
+	CASE WHEN qs.total_columnstore_segment_skips IS NOT NULL THEN qs.total_columnstore_segment_skips/qs.execution_count ELSE -1 END AS avg_columnstore_segment_skips,
+	CASE WHEN qs.total_spills IS NOT NULL THEN qs.total_spills/qs.execution_count ELSE -1 END AS avg_spills' ELSE '' END +'
+FROM sys.dm_exec_query_stats (NOLOCK) AS qs
+CROSS APPLY sys.dm_exec_plan_attributes(qs.plan_handle) AS pa
+WHERE pa.attribute = ''dbid'''
+	EXEC (@sqlcmd);
+END;
+
 -- Stored procedure stats
 IF @spstats = 1 AND @sqlmajorver >= 11
 BEGIN 
@@ -518,31 +554,6 @@ BEGIN
 	ps.last_logical_writes, ps.min_logical_writes, ps.max_logical_writes
  FROM sys.dm_exec_procedure_stats (NOLOCK) ps
  CROSS APPLY sys.dm_exec_query_plan(ps.plan_handle) qp'
-	EXEC (@sqlcmd);
-END;
- 
--- Query stats
-IF @qrystats = 1 AND @sqlmajorver >= 11
-BEGIN 
-	SET @sqlcmd = N'SELECT CASE WHEN CONVERT(int,pa.value) = 32767 THEN ''ResourceDB'' ELSE DB_NAME(CONVERT(int,pa.value)) END AS DatabaseName,
-	(SELECT st.text AS [text()] FROM sys.dm_exec_sql_text(qs.plan_handle) AS st FOR XML PATH(''''), TYPE) AS [sqltext],
-	qs.creation_time AS cached_time,
-	qs.last_execution_time,
-	qs.execution_count,
-	qs.total_elapsed_time/qs.execution_count AS avg_elapsed_time,
-	qs.last_elapsed_time,
-	qs.total_worker_time/qs.execution_count AS avg_cpu_time,
-	qs.last_worker_time AS last_cpu_time,
-	qs.min_worker_time AS min_cpu_time, qs.max_worker_time AS max_cpu_time,
-	qs.total_logical_reads/qs.execution_count AS avg_logical_reads,
-	qs.last_logical_reads, qs.min_logical_reads, qs.max_logical_reads,
-	qs.total_physical_reads/qs.execution_count AS avg_physical_reads,
-	qs.last_physical_reads, qs.min_physical_reads, qs.max_physical_reads,
-	qs.total_logical_writes/qs.execution_count AS avg_logical_writes,
-	qs.last_logical_writes, qs.min_logical_writes, qs.max_logical_writes
-FROM sys.dm_exec_query_stats (NOLOCK) AS qs
-CROSS APPLY sys.dm_exec_plan_attributes(qs.plan_handle) AS pa
-WHERE pa.attribute = ''dbid'''
 	EXEC (@sqlcmd);
 END;
 

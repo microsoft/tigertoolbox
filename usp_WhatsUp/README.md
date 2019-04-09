@@ -38,4 +38,5 @@ In the output, you will find the following information in 6 sections:
    -  Removed the extra "," that was throwing parsing error (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
    -  Added create proc and alter note to allow new changes to the SP if the SP is already present (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
    -  Changed parameter @uptime to @uptimesql (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
-   -  Fixed unbound column in Function stats section.
+   -  Fixed unbound column in Function stats section;
+   -  Added more information to Query stats section.
