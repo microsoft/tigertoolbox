@@ -8919,6 +8919,57 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
+-- Tuning recommendations info subsection
+--------------------------------------------------------------------------------------------------------------------------------
+
+IF @sqlmajorver > 13
+begin
+
+RAISERROR (N'|-Executing Tuning recommendations', 10, 1) WITH NOWAIT
+
+declare @recommendationsNum int=0
+SELECT @recommendationsNum = COUNT(*) FROM sys.dm_db_tuning_recommendations  ;
+
+IF @recommendationsNum > 0
+BEGIN
+
+	WITH CTE_Tunning
+AS (SELECT tr.reason,tr.score, pln.query_id, pln.regressedPlanId, pln.recommendedPlanId,
+           JSON_VALUE(tr.state,'$.currentValue') AS CurrentState,
+           JSON_VALUE(tr.state,'$.reason') AS CurrentStateReason,
+           JSON_VALUE(tr.details,'$.implementationDetails.script') AS ImplementationScript
+    FROM sys.dm_db_tuning_recommendations AS tr
+        CROSS APPLY
+        OPENJSON(tr.details,'$.planForceDetails')
+        WITH (query_id INT '$.queryId',
+              regressedPlanId INT '$.regressedPlanId',
+              recommendedPlanId INT '$.recommendedPlanId') AS pln)
+SELECT 'Information' AS [Category], 'Tuning_recommendations' AS [Information], 
+		qsq.query_id,
+       cte.reason,
+       cte.score,
+       cte.CurrentState,
+       cte.CurrentStateReason,
+       qsqt.query_sql_text,
+       CAST(rp.query_plan AS XML) AS RegressedPlan,
+       CAST(sp.query_plan AS XML) AS SuggestedPlan,
+       cte.ImplementationScript
+FROM CTE_Tunning  AS cte
+    JOIN sys.query_store_plan AS rp
+        ON rp.query_id = cte.query_id
+           AND rp.plan_id = cte.regressedPlanId
+    JOIN sys.query_store_plan AS sp
+        ON sp.query_id = cte.query_id
+           AND sp.plan_id = cte.recommendedPlanId
+    JOIN sys.query_store_query AS qsq
+        ON qsq.query_id = rp.query_id
+    JOIN sys.query_store_query_text AS qsqt
+        ON qsqt.query_text_id = qsq.query_text_id;
+
+END;
+END;
+
+--------------------------------------------------------------------------------------------------------------------------------
 -- Declarative Referential Integrity - Untrusted Constraints subsection
 --------------------------------------------------------------------------------------------------------------------------------
 IF @ptochecks = 1
