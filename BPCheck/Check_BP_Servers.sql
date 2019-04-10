@@ -6289,6 +6289,61 @@ BEGIN
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
+-- Query Store info subsection
+--------------------------------------------------------------------------------------------------------------------------------
+IF @sqlmajorver > 12
+begin
+
+RAISERROR (N'|-Executing Query Store Info', 10, 1) WITH NOWAIT
+
+-- Select all the data from the temporary table
+DECLARE @QStoreDBname VARCHAR(50)
+DECLARE @QStoreDBNum int 
+
+SELECT @QStoreDBNum = COUNT(database_id) FROM sys.databases where is_query_store_on = 1
+
+IF @QStoreDBNum =  0
+BEGIN
+	SELECT 'Information' AS [Category], 'Query Store' AS [Information] , 'No database with query store enabled found'
+END
+ELSE
+BEGIN
+
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
+DROP TABLE #qstoreinfo;
+IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
+CREATE TABLE #qstoreinfo (DatabaseName VARCHAR(150),Actual_State VARCHAR(50),	Flush_Interval VARCHAR(50),	Interval_Length VARCHAR(50), Query_CaptureMode VARCHAR(50),	Max_Storage_Size INT,	Current_Storage_Size INT);
+
+DECLARE qStore_cursor CURSOR FOR
+	SELECT QUOTENAME([name]) FROM sys.databases WHERE is_query_store_on = 1 
+
+OPEN qStore_cursor
+	FETCH NEXT FROM qStore_cursor INTO @QStoreDBname
+
+	WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @sqlcmd = 
+					'INSERT INTO #qstoreinfo(DatabaseName,Actual_State,Flush_Interval,Interval_Length,Query_CaptureMode,Max_Storage_Size,Current_Storage_Size)
+					  SELECT ''' + @QStoreDBname + ''',  actual_state_desc, flush_interval_seconds, interval_length_minutes, query_capture_mode_desc,  max_storage_size_mb, current_storage_size_mb
+					   FROM ' + @QStoreDBname + '.sys.database_query_store_options' 
+
+			EXEC sp_executesql @sqlcmd
+
+		FETCH NEXT FROM qStore_cursor INTO @QStoreDBname
+		END
+
+CLOSE qStore_cursor
+DEALLOCATE qStore_cursor
+
+SELECT 'Information' AS [Category], 'Query Store Info' AS [Information] , * from #qstoreinfo
+
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
+DROP TABLE #qstoreinfo;
+
+END
+END
+
+--------------------------------------------------------------------------------------------------------------------------------
 -- DBs with Sparse files subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting DBs with Sparse files', 10, 1) WITH NOWAIT
