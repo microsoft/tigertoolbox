@@ -130,9 +130,8 @@ SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS 
 		AS [text()]
 		FROM sys.dm_exec_sql_text(er.sql_handle) AS qt2
 		FOR XML PATH(''''), TYPE) AS [running_statement],
-	--ot.task_state AS [status],
 	er.status,
-	--er.command,
+	er.command,
 	qp.query_plan,
 	er.percent_complete,
 	CONVERT(VARCHAR(20),DATEADD(ms,er.estimated_completion_time,GETDATE()),20) AS [ETA_completion_time],
@@ -214,9 +213,14 @@ SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS 
 		AS [text()]
 		FROM sys.dm_exec_sql_text(er.sql_handle) AS qt2
 		FOR XML PATH(''''), TYPE) AS [running_statement],
-	--ot.task_state AS [status],
+	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		ib.event_info,
+		NCHAR(1),N''?''),NCHAR(2),N''?''),NCHAR(3),N''?''),NCHAR(4),N''?''),NCHAR(5),N''?''),NCHAR(6),N''?''),NCHAR(7),N''?''),NCHAR(8),N''?''),NCHAR(11),N''?''),NCHAR(12),N''?''),NCHAR(14),N''?''),NCHAR(15),N''?''),NCHAR(16),N''?''),NCHAR(17),N''?''),NCHAR(18),N''?''),NCHAR(19),N''?''),NCHAR(20),N''?''),NCHAR(21),N''?''),NCHAR(22),N''?''),NCHAR(23),N''?''),NCHAR(24),N''?''),NCHAR(25),N''?''),NCHAR(26),N''?''),NCHAR(27),N''?''),NCHAR(28),N''?''),NCHAR(29),N''?''),NCHAR(30),N''?''),NCHAR(31),N''?'') 
+		AS [text()]
+		FROM sys.dm_exec_input_buffer(er.session_id, er.request_id) AS ib
+		FOR XML PATH(''''), TYPE) AS [input_buffer],
 	er.status,
-	--er.command,
+	er.command,
 	qp.query_plan,
 	CASE WHEN qes.query_plan IS NULL THEN ''Lightweight Query Profiling Infrastructure is not enabled'' ELSE qes.query_plan END AS [live_query_plan_snapshot],
 	er.percent_complete,
@@ -301,8 +305,14 @@ SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS 
 		FROM sys.dm_exec_sql_text(er.sql_handle) AS qt2
 		FOR XML PATH(''''), TYPE) AS [running_statement],
 	--ot.task_state AS [status],
+	(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		ib.event_info,
+		NCHAR(1),N''?''),NCHAR(2),N''?''),NCHAR(3),N''?''),NCHAR(4),N''?''),NCHAR(5),N''?''),NCHAR(6),N''?''),NCHAR(7),N''?''),NCHAR(8),N''?''),NCHAR(11),N''?''),NCHAR(12),N''?''),NCHAR(14),N''?''),NCHAR(15),N''?''),NCHAR(16),N''?''),NCHAR(17),N''?''),NCHAR(18),N''?''),NCHAR(19),N''?''),NCHAR(20),N''?''),NCHAR(21),N''?''),NCHAR(22),N''?''),NCHAR(23),N''?''),NCHAR(24),N''?''),NCHAR(25),N''?''),NCHAR(26),N''?''),NCHAR(27),N''?''),NCHAR(28),N''?''),NCHAR(29),N''?''),NCHAR(30),N''?''),NCHAR(31),N''?'') 
+		AS [text()]
+		FROM sys.dm_exec_input_buffer(er.session_id, er.request_id) AS ib
+		FOR XML PATH(''''), TYPE) AS [input_buffer],
 	er.status,
-	--er.command,
+	er.command,
 	qp.query_plan,
 	CASE WHEN qes.query_plan IS NULL THEN ''Lightweight Query Profiling Infrastructure is not enabled'' ELSE qes.query_plan END AS [live_query_plan_snapshot],
 	CASE WHEN qps.query_plan IS NULL THEN ''Lightweight Query Profiling Infrastructure is not enabled'' ELSE qps.query_plan END AS [last_actual_execution_plan],

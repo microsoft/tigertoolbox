@@ -40,3 +40,4 @@ In the output, you will find the following information in 6 sections:
    -  Changed parameter @uptime to @uptimesql (Thanks Kin Shah (https://dba.stackexchange.com/users/8783/kin));
    -  Fixed unbound column in Function stats section;
    -  Added more information to Query stats section.
+-  04/15/2019 Added support for input buffer DMF.
