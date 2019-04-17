@@ -44,11 +44,11 @@ Set @duration to the number of seconds between data collection points regarding 
 Set @logdetail to OFF if you want to get just the summary info on issues in the Errorlog, rather than the full detail.
 Set @diskfrag to ON if you want to check for disk physical fragmentation. 
 	Can take some time in large disks. Requires elevated privileges.
-	See https://support.microsoft.com/en-us/help/3195161/defragmenting-sql-server-database-disk-drives
+	See https://support.microsoft.com/help/3195161/defragmenting-sql-server-database-disk-drives
 Set @ixfrag to ON if you want to check for index fragmentation. 
 	Can take some time to collect data depending on number of databases and indexes, as well as the scan mode chosen in @ixfragscanmode.
 Set @ixfragscanmode to the scanning mode you prefer. 
-	More detail on scanning modes available at http://msdn.microsoft.com/en-us/library/ms188917.aspx
+	More detail on scanning modes available at https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-db-index-physical-stats-transact-sql
 Set @bpool_consumer to OFF if you want to list what are the Buffer Pool Consumers from Buffer Descriptors. 
 	Mind that it may take some time in servers with large caches.
 Set @spn_check to OFF if you want to skip SPN checks.
@@ -1909,6 +1909,9 @@ END;
 SELECT 'Memory_checks' AS [Category], 'Memory_issues_MaxServerMem' AS [Check],
 	CASE WHEN @maxservermem = 2147483647 THEN '[WARNING: MaxMem setting is default. Please revise memory settings]'
 		WHEN @maxservermem > @systemmem THEN '[WARNING: MaxMem setting exceeds available system memory]'
+		WHEN SERVERPROPERTY('EditionID') IN (284895786, 1293598313) AND @maxservermem > 67108864 THEN '[WARNING: MaxMem setting exceeds Web and Business Intelligence Edition limits]'
+		WHEN SERVERPROPERTY('EditionID') = -1534726760 AND @maxservermem > 134217728 THEN '[WARNING: MaxMem setting exceeds Standard Edition limits]'
+		WHEN SERVERPROPERTY('EngineEdition') = 4 AND @maxservermem > 1443840 THEN '[WARNING: MaxMem setting exceeds Express Edition limits]'
 		WHEN @numa > 1 AND (@maxservermem/@numa) * @numa_nodes_afinned > (@systemmem/@numa) * @numa_nodes_afinned THEN '[WARNING: Current MaxMem setting will leverage node foreign memory. 
 Maximum value for MaxMem setting on this configuration is ' + CONVERT(NVARCHAR,(@systemmem/@numa) * @numa_nodes_afinned) + ' for a single instance]'
 		ELSE '[OK]'
@@ -1939,22 +1942,26 @@ SELECT 'Memory_checks' AS [Category], 'Memory_issues_CommitedMem' AS [Check],
 
 SELECT 'Memory_checks' AS [Category], 'Memory_reference' AS [Check],
 	CASE WHEN @arch IS NULL THEN '[WARNING: Could not determine architecture needed for check]'
-		WHEN (@systemmem <= 2048 AND @maxservermem > @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
-		(@systemmem BETWEEN 2049 AND 4096 AND @maxservermem > @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
-		(@systemmem BETWEEN 4097 AND 8192 AND @maxservermem > @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
-		(@systemmem BETWEEN 8193 AND 12288 AND @maxservermem > @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
-		(@systemmem BETWEEN 12289 AND 24576 AND @maxservermem > @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
-		(@systemmem BETWEEN 24577 AND 32768 AND @maxservermem > @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) OR
-		(@systemmem > 32768 AND @maxservermem > @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))-256) THEN '[WARNING: Not at the recommended MaxMem setting for this server memory configuration, with a single instance]'
-		ELSE '[OK]'
-	END AS [Deviation],
-	CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
-		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
-		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
-		WHEN @systemmem BETWEEN 8193 AND 12288 THEN @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
-		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
-		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
-		WHEN @systemmem > 32768 THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)-256)
+		WHEN (@systemmem <= 2048 AND @maxservermem > @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))- CASE WHEN @arch = 32 THEN 256 ELSE 0 END) OR
+		(@systemmem BETWEEN 2049 AND 4096 AND @maxservermem > @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))- CASE WHEN @arch = 32 THEN 256 ELSE 0 END) OR
+		(@systemmem BETWEEN 4097 AND 8192 AND @maxservermem > @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))- CASE WHEN @arch = 32 THEN 256 ELSE 0 END) OR
+		(@systemmem BETWEEN 8193 AND 12288 AND @maxservermem > @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))- CASE WHEN @arch = 32 THEN 256 ELSE 0 END) OR
+		(@systemmem BETWEEN 12289 AND 24576 AND @maxservermem > @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))- CASE WHEN @arch = 32 THEN 256 ELSE 0 END) OR
+		(@systemmem BETWEEN 24577 AND 32768 AND @maxservermem > @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END))- CASE WHEN @arch = 32 THEN 256 ELSE 0 END) OR
+		(@systemmem > 32768 AND SERVERPROPERTY('EditionID') IN (284895786, 1293598313) AND @maxservermem > CAST(0.5 * (((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) + 65536) - ABS((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) - 65536)) AS int)) OR -- Find min of max mem for machine or max mem for Web and Business Intelligence SKU
+		(@systemmem > 32768 AND SERVERPROPERTY('EditionID') = -1534726760 AND @maxservermem > CAST(0.5 * (((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) + 131072) - ABS((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) - 131072)) AS int)) OR -- Find min of max mem for machine or max mem for Standard SKU
+		(@systemmem > 32768 AND SERVERPROPERTY('EngineEdition') IN (3,8) AND @maxservermem > @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) THEN '[WARNING: Not at the recommended MaxMem setting for this server memory configuration, with a single instance]' -- Enterprise Edition or Managed Instance
+		ELSE 'OK'
+	END AS [Deviation],		
+	CASE WHEN @systemmem <= 2048 THEN @systemmem-512-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)
+		WHEN @systemmem BETWEEN 2049 AND 4096 THEN @systemmem-819-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)
+		WHEN @systemmem BETWEEN 4097 AND 8192 THEN @systemmem-1228-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)
+		WHEN @systemmem BETWEEN 8193 AND 12288 THEN @systemmem-2048-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)
+		WHEN @systemmem BETWEEN 12289 AND 24576 THEN @systemmem-2560-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)
+		WHEN @systemmem BETWEEN 24577 AND 32768 THEN @systemmem-3072-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)
+		WHEN @systemmem > 32768 AND SERVERPROPERTY('EditionID') IN (284895786, 1293598313) THEN CAST(0.5 * (((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) + 65536) - ABS((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) - 65536)) AS int) -- Find min of max mem for machine or max mem for Web and Business Intelligence SKU
+		WHEN @systemmem > 32768 AND SERVERPROPERTY('EditionID') = -1534726760 THEN CAST(0.5 * (((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) + 131072) - ABS((@systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END)) - 131072)) AS int) -- Find min of max mem for machine or max mem for Standard SKU
+		WHEN @systemmem > 32768 AND SERVERPROPERTY('EngineEdition') IN (3,8) THEN @systemmem-4096-(@mwthreads_count*(CASE WHEN @arch = 64 THEN 2 WHEN @arch = 128 THEN 4 WHEN @arch = 32 THEN 0.5 END)- CASE WHEN @arch = 32 THEN 256 ELSE 0 END) -- Enterprise Edition or Managed Instance
 	END AS [Recommended_MaxMem_MB_SingleInstance],
 	CASE WHEN @systemmem <= 2048 THEN 512
 		WHEN @systemmem BETWEEN 2049 AND 4096 THEN 819
@@ -4238,7 +4245,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running SQL Server under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlservice = 'LocalSystem' THEN '[WARNING: Running SQL Server under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server under this account is not recommended]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
+			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -4254,7 +4261,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
+			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -4267,7 +4274,7 @@ BEGIN
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
-			-- MSA for WS2008R2 or higher, SQL Server 2005 or higher, non-clustered (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
+			-- MSA for WS2008R2 or higher, SQL Server 2005 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -4279,7 +4286,7 @@ BEGIN
 			WHEN @accntdtsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Integration Services under the same account as SQL Server is not recommended]' 
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			WHEN CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
+			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -4292,7 +4299,7 @@ BEGIN
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
+			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -4308,7 +4315,7 @@ BEGIN
 				WHEN @sqlmajorver <= 10 AND @accntftservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running Full-Text Service under this account is not recommended]' 
 				WHEN @sqlmajorver <= 10 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
-				-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (http://msdn.microsoft.com/en-us/library/ms143504(v=SQL.110).aspx#Default_Accts)
+				-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 			ELSE '[OK]' END 
 		ELSE '[INFORMATION: Service is not installed]' 
@@ -4756,8 +4763,8 @@ BEGIN
 	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], '[There are no Global Trace Flags active]' AS [Deviation]
 END;
 
--- Plan affecting TFs: http://support.microsoft.com/kb/2801413 and https://support.microsoft.com/en-us/kb/2964518
--- All supported TFs: http://msdn.microsoft.com/library/ms188396.aspx
+-- Plan affecting TFs: http://support.microsoft.com/kb/2801413 and https://support.microsoft.com/kb/2964518
+-- All supported TFs: http://aka.ms/traceflags
 IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1)
 BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 174)
@@ -4781,7 +4788,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 652)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-			'[INFORMATION: TF652 disables read-aheads during scans]' --http://support.microsoft.com/en-us/kb/920093
+			'[INFORMATION: TF652 disables read-aheads during scans]' --http://support.microsoft.com/kb/920093
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 652
@@ -4892,7 +4899,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1229)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[WARNING: TF1229 disables lock partitioning, which is a locking mechanism optimization on 16+ CPU servers]' --http://blogs.msdn.com/b/psssql/archive/2012/08/31/strange-sch-s-sch-m-deadlock-on-machines-with-16-or-more-schedulers.aspx
+			'[WARNING: TF1229 disables lock partitioning, which is a locking mechanism optimization on 16+ CPU servers]' --https://techcommunity.microsoft.com/t5/SQL-Server-Support/Strange-Sch-S-Sch-M-Deadlock-on-Machines-with-16-or-More/ba-p/317208
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1229
@@ -5188,7 +5195,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 11 AND @sqlbuild >= 3349)
 					OR @sqlmajorver >= 12
-				THEN '[WARNING: TF8015 disables auto-detection and NUMA setup]' --http://blogs.msdn.com/b/psssql/archive/2010/04/02/how-it-works-soft-numa-i-o-completion-thread-lazy-writer-workers-and-memory-nodes.aspx
+				THEN '[WARNING: TF8015 disables auto-detection and NUMA setup]' --https://techcommunity.microsoft.com/t5/SQL-Server-Support/How-It-Works-Soft-NUMA-I-O-Completion-Thread-Lazy-Writer-Workers/ba-p/316044
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5212,7 +5219,7 @@ BEGIN
 			CASE WHEN ((@sqlmajorver = 12 AND @sqlbuild < 4100)
 					OR (@sqlmajorver BETWEEN 9 AND 11))
 					AND (@cpucount/@numa) > 8
-				THEN '[INFORMATION: TF8048 converts NUMA partitioned memory objects into CPU partitioned]' --http://blogs.msdn.com/b/psssql/archive/2011/09/01/sql-server-2008-2008-r2-on-newer-machines-with-more-than-8-cpus-presented-per-numa-node-may-need-trace-flag-8048.aspx
+				THEN '[INFORMATION: TF8048 converts NUMA partitioned memory objects into CPU partitioned]' --https://techcommunity.microsoft.com/t5/SQL-Server-Support/Running-SQL-Server-on-Machines-with-More-Than-8-CPUs-per-NUMA/ba-p/318513
 			WHEN (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver >= 13
 				THEN '[WARNING: TF8048 is not needed in SQL Server 2014 SP2, SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
@@ -5227,7 +5234,7 @@ BEGIN
 		AND (@cpucount/@numa) > 8
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[INFORMATION: Consider enabling TF8048 to convert NUMA partitioned memory objects into CPU partitioned. Look in dm_os_wait_stats and dm_os_spin_stats for wait types (CMEMTHREAD and SOS_SUSPEND_QUEUE). Microsoft CSS usually sees the spins jump into the trillions and the waits become a hot spot]' --http://blogs.msdn.com/b/psssql/archive/2011/09/01/sql-server-2008-2008-r2-on-newer-machines-with-more-than-8-cpus-presented-per-numa-node-may-need-trace-flag-8048.aspx
+			'[INFORMATION: Consider enabling TF8048 to convert NUMA partitioned memory objects into CPU partitioned. Look in dm_os_wait_stats and dm_os_spin_stats for wait types (CMEMTHREAD and SOS_SUSPEND_QUEUE). Microsoft CSS usually sees the spins jump into the trillions and the waits become a hot spot]' --https://techcommunity.microsoft.com/t5/SQL-Server-Support/Running-SQL-Server-on-Machines-with-More-Than-8-CPUs-per-NUMA/ba-p/318513
 			AS [Deviation];
 			
 		-- If the top consumers are partitioned by Node, then use startup trace flag 8048 to further partition by CPU.
@@ -6292,8 +6299,7 @@ END;
 -- DBs with Sparse files subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting DBs with Sparse files', 10, 1) WITH NOWAIT
--- http://blogs.msdn.com/b/psssql/archive/2011/02/21/did-your-backup-program-utility-leave-your-sql-server-running-in-an-squirrely-scenario-version-2.aspx
--- http://blogs.msdn.com/b/jorgepc/archive/2010/11/25/what-are-sparse-files-and-why-should-i-care-as-sql-server-dba.aspx
+-- https://techcommunity.microsoft.com/t5/SQL-Server-Support/Did-your-backup-program-utility-leave-your-SQL-Server-running-in/ba-p/315840
 IF (SELECT COUNT(sd.database_id) FROM sys.databases sd INNER JOIN sys.master_files smf ON sd.database_id = smf.database_id WHERE sd.source_database_id IS NULL AND smf.is_sparse = 1) > 0
 BEGIN
 	SELECT 'Database_checks' AS [Category], 'DB_nonSnap_Sparse' AS [Check], '[WARNING: Sparse files were detected that do not belong to a Database Snapshot. You might also notice unexplained performance degradation when query data from these files]' AS [Deviation]
@@ -7651,13 +7657,13 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	HAVING (t2.wait_time_ms-t1.wait_time_ms) > 0
 	ORDER BY wait_time_s DESC;
 
-	-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/en-us/library/cc917684.aspx
+	-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/library/cc917684.aspx
 	-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
 	-- LATCH = indicates contention for access to some non-page structures. ACCESS_METHODS_DATASET_PARENT, ACCESS_METHODS_SCAN_RANGE_GENERATOR or NESTING_TRANSACTION_FULL latches indicate parallelism issues;
 	-- PAGELATCH = indicates contention for access to in-memory copies of pages, like PFS, SGAM and GAM; 
 	-- PAGELATCH_UP = Does the filegroup have enough files? Contention in PFS?
 	-- PAGELATCH_EX = Contention while doing many UPDATE statements against small tables? 
-	-- PAGELATCH_EX = Many concurrent INSERT statements into a table that has an index on an IDENTITY or NEWSEQUENTIALID column? -> http://blogs.msdn.com/b/blogdoezequiel/archive/2013/05/23/pagelatch-ex-waits-and-heavy-inserts.aspx
+	-- PAGELATCH_EX = Many concurrent INSERT statements into a table that has an index on an IDENTITY or NEWSEQUENTIALID column? -> https://techcommunity.microsoft.com/t5/SQL-Server/PAGELATCH-EX-waits-and-heavy-inserts/ba-p/384289
 	-- PAGEIOLATCH = indicates IO problems, or BP pressure.
 	-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
 	-- IO_COMPLETION = usually TempDB spilling; 
@@ -7665,15 +7671,15 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	-- DISKIO_SUSPEND = High wait times here indicate the SNAPSHOT BACKUP may be taking longer than expected. Typically the delay is within the VDI application perform the snapshot backup;
 	-- BACKUPIO = check for slow backup media slow, like Tapes or Disks;
 	-- BACKUPBUFFER = usually when backing up to Tape;
-	-- Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/en-us/library/ms188743.aspx;
+	-- Check sys.dm_os_waiting_tasks for Exchange wait types in https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-os-waiting-tasks-transact-sql
 	-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
 	-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
 	-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
 	-- WRITELOG = log management system waiting for a log flush to disk. Examine the IO latency for the log file
-	-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> http://blogs.msdn.com/b/psssql/archive/2012/12/20/how-it-works-cmemthread-and-debugging-them.aspx
+	-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> https://techcommunity.microsoft.com/t5/SQL-Server-Support/How-It-Works-CMemThread-and-Debugging-Them/ba-p/317488
 	-- SOS_RESERVEDMEMBLOCKLIST = look for procedures with a large number of parameters, or queries with a long list of expression values specified in an IN clause, which would require multi-page allocations
 	-- RESOURCE_SEMAPHORE_SMALL_QUERY or RESOURCE_SEMAPHORE = queries are waiting for execution memory. Look for plans with excessive hashing or sorts.
-	-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS. -> http://technet.microsoft.com/en-us/library/cc293620.aspx
+	-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS. -> http://technet.microsoft.com/library/cc293620.aspx
 	-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
 	
 	SELECT 'Performance_checks' AS [Category], 'Waits_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1.wait_type, 
@@ -7804,7 +7810,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	-- NESTING_TRANSACTION_FULL  = This latch, along with NESTING_TRANSACTION_READONLY, is used to control access to transaction description structures (called an XDES) for parallel nested transactions. The _FULL is for a transaction that's 'active', i.e. it's changed the database (usually for an index build/rebuild), and that makes the _READONLY description obvious. A query that involves a parallel operator must start a sub-transaction for each parallel thread that is used – these transactions are sub-transactions of the parallel nested transaction. For contention on these, I'd investigate unwanted parallelism but I don't have a definite "it's usually this problem". Also check out the comments for some info about these also sometimes being a problem when RCSI is used.
 	-- LOG_MANAGER = you see this latch it is almost certainly because a transaction log is growing because it could not clear/truncate for some reason. Find the database where the log is growing and then figure out what's preventing log clearing using sys.databases.
 	-- DBCC_MULTIOBJECT_SCANNER  = This latch appears on Enterprise Edition when DBCC CHECK_ commands are allowed to run in parallel. It is used by threads to request the next data file page to process. Late last year this was identified as a major contention point inside DBCC CHECK* and there was work done to reduce the contention and make DBCC CHECK* run faster.
-	-- http://blogs.msdn.com/b/psssql/archive/2012/02/23/a-faster-checkdb-part-ii.aspx
+	-- https://techcommunity.microsoft.com/t5/SQL-Server-Support/A-faster-CHECKDB-8211-Part-II/ba-p/316882
 	-- FGCB_ADD_REMOVE = FGCB stands for File Group Control Block. This latch is required whenever a file is added or dropped from the filegroup, whenever a file is grown (manually or automatically), when recalculating proportional-fill weightings, and when cycling through the files in the filegroup as part of round-robin allocation. If you're seeing this, the most common cause is that there's a lot of file auto-growth happening. It could also be from a filegroup with lots of file (e.g. the primary filegroup in tempdb) where there are thousands of concurrent connections doing allocations. The proportional-fill weightings are recalculated every 8192 allocations, so there's the possibility of a slowdown with frequent recalculations over many files.
 
 	;WITH cteLatches1 (latch_class,wait_time_ms,waiting_requests_count) AS (SELECT latch_class,wait_time_ms,waiting_requests_count FROM #tblLatches WHERE [retrieval_time] = @minctr),
@@ -7991,7 +7997,7 @@ BEGIN
 		COALESCE(owt.wait_duration_ms, ABS(CONVERT(BIGINT,(DATEDIFF(mi, es.last_request_start_time, GETDATE())))*60)) AS blocked_spid_wait_time_ms,
 		--er.total_elapsed_time AS blocked_elapsed_time_ms,
 		/* 
-			Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/en-us/library/ms188743.aspx.
+			Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/library/ms188743.aspx.
 			- Wait Resource e_waitPipeNewRow in CXPACKET waits – Producer waiting on consumer for a packet to fill.
 			- Wait Resource e_waitPipeGetRow in CXPACKET waits – Consumer waiting on producer to fill a packet.
 		*/
@@ -8163,7 +8169,7 @@ END;
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Hints usage subsection
--- Refer to "Hints" BOL entry for more information (http://msdn.microsoft.com/en-us/library/ms187713.aspx)
+-- Refer to "Hints" BOL entry for more information (https://docs.microsoft.com/sql/t-sql/queries/hints-transact-sql)
 --------------------------------------------------------------------------------------------------------------------------------
 IF @ptochecks = 1
 BEGIN
@@ -9439,7 +9445,7 @@ WHERE o.[type] = ''U'''
 
 						SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE [' + @dbname + '];
-SELECT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id],
+SELECT DISTINCT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id],
 	xis.[object_id], t.name, o.name, xis.index_id, si.name, si.type_desc,
 	xnis.delta_pages, xnis.internal_pages, xnis.leaf_pages, xnis.page_update_count,
 	xnis.page_update_retry_count, xnis.page_consolidation_count,
@@ -9630,7 +9636,7 @@ OPTION (MAXDOP 2)'
 		END;
 
 		-- For the below values, your mileage may vary. Assuming more than 5 percent retries requires investigation	.
-		-- https://msdn.microsoft.com/en-us/library/dn645468.aspx		
+		-- https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-db-xtp-nonclustered-index-stats-transact-sql	
 		IF (SELECT COUNT(*) FROM #tmpXNCIS WHERE FLOOR((CAST(page_update_retry_count AS FLOAT)/CASE WHEN page_update_count = 0 THEN 1 ELSE page_update_count END) * 100) > 5
 			OR FLOOR((CAST(page_consolidation_retry_count AS FLOAT)/CASE WHEN page_consolidation_count = 0 THEN 1 ELSE page_consolidation_count END) * 100) > 5
 			OR FLOOR((CAST(page_split_retry_count AS FLOAT)/CASE WHEN page_split_count = 0 THEN 1 ELSE page_split_count END) * 100) > 5
@@ -10647,7 +10653,7 @@ BEGIN
 	RAISERROR (N'  |-Starting Missing Indexes', 10, 1) WITH NOWAIT
 	DECLARE @IC NVARCHAR(4000), @ICWI NVARCHAR(4000), @editionCheck bit
 
-	/* Refer to http://msdn.microsoft.com/en-us/library/ms174396.aspx */	
+	/* Refer to https://docs.microsoft.com/sql/t-sql/functions/serverproperty-transact-sql */	
 	IF (SELECT SERVERPROPERTY('EditionID')) IN (1804890536, 1872460670, 610778273, -2117995310)	
 	SET @editionCheck = 1 -- supports enterprise only features
 	ELSE	
@@ -10924,9 +10930,9 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 -- Objects naming conventions subsection
 -- Refer to BOL for more information 
--- (http://msdn.microsoft.com/en-us/library/dd172115(v=vs.100).aspx)
--- (http://msdn.microsoft.com/en-us/library/dd172134.aspx)
--- (http://msdn.microsoft.com/en-us/library/ms189822.aspx)
+-- https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172115(v=vs.100)
+-- https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172134(v=vs.100)
+-- https://docs.microsoft.com/sql/t-sql/language-elements/reserved-keywords-transact-sql
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Objects naming conventions Checks', 10, 1) WITH NOWAIT
 
@@ -10977,14 +10983,14 @@ SET isdone = 0
 
 CREATE INDEX IX1 ON #tmpobjectnames([type],[Object]);
 
-/* http://msdn.microsoft.com/en-us/library/dd172115(v=vs.100).aspx */
+/* https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172115(v=vs.100) */
 INSERT INTO #tmpfinalobjectnames
 SELECT 1, [DBName], [schemaName], [Object], [Col], type_desc, NULL
 FROM #tmpobjectnames
 WHERE [type] = 'P' AND [Object] LIKE 'sp[_]%'
 	AND [Object] NOT IN ('sp_alterdiagram','sp_creatediagram','sp_dropdiagram','sp_helpdiagramdefinition','sp_helpdiagrams','sp_renamediagram','sp_upgraddiagrams');
 
-/* http://msdn.microsoft.com/en-us/library/dd172134.aspx */
+/* https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172134(v=vs.100) */
 INSERT INTO #tmpfinalobjectnames
 SELECT 2, [DBName], [schemaName], [Object], [Col], type_desc, CASE WHEN [Object] LIKE '% %' THEN 'Space - ' + QUOTENAME([Object]) ELSE NULL END COLLATE database_default AS [Comment]
 FROM #tmpobjectnames
@@ -11013,7 +11019,7 @@ WHERE [type] = 'TC'
 	OR [Col] LIKE '%' + CHAR(34) + '%' --double quote
 	OR [Col] LIKE '%' + CHAR(39) + '%'); --single quote
 
-/* http://msdn.microsoft.com/en-us/library/ms189822.aspx */
+/* https://docs.microsoft.com/sql/t-sql/language-elements/reserved-keywords-transact-sql */
 INSERT INTO #tmpfinalobjectnames
 SELECT 4, [DBName], [schemaName], [Object], [Col], type_desc, NULL
 FROM #tmpobjectnames
@@ -11412,7 +11418,7 @@ AND ([Object] LIKE '% ABSOLUTE %' OR [Object] LIKE '% ABSOLUTE' OR [Object] = 'A
 	OR [Object] LIKE '% YEAR %' OR [Object] LIKE '% YEAR' OR [Object] = 'YEAR'
 	OR [Object] LIKE '% ZONE %' OR [Object] LIKE '% ZONE' OR [Object] = 'ZONE');
 
-/* http://msdn.microsoft.com/en-us/library/ms186755.aspx */
+/* https://docs.microsoft.com/sql/t-sql/statements/create-function-transact-sql*/
 INSERT INTO #tmpfinalobjectnames
 SELECT 5, [DBName], [schemaName], [Object], [Col], type_desc, NULL
 FROM #tmpobjectnames
@@ -11723,7 +11729,7 @@ END;
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- AlwaysOn/Mirroring automatic page repair subsection
--- Refer to "Automatic Page Repair" BOL entry for more information (http://msdn.microsoft.com/en-us/library/bb677167.aspx) 
+-- Refer to "Automatic Page Repair" BOL entry for more information (https://docs.microsoft.com/sql/sql-server/failover-clusters/automatic-page-repair-availability-groups-database-mirroring) 
 --------------------------------------------------------------------------------------------------------------------------------
 IF @sqlmajorver > 9
 BEGIN
@@ -11792,7 +11798,7 @@ END;
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Suspect pages subsection
--- Refer to "Manage the suspect_pages Table" BOL entry for more information (http://msdn.microsoft.com/en-us/library/ms191301.aspx) 
+-- Refer to "Manage the suspect_pages Table" BOL entry for more information (https://docs.microsoft.com/sql/relational-databases/backup-restore/manage-the-suspect-pages-table-sql-server)
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Suspect pages', 10, 1) WITH NOWAIT
 IF (SELECT COUNT(*) FROM msdb.dbo.suspect_pages WHERE (event_type = 1 OR event_type = 2 OR event_type = 3)) > 0
@@ -12014,10 +12020,10 @@ BEGIN
 				WHEN logmsg LIKE 'Error: 3624%' OR logmsg LIKE 'Error: 17065%' OR logmsg LIKE 'Error: 17066%' OR logmsg LIKE 'Error: 17067%' THEN 'System assertion check failed. Possible corruption'
 				WHEN logmsg LIKE 'Error: 5572%' THEN 'Possible FILESTREAM corruption'
 				WHEN logmsg LIKE 'Error: 9100%' THEN 'Possible index corruption'
-				-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/en-us/library/cc917684.aspx)
-				WHEN logmsg LIKE 'Error: 17883%' THEN 'Non-yielding scheduler: http://technet.microsoft.com/en-us/library/cc917684.aspx'
-				WHEN logmsg LIKE 'Error: 17884%' OR logmsg LIKE 'Error: 17888%' THEN 'Deadlocked scheduler: http://technet.microsoft.com/en-us/library/cc917684.aspx'
-				WHEN logmsg LIKE 'Error: 17887%' THEN 'IO completion error: http://technet.microsoft.com/en-us/library/cc917684.aspx'
+				-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/library/cc917684.aspx)
+				WHEN logmsg LIKE 'Error: 17883%' THEN 'Non-yielding scheduler: http://technet.microsoft.com/library/cc917684.aspx'
+				WHEN logmsg LIKE 'Error: 17884%' OR logmsg LIKE 'Error: 17888%' THEN 'Deadlocked scheduler: http://technet.microsoft.com/library/cc917684.aspx'
+				WHEN logmsg LIKE 'Error: 17887%' THEN 'IO completion error: http://technet.microsoft.com/library/cc917684.aspx'
 				WHEN logmsg LIKE 'Error: 1205%' THEN 'Deadlocked transaction'
 				WHEN logmsg LIKE 'Error: 610%' THEN 'Page header invalid. Possible corruption'
 				WHEN logmsg LIKE 'Error: 8621%' THEN 'QP stack overflow during optimization. Please simplify the query'
@@ -12072,7 +12078,7 @@ BEGIN
 					WHEN logmsg LIKE 'Error: 3624%' OR logmsg LIKE 'Error: 17065%' OR logmsg LIKE 'Error: 17066%' OR logmsg LIKE 'Error: 17067%' THEN 'System assertion check failed. Possible corruption'
 					WHEN logmsg LIKE 'Error: 5572%' THEN 'Possible FILESTREAM corruption'
 					WHEN logmsg LIKE 'Error: 9100%' THEN 'Possible index corruption'
-					-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/en-us/library/cc917684.aspx)
+					-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/library/cc917684.aspx)
 					WHEN logmsg LIKE 'Error: 17883%' THEN 'Non-yielding scheduler'
 					WHEN logmsg LIKE 'Error: 17884%' OR logmsg LIKE 'Error: 17888%' THEN 'Deadlocked scheduler'
 					WHEN logmsg LIKE 'Error: 17887%' THEN 'IO completion error'
