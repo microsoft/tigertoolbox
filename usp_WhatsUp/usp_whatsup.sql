@@ -598,7 +598,7 @@ CROSS APPLY sys.dm_exec_query_plan(ts.plan_handle) qp'
 END;
 
 -- Function stats
-IF @fnstats = 1 AND @sqlmajorver >= 11
+IF @fnstats = 1 AND @sqlmajorver >= 13
 BEGIN
 	SET @sqlcmd = N'SELECT CASE WHEN fs.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(fs.database_id) END AS DatabaseName, 
 	CASE WHEN fs.database_id = 32767 THEN NULL ELSE OBJECT_NAME(fs.[object_id], fs.database_id) END AS ObjectName,

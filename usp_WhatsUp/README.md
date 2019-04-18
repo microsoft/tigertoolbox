@@ -41,3 +41,4 @@ In the output, you will find the following information in 6 sections:
    -  Fixed unbound column in Function stats section;
    -  Added more information to Query stats section.
 -  04/15/2019 Added support for input buffer DMF.
+-  04/17/2019 Fixed function stats query failing in SQL Server 2012 and 2014.
