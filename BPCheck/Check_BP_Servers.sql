@@ -9203,7 +9203,7 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 				tr2.query_sql_text,
 				NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 				AS [text()]
-				FROM #tblTuningRecommendations (NOLOCK) AS tr
+				FROM #tblTuningRecommendations (NOLOCK) AS tr2
 				WHERE tr2.DBName = tr.DBName AND tr2.query_id = tr.query_id
 				FOR XML PATH(''), TYPE) AS [query_sql_text],
 			[RegressedPlan], [SuggestedPlan], [ImplementationScript]
