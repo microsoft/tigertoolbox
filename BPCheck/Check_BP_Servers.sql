@@ -9110,7 +9110,7 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 	END
 	ELSE
 	BEGIN
-		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], [NA] AS Comment
+		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], '[NA]' AS Comment
 	END;
 END;
 
