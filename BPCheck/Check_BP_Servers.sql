@@ -2,11 +2,13 @@ USE [msdb]
 GO
 
 /*
-Example:
+Replace CREATE PROCEDURE with ALTER PROCEDURE or CREATE OR ALTER PROCEDURE to allow new changes to the SP if the SP is already present.
 
+Usage examples:
+EXEC usp_bpcheck
 EXEC usp_bpcheck @allow_xpcmdshell = 0, @ptochecks = 1, @duration = 60
 */
-
+ 
 CREATE PROCEDURE usp_bpcheck 
 	@custompath NVARCHAR(500) = NULL, -- = 'C:\<temp_location>',
 	@dbScope VARCHAR(256) = NULL, -- (NULL = All DBs; '<database_name>')	
@@ -861,7 +863,7 @@ BEGIN
 		LEFT JOIN sys.availability_replicas ar (NOLOCK) ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
 		LEFT JOIN sys.dm_hadr_availability_replica_states (NOLOCK) ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
 		LEFT JOIN sys.dm_hadr_database_replica_cluster_states (NOLOCK) rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
-	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;'
+	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready, sd.is_query_store_on;'
 	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, is_query_store_on, [isdone])
 	EXEC sp_executesql @sqlcmd;
 END;
@@ -6424,7 +6426,7 @@ FROM sys.database_automatic_tuning_options;'
 		END
 	END
 	
-	IF (SELECT COUNT([triggerName]) FROM #tblAutoTuningInfo) > 0
+	IF (SELECT COUNT(AutoTuning_Option) FROM #tblAutoTuningInfo) > 0
 	BEGIN
 		SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information], DBName AS [Database_Name],
 			AutoTuning_Option, Desired_State, Actual_State, Desired_diff_Actual_reason
