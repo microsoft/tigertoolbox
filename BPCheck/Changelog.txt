@@ -368,4 +368,5 @@ v2.4.1 - 04/17/2019 - Improved Max Server Memory section to account for new, soo
 						Added Query Store configuration info for SQL 2016+ (Thanks Petar Trbos);
 						Added Automatic Tuning configuration info for SQL 2017+;
 						Added Automatic Tuning recommendations for SQL 2017+ (Thanks Petar Trbos and FifthMan);
-						Fixed Indexing per Table checks (Thanks FifthMan).
+						Fixed Indexing per Table checks (Thanks FifthMan);
+						Added check for recommended trace flag 7412 on SQL 2016+.

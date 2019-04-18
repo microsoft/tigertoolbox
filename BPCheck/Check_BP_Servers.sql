@@ -5016,10 +5016,18 @@ BEGIN
 	END;
 	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
-		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12 OR (@sqlmajorver >= 13 AND @min_compat_level < 130))
+		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF2371 to change the 20pct fixed rate threshold for update statistics into a dynamic percentage rate]' --http://blogs.msdn.com/b/saponsqlserver/archive/2011/09/07/changes-to-automatic-update-statistics-in-sql-server-traceflag-2371.aspx
+			AS [Deviation]
+	END;
+
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
+		AND (@sqlmajorver >= 13 AND @min_compat_level < 130)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Some databases have a compatibility level < 130. Consider enabling TF2371 to change the 20pct fixed rate threshold for update statistics into a dynamic percentage rate]' --http://blogs.msdn.com/b/saponsqlserver/archive/2011/09/07/changes-to-automatic-update-statistics-in-sql-server-traceflag-2371.aspx
 			AS [Deviation]
 	END;
 
@@ -5205,6 +5213,14 @@ BEGIN
 		WHERE [Global] = 1 AND TraceFlag = 6534
 	END;
 	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 7412)
+		AND @sqlmajorver >= 13
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF7412 to enable the lightweight profiling infrastructure]' -- https://docs.microsoft.com/sql/relational-databases/performance/query-profiling-infrastructure
+			AS [Deviation]
+	END;
+
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 8015)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -10725,21 +10741,21 @@ BEGIN
 		SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT 1 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	
-s.name, t.name, SUM(P.rows)
+s.name, t.name, SUM(p.rows)
 FROM sys.indexes AS si (NOLOCK)
 INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
 INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
-INNER JOIN sys.partitions p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
+INNER JOIN sys.partitions AS p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
 WHERE si.is_hypothetical = 0
 GROUP BY si.[object_id], t.name, s.name
 HAVING COUNT(si.index_id) = 1 AND MAX(si.index_id) = 0
 UNION ALL
 SELECT 2 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	
-s.name, t.name, SUM(P.rows)
+s.name, t.name, SUM(p.rows)
 FROM sys.indexes AS si (NOLOCK) 
 INNER JOIN sys.tables AS t (NOLOCK) ON si.[object_id] = t.[object_id]
 INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
-INNER JOIN sys.partitions p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
+INNER JOIN sys.partitions AS p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
 WHERE si.is_hypothetical = 0
 GROUP BY t.name, s.name
 HAVING COUNT(si.index_id) > 1 AND MIN(si.index_id) = 0;'
