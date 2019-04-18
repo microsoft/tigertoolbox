@@ -2142,11 +2142,16 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				SELECT TOP 1 @stats_isincremental = [is_incremental] FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working 
 				WHERE dbName = @dbName AND schemaName = @schemaName AND objectName = @objectName AND statsName = @indexName;
 
-				DECLARE @sqlcmdRI NVARCHAR(3000), @paramsRI NVARCHAR(50), @HasRI int
-				SET @sqlcmdRI = 'USE ' + QUOTENAME(@dbName) + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.index_resumable_operations'
-				SET @paramsRI = N'@HasRI_OUT int OUTPUT'
-			
-				EXECUTE sp_executesql @sqlcmdRI, @paramsRI, @HasRI_OUT = @HasRI OUTPUT
+				/* Are there paused index operations? */
+				DECLARE @sqlcmdRI NVARCHAR(100), @paramsRI NVARCHAR(50), @HasRI int
+				SET @HasRI = 0
+				IF @sqlmajorver > 14
+				BEGIN
+					SET @sqlcmdRI = 'USE ' + QUOTENAME(@dbName) + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.index_resumable_operations'
+					SET @paramsRI = N'@HasRI_OUT int OUTPUT'
+				
+					EXECUTE sp_executesql @sqlcmdRI, @paramsRI, @HasRI_OUT = @HasRI OUTPUT
+				END;
 				
 				IF @HasRI > 0
 				BEGIN
