@@ -9550,14 +9550,14 @@ BEGIN
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
 	DROP TABLE #tmpXIS;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXIS'))
-	CREATE TABLE #tmpXIS ([database_id] int, [object_id] int, [schema_name] VARCHAR(100) COLLATE database_default, [table_name] VARCHAR(300) COLLATE database_default, [index_id] int, [index_name] VARCHAR(300) COLLATE database_default, type_desc NVARCHAR(60), total_bucket_count bigint, empty_bucket_count bigint, avg_chain_length bigint, max_chain_length bigint, KeyCols VARCHAR(4000) COLLATE database_default, DistinctCnt bigint NULL, OptimBucketCnt bigint NULL, isdone bit, 
-		CONSTRAINT PK_tmpXIS PRIMARY KEY CLUSTERED(database_id, [object_id], [index_id]));
+	CREATE TABLE #tmpXIS ([database_id] int, [object_id] int, [xtp_object_id] int, [schema_name] VARCHAR(100) COLLATE database_default, [table_name] VARCHAR(300) COLLATE database_default, [index_id] int, [index_name] VARCHAR(300) COLLATE database_default, type_desc NVARCHAR(60), total_bucket_count bigint, empty_bucket_count bigint, avg_chain_length bigint, max_chain_length bigint, KeyCols VARCHAR(4000) COLLATE database_default, DistinctCnt bigint NULL, OptimBucketCnt bigint NULL, isdone bit, 
+		CONSTRAINT PK_tmpXIS PRIMARY KEY CLUSTERED(database_id, [object_id], [xtp_object_id], [index_id]));
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
 	DROP TABLE #tmpXNCIS;
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpXNCIS'))
-	CREATE TABLE #tmpXNCIS ([database_id] int, [object_id] int, [schema_name] VARCHAR(100) COLLATE database_default, [table_name] VARCHAR(300) COLLATE database_default, [index_id] int, [index_name] VARCHAR(300) COLLATE database_default, type_desc NVARCHAR(60), delta_pages bigint, internal_pages bigint, leaf_pages bigint, page_update_count bigint, page_update_retry_count bigint, page_consolidation_count bigint, page_consolidation_retry_count bigint, page_split_count bigint, page_split_retry_count bigint, key_split_count bigint, key_split_retry_count bigint, page_merge_count bigint, page_merge_retry_count bigint, key_merge_count bigint, key_merge_retry_count bigint, scans_started bigint, scans_retries bigint, 
-		CONSTRAINT PK_tmpXNCIS PRIMARY KEY CLUSTERED(database_id, [object_id], [index_id]));
+	CREATE TABLE #tmpXNCIS ([database_id] int, [object_id] int, [xtp_object_id] int, [schema_name] VARCHAR(100) COLLATE database_default, [table_name] VARCHAR(300) COLLATE database_default, [index_id] int, [index_name] VARCHAR(300) COLLATE database_default, type_desc NVARCHAR(60), delta_pages bigint, internal_pages bigint, leaf_pages bigint, page_update_count bigint, page_update_retry_count bigint, page_consolidation_count bigint, page_consolidation_retry_count bigint, page_split_count bigint, page_split_retry_count bigint, key_split_count bigint, key_split_retry_count bigint, page_merge_count bigint, page_merge_retry_count bigint, key_merge_count bigint, key_merge_retry_count bigint, scans_started bigint, scans_retries bigint, 
+		CONSTRAINT PK_tmpXNCIS PRIMARY KEY CLUSTERED(database_id, [object_id], [xtp_object_id], [index_id]));
 
 	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblWorking'))
 	DROP TABLE #tblWorking;
@@ -9619,7 +9619,7 @@ WHERE mst.is_ms_shipped = 0 AND ' + CASE WHEN @sqlmajorver <= 11 THEN ' si.[type
 
 						SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE [' + @dbname + '];
-SELECT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id], xis.[object_id], t.name, o.name, xis.index_id, si.name, si.type_desc, xhis.total_bucket_count, xhis.empty_bucket_count, xhis.avg_chain_length, xhis.max_chain_length,
+SELECT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id], xis.[object_id], xhis.xtp_object_id, t.name, o.name, xis.index_id, si.name, si.type_desc, xhis.total_bucket_count, xhis.empty_bucket_count, xhis.avg_chain_length, xhis.max_chain_length,
 	SUBSTRING((SELECT '','' + ac.name FROM sys.tables AS st
 		INNER JOIN sys.indexes AS i ON st.[object_id] = i.[object_id]
 		INNER JOIN sys.index_columns AS ic ON i.[object_id] = ic.[object_id] AND i.[index_id] = ic.[index_id] 
@@ -9647,7 +9647,7 @@ WHERE o.[type] = ''U'''
 						SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE [' + @dbname + '];
 SELECT DISTINCT ' + CONVERT(NVARCHAR(20), @dbid) + ' AS [database_id],
-	xis.[object_id], t.name, o.name, xis.index_id, si.name, si.type_desc,
+	xis.[object_id], xnis.xtp_object_id, t.name, o.name, xis.index_id, si.name, si.type_desc,
 	xnis.delta_pages, xnis.internal_pages, xnis.leaf_pages, xnis.page_update_count,
 	xnis.page_update_retry_count, xnis.page_consolidation_count,
 	xnis.page_consolidation_retry_count, xnis.page_split_count, xnis.page_split_retry_count,
