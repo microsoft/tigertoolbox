@@ -1,8 +1,8 @@
-*ReadTrace and SQL Nexus Analysis Queries*
+**ReadTrace and SQL Nexus Analysis Queries**
 
-Using RML Utilities (ReadTrace) to analyze your workloads?
+Using [RML Utilities](https://www.microsoft.com/en-us/download/details.aspx?id=4511) (ReadTrace) to analyze your workloads?
 
-Using SQL Nexus to make sense of all the infomration collected by PSSDiag or SQLDiag?
+Using [SQL Nexus](https://github.com/Microsoft/SqlNexus) to make sense of all the information collected by [PSSDiag](https://github.com/Microsoft/DiagManager) or SQLDiag?
 
 Did you know the database that supports these tools holds much more infromation than the UI Reports provide?
 
