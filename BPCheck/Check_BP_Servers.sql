@@ -9144,7 +9144,7 @@ SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ''' + REPLA
 		SET isdone = 0
 		FROM #tblTuningRecommendationsCnt AS trc
 		INNER JOIN #tmpdbs0 ON #tmpdbs0.[dbid] = trc.[dbid]
-		WHERE [state] <> 0;
+		WHERE [state] <> 0 AND trc.[HasRecommendations] = 1;
 	
 		IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN	
@@ -9152,25 +9152,18 @@ SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ''' + REPLA
 			BEGIN
 				SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-WITH CTE_Tuning_Recs AS (SELECT tr.reason, 
-		tr.score, pln.query_id, pln.regressedPlanId, pln.recommendedPlanId,
+;WITH CTE_Tuning_Recs AS (SELECT tr.reason, 
+		tr.score, 
+		JSON_VALUE(tr.details,''$.query_id'') AS query_id, 
+		JSON_VALUE(tr.details,''$.regressedPlanId'') AS regressedPlanId, 
+		JSON_VALUE(tr.details,''$.recommendedPlanId'') AS recommendedPlanId,
 		JSON_VALUE(tr.state,''$.currentValue'') AS CurrentState,
 		JSON_VALUE(tr.state,''$.reason'') AS CurrentStateReason,
-		(regressedPlanExecutionCount + recommendedPlanExecutionCount) * (regressedPlanCpuTimeAverage - recommendedPlanCpuTimeAverage)/1000000 AS Estimated_Gain,
-		CASE WHEN regressedPlanErrorCount > recommendedPlanErrorCount THEN 1 ELSE 0 END AS Error_Prone,
+		(CAST(JSON_VALUE(tr.state,''$.regressedPlanExecutionCount'') AS int) + CAST(JSON_VALUE(tr.state,''$.recommendedPlanExecutionCount'') AS int)) 
+		* (CAST(JSON_VALUE(tr.state,''$.regressedPlanCpuTimeAverage'') AS float) - CAST(JSON_VALUE(tr.state,''$.recommendedPlanCpuTimeAverage'') AS float))/1000000 AS Estimated_Gain,
+		CASE WHEN CAST(JSON_VALUE(tr.state,''$.regressedPlanErrorCount'') AS int) > CAST(JSON_VALUE(tr.state,''$.recommendedPlanErrorCount'') AS int) THEN 1 ELSE 0 END AS Error_Prone,
 		JSON_VALUE(tr.details,''$.implementationDetails.script'') AS ImplementationScript
 	FROM sys.dm_db_tuning_recommendations AS tr
-	CROSS APPLY OPENJSON(Details, ''$.planForceDetails'')
-	WITH ([query_id] int ''$.queryId'',
-		regressedPlanId int ''$.regressedPlanId'',
-		recommendedPlanId int ''$.recommendedPlanId'',
-		regressedPlanErrorCount int,	
-		recommendedPlanErrorCount int,
-		regressedPlanExecutionCount int,
-		regressedPlanCpuTimeAverage float,
-		recommendedPlanExecutionCount int,
-		recommendedPlanCpuTimeAverage float
-		) AS pln
 	)
 SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], qsq.query_id, cte.reason, cte.score, cte.CurrentState, cte.CurrentStateReason, qsqt.query_sql_text,
 	CAST(rp.query_plan AS XML) AS RegressedPlan, CAST(sp.query_plan AS XML) AS SuggestedPlan, cte.ImplementationScript
@@ -9196,6 +9189,8 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 			END
 		END
 		
+		IF (SELECT COUNT(query_id) FROM #tblTuningRecommendations) > 0
+		BEGIN
 		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], '[INFORMATION: Found tuning recommendations. If Automatic Tuning is not configured to deploy these recommednations, review manually and decide which ones to deploy]' AS Comment
 		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], DBName AS [Database_Name], 
 			[query_id], [reason], [score], [CurrentState], [CurrentStateReason],
@@ -9208,6 +9203,11 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 				FOR XML PATH(''), TYPE) AS [query_sql_text],
 			[RegressedPlan], [SuggestedPlan], [ImplementationScript]
 		FROM #tblTuningRecommendations AS tr;
+		END
+		ELSE
+		BEGIN
+			SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], '[INFORMATION: Found tuning recommendations but Query Store does not contain any information on the queries anymore. Skipping]' AS Comment
+		END
 	END
 	ELSE
 	BEGIN
