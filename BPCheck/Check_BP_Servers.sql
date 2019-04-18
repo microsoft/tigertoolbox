@@ -1670,10 +1670,10 @@ SELECT @affined_cpus = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE is_online =
 --SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
 	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)]'
-		WHEN @numa = 1 AND @affined_cpus > 8 AND @affined_cpus <= 16 AND ([value] = 0 OR [value] < 8 OR [value] > 16) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
-		WHEN @numa = 1 AND @affined_cpus > 16 AND ([value] = 0 OR [value] > 16) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
-		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 AND ([value] = 0 OR [value] > CEILING(@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
-		WHEN @numa > 1 AND (@cpucount/@numa) > 16 AND ([value] = 0 OR [value] > CEILING(@cpucount/@numa)/2) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @numa = 1 AND @affined_cpus <= 16 AND ([value] = 0 OR [value] <> @affined_cpus) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
+		WHEN @numa = 1 AND @affined_cpus > 16 AND ([value] = 0 OR [value] <> 16) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
+		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 AND ([value] = 0 OR [value] <> CEILING(@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @numa > 1 AND (@cpucount/@numa) > 16 AND ([value] = 0 OR [value] <> CEILING(@cpucount/@numa)/2) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
 		ELSE '[OK]'
 	END AS [Deviation]
 FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
@@ -1681,13 +1681,13 @@ FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information], 
 	CASE 
 		-- If not NUMA, and up to 16 @affined_cpus then MaxDOP up to 16
-		WHEN @numa = 1 AND @affined_cpus > 8 AND @affined_cpus <= 16 AND ([value] = 0 OR [value] < 8 OR [value] >= 16) THEN @affined_cpus
+		WHEN @numa = 1 AND @affined_cpus <= 16 THEN @affined_cpus
 		-- If not NUMA, and more than 16 @affined_cpus then MaxDOP 16
-		WHEN @numa = 1 AND @affined_cpus > 16 AND ([value] = 0 OR [value] > 16) THEN 16
+		WHEN @numa = 1 AND @affined_cpus > 16 THEN 16
 		-- If NUMA and # logical CPUs per NUMA up to 16, then MaxDOP is set as # logical CPUs per NUMA, up to 16 
-		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 AND ([value] = 0 OR [value] > (@cpucount/@numa)) THEN CEILING(@cpucount/@numa)
+		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 THEN CEILING(@cpucount/@numa)
 		-- If NUMA and # logical CPUs per NUMA > 16, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
-		WHEN @numa > 1 AND (@cpucount/@numa) > 16 AND ([value] = 0 OR [value] > CEILING((@cpucount/@numa)/2)) THEN CEILING((@cpucount/@numa)/2)
+		WHEN @numa > 1 AND (@cpucount/@numa) > 16 THEN CEILING((@cpucount/@numa)/2)
 		ELSE 0
 	END AS [Recommended_MaxDOP],
 	[value] AS [Current_MaxDOP], @cpucount AS [Available_Processors], @affined_cpus AS [Affined_Processors], 

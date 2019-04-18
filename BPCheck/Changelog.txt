@@ -361,7 +361,7 @@ v2.4 - 03/31/2019 - Improved displayed information in missing index check (Thank
 						Added row count information on empty tables and tables without CL (Thanks Petar Trbos);
 						Disabled unsupported high VLF fix for Azure SQL Database Managed Instance (Thanks Jovan Popovic);
 						Improved MaxDOP section to account for new, soon to be Microsoft's official documented recommendations.
-v2.4.1 - 04/17/2019 - Improved Max Server Memory section to account for new, soon to be Microsoft's official documented recommendations;
+v2.4.1.2 - 04/17/2019 - Improved Max Server Memory section to account for new, soon to be Microsoft's official documented recommendations;
 						Fixed PK violation in Index Health Analysis subsection;
 						Updated all docs and blog links;
 						Fixed Linked Server section (Thanks Petar Trbos);
@@ -369,4 +369,5 @@ v2.4.1 - 04/17/2019 - Improved Max Server Memory section to account for new, soo
 						Added Automatic Tuning configuration info for SQL 2017+;
 						Added Automatic Tuning recommendations for SQL 2017+ (Thanks Petar Trbos and FifthMan);
 						Fixed Indexing per Table checks (Thanks FifthMan);
-						Added check for recommended trace flag 7412 on SQL 2016+.
+						Added check for recommended trace flag 7412 on SQL 2016+;
+						Fixed new MaxDOP recommendation.

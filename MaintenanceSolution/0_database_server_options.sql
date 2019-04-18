@@ -51,14 +51,13 @@ SELECT @numa = COUNT(DISTINCT parent_node_id) FROM sys.dm_os_schedulers WHERE sc
 SELECT @sqlcmd = 'sp_configure ''max degree of parallelism'', ' + CONVERT(NVARCHAR(255), 
 		CASE 
 		-- If not NUMA, and up to 16 @affined_cpus then MaxDOP up to 16
-		WHEN @numa = 1 AND @affined_cpus > 8 AND @affined_cpus <= 16 AND ([value] = 0 OR [value] < 8 OR [value] >= 16) THEN @affined_cpus
+		WHEN @numa = 1 AND @affined_cpus <= 16 THEN @affined_cpus
 		-- If not NUMA, and more than 16 @affined_cpus then MaxDOP 16
-		WHEN @numa = 1 AND @affined_cpus > 16 AND ([value] = 0 OR [value] > 16) THEN 16
+		WHEN @numa = 1 AND @affined_cpus > 16 THEN 16
 		-- If NUMA and # logical CPUs per NUMA up to 16, then MaxDOP is set as # logical CPUs per NUMA, up to 16 
-		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 AND ([value] = 0 OR [value] > (@cpucount/@numa)) THEN CEILING(@cpucount/@numa)
+		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 THEN CEILING(@cpucount/@numa)
 		-- If NUMA and # logical CPUs per NUMA > 16, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
-		WHEN @numa > 1 AND (@cpucount/@numa) > 16 AND ([value] = 0 OR [value] > CEILING((@cpucount/@numa)/2)) THEN CEILING((@cpucount/@numa)/2)
-		WHEN @numa = 0 AND [value] > @affined_cpus THEN @affined_cpus
+		WHEN @numa > 1 AND (@cpucount/@numa) > 16 THEN CEILING((@cpucount/@numa)/2)
 		ELSE 0
 	END)
 FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';	
