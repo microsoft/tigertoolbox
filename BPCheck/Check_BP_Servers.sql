@@ -4,10 +4,10 @@ GO
 /*
 Example:
 
-EXEC bp_check @allow_xpcmdshell = 0, @ptochecks = 1, @duration = 60
+EXEC usp_bpcheck @allow_xpcmdshell = 0, @ptochecks = 1, @duration = 60
 */
 
-CREATE PROCEDURE bp_check 
+CREATE PROCEDURE usp_bpcheck 
 	@custompath NVARCHAR(500) = NULL, -- = 'C:\<temp_location>',
 	@dbScope VARCHAR(256) = NULL, -- (NULL = All DBs; '<database_name>')	
 	@allow_xpcmdshell bit = 1, --(1 = ON; 0 = OFF)
@@ -821,7 +821,7 @@ DECLARE @curdbname NVARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
 DROP TABLE #tmpdbs0;
 IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
-CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] NVARCHAR(1000), [compatibility_level] tinyint, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, isdone bit);
+CREATE TABLE #tmpdbs0 (id int IDENTITY(1,1), [dbid] int, [dbname] NVARCHAR(1000), [compatibility_level] tinyint, is_read_only bit, [state] tinyint, is_distributor bit, [role] tinyint, [secondary_role_allow_connections] tinyint, is_database_joined bit, is_failover_ready bit, is_query_store_on bit, isdone bit);
 
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbfiledetail'))
 DROP TABLE #tmpdbfiledetail;
@@ -835,21 +835,34 @@ CREATE TABLE ##tmpdbsizes([database_id] [int] NOT NULL, [size] bigint, [type_des
 
 IF @sqlmajorver < 11
 BEGIN
-	SET @sqlcmd = 'SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0 FROM master.sys.databases (NOLOCK)'
-	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], [isdone])
+	SET @sqlcmd = 'SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0, 0 FROM master.sys.databases (NOLOCK)'
+	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_query_store_on, [isdone])
 	EXEC sp_executesql @sqlcmd;
 END;
 
-IF @sqlmajorver > 10
+IF @sqlmajorver IN (11,12)
 BEGIN
-	SET @sqlcmd = 'SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, 0 
+	SET @sqlcmd = 'SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, 0, 0 
 	FROM master.sys.databases (NOLOCK) sd
 		LEFT JOIN sys.dm_hadr_database_replica_states (NOLOCK) d ON sd.database_id = d.database_id
 		LEFT JOIN sys.availability_replicas ar (NOLOCK) ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
 		LEFT JOIN sys.dm_hadr_availability_replica_states (NOLOCK) ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
 		LEFT JOIN sys.dm_hadr_database_replica_cluster_states (NOLOCK) rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
 	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;'
-	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, [isdone])
+	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, is_query_store_on, [isdone])
+	EXEC sp_executesql @sqlcmd;
+END;
+
+IF @sqlmajorver > 12
+BEGIN
+	SET @sqlcmd = 'SELECT sd.database_id, sd.name, sd.[compatibility_level], sd.is_read_only, sd.[state], sd.is_distributor, MIN(COALESCE(ars.[role],1)) AS [role], ar.secondary_role_allow_connections, rcs.is_database_joined, rcs.is_failover_ready, sd.is_query_store_on, 0 
+	FROM master.sys.databases (NOLOCK) sd
+		LEFT JOIN sys.dm_hadr_database_replica_states (NOLOCK) d ON sd.database_id = d.database_id
+		LEFT JOIN sys.availability_replicas ar (NOLOCK) ON d.group_id = ar.group_id AND d.replica_id = ar.replica_id
+		LEFT JOIN sys.dm_hadr_availability_replica_states (NOLOCK) ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
+		LEFT JOIN sys.dm_hadr_database_replica_cluster_states (NOLOCK) rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
+	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;'
+	INSERT INTO #tmpdbs0 ([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, is_query_store_on, [isdone])
 	EXEC sp_executesql @sqlcmd;
 END;
 
@@ -6299,56 +6312,79 @@ END;
 -- Query Store info subsection
 --------------------------------------------------------------------------------------------------------------------------------
 IF @sqlmajorver > 12
-begin
-
-RAISERROR (N'|-Executing Query Store Info', 10, 1) WITH NOWAIT
-
--- Select all the data from the temporary table
-DECLARE @QStoreDBname VARCHAR(50)
-DECLARE @QStoreDBNum int 
-
-SELECT @QStoreDBNum = COUNT(database_id) FROM sys.databases where is_query_store_on = 1
-
-IF @QStoreDBNum =  0
 BEGIN
-	SELECT 'Information' AS [Category], 'Query Store' AS [Information] , 'No database with query store enabled found'
-END
-ELSE
-BEGIN
+	RAISERROR (N'  |-Starting Query Store Info', 10, 1) WITH NOWAIT
+	
+	UPDATE #tmpdbs0
+	SET isdone = 0;
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
-DROP TABLE #qstoreinfo;
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
-CREATE TABLE #qstoreinfo (DatabaseName VARCHAR(150),Actual_State VARCHAR(50),	Flush_Interval VARCHAR(50),	Interval_Length VARCHAR(50), Query_CaptureMode VARCHAR(50),	Max_Storage_Size INT,	Current_Storage_Size INT);
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [state] <> 0 OR [dbid] < 5;
 
-DECLARE qStore_cursor CURSOR FOR
-	SELECT QUOTENAME([name]) FROM sys.databases WHERE is_query_store_on = 1 
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
+	
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE is_query_store_on = 0;
+	
+	IF NOT EXISTS (SELECT [database_id] FROM sys.databases WHERE is_query_store_on = 1)
+	SELECT 'Database_checks' AS [Category], 'Query_Store' AS [Information] , '[INFORMATION: No databases have Query Store enabled]';
+	
+	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+	BEGIN	
+		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
+		DROP TABLE #tblQStoreInfo;
+		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
+		CREATE TABLE #tblQStoreInfo ([DBName] sysname, Actual_State NVARCHAR(60), Flush_Interval_Sec bigint, Interval_Length_Min bigint, Query_CaptureMode NVARCHAR(60), Max_Storage_Size_MB bigint, Current_Storage_Size_MB bigint);
 
-OPEN qStore_cursor
-	FETCH NEXT FROM qStore_cursor INTO @QStoreDBname
-
-	WHILE @@FETCH_STATUS = 0
+		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN
-			SET @sqlcmd = 
-					'INSERT INTO #qstoreinfo(DatabaseName,Actual_State,Flush_Interval,Interval_Length,Query_CaptureMode,Max_Storage_Size,Current_Storage_Size)
-					  SELECT ''' + @QStoreDBname + ''',  actual_state_desc, flush_interval_seconds, interval_length_minutes, query_capture_mode_desc,  max_storage_size_mb, current_storage_size_mb
-					   FROM ' + @QStoreDBname + '.sys.database_query_store_options' 
+			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+			
+			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], actual_state_desc, flush_interval_seconds, interval_length_minutes, query_capture_mode_desc, max_storage_size_mb, current_storage_size_mb 
+FROM sys.database_query_store_options;'
 
-			EXEC sp_executesql @sqlcmd
-
-		FETCH NEXT FROM qStore_cursor INTO @QStoreDBname
+			BEGIN TRY
+				INSERT INTO #tblQStoreInfo
+				EXECUTE sp_executesql @sqlcmd
+			END TRY
+			BEGIN CATCH
+				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+				SELECT @ErrorMessage = 'Query Store subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+				RAISERROR (@ErrorMessage, 16, 1);
+			END CATCH
+			
+			UPDATE #tmpdbs0
+			SET isdone = 1
+			WHERE [dbid] = @dbid
 		END
+	END
+	
+	IF (SELECT COUNT([triggerName]) FROM #tblQStoreInfo) > 0
+	BEGIN
+		SELECT 'Information' AS [Category], 'Query_Store' AS [Information], DBName AS [Database_Name],
+			Actual_State, Flush_Interval_Sec, Interval_Length_Min, Query_CaptureMode, Max_Storage_Size_MB, Current_Storage_Size_MB
+		FROM #tblQStoreInfo
+		ORDER BY DBName;
+	END
+	ELSE
+	BEGIN
+		SELECT 'Information' AS [Category], 'Query_Store' AS [Information] , '[INFORMATION: No databases have Query Store enabled]' AS [Comment];
+	END
+END;		
 
-CLOSE qStore_cursor
-DEALLOCATE qStore_cursor
 
-SELECT 'Information' AS [Category], 'Query Store Info' AS [Information] , * from #qstoreinfo
+	SELECT 'Database_checks' AS [Category], 'Query_Store_Info' AS [Information] , * from #qstoreinfo
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
-DROP TABLE #qstoreinfo;
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
+	DROP TABLE #qstoreinfo;
 
-END
-END
+	END
+END;
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- DBs with Sparse files subsection
@@ -8982,52 +9018,49 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 -- Tuning recommendations info subsection
 --------------------------------------------------------------------------------------------------------------------------------
-
-IF @sqlmajorver > 13
-begin
-
-RAISERROR (N'|-Executing Tuning recommendations', 10, 1) WITH NOWAIT
-
-declare @recommendationsNum int=0
-SELECT @recommendationsNum = COUNT(*) FROM sys.dm_db_tuning_recommendations  ;
-
-IF @recommendationsNum > 0
+IF @sqlmajorver > 13 AND @ptochecks = 1
 BEGIN
+	RAISERROR (N'  |-Starting Tuning recommendations', 10, 1) WITH NOWAIT
 
-	WITH CTE_Tunning
-AS (SELECT tr.reason,tr.score, pln.query_id, pln.regressedPlanId, pln.recommendedPlanId,
-           JSON_VALUE(tr.state,'$.currentValue') AS CurrentState,
-           JSON_VALUE(tr.state,'$.reason') AS CurrentStateReason,
-           JSON_VALUE(tr.details,'$.implementationDetails.script') AS ImplementationScript
-    FROM sys.dm_db_tuning_recommendations AS tr
-        CROSS APPLY
-        OPENJSON(tr.details,'$.planForceDetails')
-        WITH (query_id INT '$.queryId',
-              regressedPlanId INT '$.regressedPlanId',
-              recommendedPlanId INT '$.recommendedPlanId') AS pln)
-SELECT 'Information' AS [Category], 'Tuning_recommendations' AS [Information], 
-		qsq.query_id,
-       cte.reason,
-       cte.score,
-       cte.CurrentState,
-       cte.CurrentStateReason,
-       qsqt.query_sql_text,
-       CAST(rp.query_plan AS XML) AS RegressedPlan,
-       CAST(sp.query_plan AS XML) AS SuggestedPlan,
-       cte.ImplementationScript
-FROM CTE_Tunning  AS cte
-    JOIN sys.query_store_plan AS rp
-        ON rp.query_id = cte.query_id
-           AND rp.plan_id = cte.regressedPlanId
-    JOIN sys.query_store_plan AS sp
-        ON sp.query_id = cte.query_id
-           AND sp.plan_id = cte.recommendedPlanId
-    JOIN sys.query_store_query AS qsq
-        ON qsq.query_id = rp.query_id
-    JOIN sys.query_store_query_text AS qsqt
-        ON qsqt.query_text_id = qsq.query_text_id;
+	DECLARE @recommendationsNum int
+	SELECT @recommendationsNum = COUNT(*) FROM sys.dm_db_tuning_recommendations  ;
 
-END;
+	IF @recommendationsNum > 0
+	BEGIN
+		EXEC (';WITH CTE_Tunning_Recs AS (SELECT tr.reason, 
+		tr.score, pln.query_id, pln.regressedPlanId, pln.recommendedPlanId,
+		JSON_VALUE(tr.state,''$.currentValue'') AS CurrentState,
+		JSON_VALUE(tr.state,''$.reason'') AS CurrentStateReason,
+		(regressedPlanExecutionCount + recommendedPlanExecutionCount) * (regressedPlanCpuTimeAverage - recommendedPlanCpuTimeAverage)/1000000 AS Estimated_Gain,
+		CASE WHEN regressedPlanErrorCount > recommendedPlanErrorCount THEN 1 ELSE 0 END AS Error_Prone,
+		JSON_VALUE(tr.details,''$.implementationDetails.script'') AS ImplementationScript
+	FROM sys.dm_db_tuning_recommendations AS tr
+	CROSS APPLY OPENJSON(Details, ''$.planForceDetails'')
+	WITH ([query_id] int ''$.queryId'',
+		regressedPlanId int ''$.regressedPlanId'',
+		recommendedPlanId int ''$.recommendedPlanId'',
+		regressedPlanErrorCount int,	
+		recommendedPlanErrorCount int,
+		regressedPlanExecutionCount int,
+		regressedPlanCpuTimeAverage float,
+		recommendedPlanExecutionCount int,
+		recommendedPlanCpuTimeAverage float
+		) AS pln
+	)
+SELECT ''Performance_checks'' AS [Category], ''Automatic_Tuning_Recommendations'' AS [Check], 
+	''[INFORMATION: Found tuning recommendations. If Automatic Tuning is not configured to deploy these recommednations, review manually and decide which ones to deploy]'' AS Comment,
+	qsq.query_id, cte.reason, cte.score, cte.CurrentState, cte.CurrentStateReason, qsqt.query_sql_text,
+	CAST(rp.query_plan AS XML) AS RegressedPlan, CAST(sp.query_plan AS XML) AS SuggestedPlan, cte.ImplementationScript
+FROM CTE_Tunning_Recs AS cte
+INNER JOIN sys.query_store_plan AS rp ON rp.query_id = cte.[query_id] AND rp.plan_id = cte.regressedPlanId
+INNER JOIN sys.query_store_plan AS sp ON sp.query_id = cte.[query_id] AND sp.plan_id = cte.recommendedPlanId
+INNER JOIN sys.query_store_query AS qsq	ON qsq.query_id = rp.query_id 
+INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_text_id;')
+	END
+	ELSE
+	BEGIN
+		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], [NA] AS Comment
+	END;
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------

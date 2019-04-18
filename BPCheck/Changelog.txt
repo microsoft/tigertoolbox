@@ -363,4 +363,7 @@ v2.4 - 03/31/2019 - Improved displayed information in missing index check (Thank
 						Improved MaxDOP section to account for new, soon to be Microsoft's official documented recommendations.
 v2.4.1 - 04/17/2019 - Improved Max Server Memory section to account for new, soon to be Microsoft's official documented recommendations;
 						Fixed PK violation in Index Health Analysis subsection;
-						Updated all docs and blog links.
+						Updated all docs and blog links;
+						Fixed Linked Server section (Thanks Petar Trbos);
+						Added Query Store configurations for SQL 2016+ (Thanks Petar Trbos);
+						Added Tuning recommendations info for SQL 2017+ (Thanks Petar Trbos).
