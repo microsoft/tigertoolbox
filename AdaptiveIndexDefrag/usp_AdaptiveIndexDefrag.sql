@@ -684,6 +684,7 @@ v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become u
 						Fixed issue with @statsThreshold and large tables (by AndrewG2).
 v1.6.6.6 - 10/28/2018 - Extended 2nd row mode counter info data type in debug mode (by CodyFitzpatrick);
 						Fixed compression data missing in working table (by ravseer).
+v1.6.6.7 - 04/17/2019 - Fixed resumable index DMV syntax error issue.
 
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1245,7 +1246,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.6';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.7';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -2140,11 +2141,19 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				/* Is stat incremental? */
 				SELECT TOP 1 @stats_isincremental = [is_incremental] FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working 
 				WHERE dbName = @dbName AND schemaName = @schemaName AND objectName = @objectName AND statsName = @indexName;
+
+				DECLARE @sqlcmdRI NVARCHAR(3000), @paramsRI NVARCHAR(50), @HasRI int
+				SET @sqlcmdRI = 'USE ' + QUOTENAME(@dbName) + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.index_resumable_operations'
+				SET @paramsRI = N'@HasRI_OUT int OUTPUT'
+			
+				EXECUTE sp_executesql @sqlcmdRI, @paramsRI, @HasRI_OUT = @HasRI OUTPUT
 				
-				IF ((SELECT COUNT(*) FROM sys.index_resumable_operations) > 0)
+				IF @HasRI > 0
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('    Found ongoing resumable index operations - skipping all pre-commands...', 0, 42) WITH NOWAIT;
+					
+					SET @sqlprecommand = N''
 				END
 				ELSE IF (@sqlmajorver < 13 OR @partitionCount = 1) AND @sqldisablecommand IS NULL AND @ixtype IN (1,2)
 				BEGIN

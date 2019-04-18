@@ -137,4 +137,4 @@ v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become u
 						Fixed issue with @statsThreshold and large tables (by AndrewG2).
 v1.6.6.6 - 10/28/2018 - Extended 2nd row mode counter info data type in debug mode (by CodyFitzpatrick);
 						Fixed compression data missing in working table (by ravseer).
-						
+v1.6.6.7 - 04/17/2019 - Fixed resumable index DMV syntax error issue.
