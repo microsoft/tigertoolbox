@@ -9084,7 +9084,7 @@ BEGIN
 		SET @sqlcmdTR = 'USE ' + QUOTENAME(@dbName) + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.dm_db_tuning_recommendations'
 		SET @paramsTR = N'@HasTR_OUT int OUTPUT'
 	
-		EXECUTE sp_executesql @sqlcmdTR, @paramsTR, HasTR_OUT = @HasTR OUTPUT
+		EXECUTE sp_executesql @sqlcmdTR, @paramsTR, @HasTR_OUT = @HasTR OUTPUT
 	END;
 
 	IF @HasTR > 0
