@@ -9076,11 +9076,20 @@ BEGIN
 	RAISERROR (N'  |-Starting Tuning recommendations', 10, 1) WITH NOWAIT
 
 	DECLARE @recommendationsNum int
-	SELECT @recommendationsNum = COUNT(*) FROM sys.dm_db_tuning_recommendations  ;
 
-	IF @recommendationsNum > 0
+	DECLARE @sqlcmdTR NVARCHAR(100), @paramsTR NVARCHAR(50), @HasTR int
+	SET @HasTR = 0
+	IF @sqlmajorver > 14
 	BEGIN
-		EXEC (';WITH CTE_Tunning_Recs AS (SELECT tr.reason, 
+		SET @sqlcmdTR = 'USE ' + QUOTENAME(@dbName) + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.dm_db_tuning_recommendations'
+		SET @paramsTR = N'@HasTR_OUT int OUTPUT'
+	
+		EXECUTE sp_executesql @sqlcmdTR, @paramsTR, HasTR_OUT = @HasTR OUTPUT
+	END;
+
+	IF @HasTR > 0
+	BEGIN
+		EXEC (';WITH CTE_Tuning_Recs AS (SELECT tr.reason, 
 		tr.score, pln.query_id, pln.regressedPlanId, pln.recommendedPlanId,
 		JSON_VALUE(tr.state,''$.currentValue'') AS CurrentState,
 		JSON_VALUE(tr.state,''$.reason'') AS CurrentStateReason,
@@ -9104,7 +9113,7 @@ SELECT ''Performance_checks'' AS [Category], ''Automatic_Tuning_Recommendations'
 	''[INFORMATION: Found tuning recommendations. If Automatic Tuning is not configured to deploy these recommednations, review manually and decide which ones to deploy]'' AS Comment,
 	qsq.query_id, cte.reason, cte.score, cte.CurrentState, cte.CurrentStateReason, qsqt.query_sql_text,
 	CAST(rp.query_plan AS XML) AS RegressedPlan, CAST(sp.query_plan AS XML) AS SuggestedPlan, cte.ImplementationScript
-FROM CTE_Tunning_Recs AS cte
+FROM CTE_Tuning_Recs AS cte
 INNER JOIN sys.query_store_plan AS rp ON rp.query_id = cte.[query_id] AND rp.plan_id = cte.regressedPlanId
 INNER JOIN sys.query_store_plan AS sp ON sp.query_id = cte.[query_id] AND sp.plan_id = cte.recommendedPlanId
 INNER JOIN sys.query_store_query AS qsq	ON qsq.query_id = rp.query_id 
@@ -10723,7 +10732,7 @@ INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
 INNER JOIN sys.partitions p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
 WHERE si.is_hypothetical = 0
 GROUP BY si.[object_id], t.name, s.name
-HAVING COUNT(index_id) = 1 AND MAX(index_id) = 0
+HAVING COUNT(si.index_id) = 1 AND MAX(si.index_id) = 0
 UNION ALL
 SELECT 2 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	
 s.name, t.name, SUM(P.rows)
@@ -10733,7 +10742,7 @@ INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
 INNER JOIN sys.partitions p (NOLOCK) ON  si.[object_id]=p.[object_id] and si.[index_id]=p.[index_id]
 WHERE si.is_hypothetical = 0
 GROUP BY t.name, s.name
-HAVING COUNT(index_id) > 1 AND MIN(index_id) = 0;'
+HAVING COUNT(si.index_id) > 1 AND MIN(si.index_id) = 0;'
 		BEGIN TRY
 			INSERT INTO #tblIxs3
 			EXECUTE sp_executesql @sqlcmd

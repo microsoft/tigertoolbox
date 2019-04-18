@@ -367,4 +367,5 @@ v2.4.1 - 04/17/2019 - Improved Max Server Memory section to account for new, soo
 						Fixed Linked Server section (Thanks Petar Trbos);
 						Added Query Store configuration info for SQL 2016+ (Thanks Petar Trbos);
 						Added Automatic Tuning configuration info for SQL 2017+;
-						Added Automatic Tuning recommendations for SQL 2017+ (Thanks Petar Trbos).
+						Added Automatic Tuning recommendations for SQL 2017+ (Thanks Petar Trbos and FifthMan);
+						Fixed Indexing per Table checks (Thanks FifthMan).
