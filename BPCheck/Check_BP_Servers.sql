@@ -6313,7 +6313,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 IF @sqlmajorver > 12
 BEGIN
-	RAISERROR (N'  |-Starting Query Store Info', 10, 1) WITH NOWAIT
+	RAISERROR (N'  |-Starting Query Store info', 10, 1) WITH NOWAIT
 	
 	UPDATE #tmpdbs0
 	SET isdone = 0;
@@ -6329,9 +6329,6 @@ BEGIN
 	UPDATE #tmpdbs0
 	SET isdone = 1
 	WHERE is_query_store_on = 0;
-	
-	IF NOT EXISTS (SELECT [database_id] FROM sys.databases WHERE is_query_store_on = 1)
-	SELECT 'Database_checks' AS [Category], 'Query_Store' AS [Information] , '[INFORMATION: No databases have Query Store enabled]';
 	
 	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 	BEGIN	
@@ -6364,7 +6361,7 @@ FROM sys.database_query_store_options;'
 		END
 	END
 	
-	IF (SELECT COUNT([triggerName]) FROM #tblQStoreInfo) > 0
+	IF (SELECT COUNT([DBName]) FROM #tblQStoreInfo) > 0
 	BEGIN
 		SELECT 'Information' AS [Category], 'Query_Store' AS [Information], DBName AS [Database_Name],
 			Actual_State, Flush_Interval_Sec, Interval_Length_Min, Query_CaptureMode, Max_Storage_Size_MB, Current_Storage_Size_MB
@@ -6377,12 +6374,66 @@ FROM sys.database_query_store_options;'
 	END
 END;		
 
+--------------------------------------------------------------------------------------------------------------------------------
+-- Automatic Tuning info subsection
+--------------------------------------------------------------------------------------------------------------------------------
+RAISERROR (N'  |-Starting Automatic Tuning info', 10, 1) WITH NOWAIT
 
-	SELECT 'Database_checks' AS [Category], 'Query_Store_Info' AS [Information] , * from #qstoreinfo
+IF @sqlmajorver > 13
+BEGIN
+	
+	UPDATE #tmpdbs0
+	SET isdone = 0;
 
-	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qstoreinfo'))
-	DROP TABLE #qstoreinfo;
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [state] <> 0 OR [dbid] < 5;
 
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
+	
+	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+	BEGIN	
+		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
+		DROP TABLE #tblAutoTuningInfo;
+		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
+		CREATE TABLE #tblAutoTuningInfo ([DBName] sysname, AutoTuning_Option NVARCHAR(128), Desired_State NVARCHAR(60), Actual_State NVARCHAR(60), Desired_diff_Actual_reason NVARCHAR(60));
+
+		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+		BEGIN
+			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+			
+			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], name, desired_state_desc, actual_state_desc, reason_desc
+FROM sys.database_automatic_tuning_options;'
+
+			BEGIN TRY
+				INSERT INTO #tblAutoTuningInfo
+				EXECUTE sp_executesql @sqlcmd
+			END TRY
+			BEGIN CATCH
+				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+				SELECT @ErrorMessage = 'Automatic Tuning subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
+				RAISERROR (@ErrorMessage, 16, 1);
+			END CATCH
+			
+			UPDATE #tmpdbs0
+			SET isdone = 1
+			WHERE [dbid] = @dbid
+		END
+	END
+	
+	IF (SELECT COUNT([triggerName]) FROM #tblAutoTuningInfo) > 0
+	BEGIN
+		SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information], DBName AS [Database_Name],
+			AutoTuning_Option, Desired_State, Actual_State, Desired_diff_Actual_reason
+		FROM #tblAutoTuningInfo
+		ORDER BY DBName;
+	END
+	ELSE
+	BEGIN
+		SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information] , '[INFORMATION: No databases have Automatic Tuning enabled]' AS [Comment];
 	END
 END;
 
@@ -12472,6 +12523,10 @@ IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id]
 DROP TABLE #tblDeprecatedJobs;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.##tblKeywords'))
 DROP TABLE ##tblKeywords;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
+DROP TABLE #tblQStoreInfo;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
+DROP TABLE #tblAutoTuningInfo;
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')
