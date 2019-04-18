@@ -9090,22 +9090,69 @@ END;
 IF @sqlmajorver > 13 AND @ptochecks = 1
 BEGIN
 	RAISERROR (N'  |-Starting Tuning recommendations', 10, 1) WITH NOWAIT
-
-	DECLARE @recommendationsNum int
-
-	DECLARE @sqlcmdTR NVARCHAR(100), @paramsTR NVARCHAR(50), @HasTR int
-	SET @HasTR = 0
-	IF @sqlmajorver > 14
-	BEGIN
-		SET @sqlcmdTR = 'USE ' + QUOTENAME(@dbName) + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.dm_db_tuning_recommendations'
-		SET @paramsTR = N'@HasTR_OUT int OUTPUT'
 	
-		EXECUTE sp_executesql @sqlcmdTR, @paramsTR, @HasTR_OUT = @HasTR OUTPUT
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTuningRecommendationsCnt'))
+	DROP TABLE #tblTuningRecommendationsCnt;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTuningRecommendationsCnt'))
+	CREATE TABLE #tblTuningRecommendationsCnt ([DBName] sysname, [dbid] int, [HasRecommendations] bit);
+	
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTuningRecommendations'))
+	DROP TABLE #tblTuningRecommendations;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTuningRecommendations'))
+	CREATE TABLE #tblTuningRecommendations ([DBName] sysname, [query_id] bigint,
+		[reason] NVARCHAR(4000), [score] int, [CurrentState] NVARCHAR(4000), [CurrentStateReason] NVARCHAR(4000), [query_sql_text] NVARCHAR(max),
+		[RegressedPlan] [xml], [SuggestedPlan] [xml], [ImplementationScript] NVARCHAR(100));
+
+	UPDATE #tmpdbs0
+	SET isdone = 0;
+
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [state] <> 0 OR [dbid] = 2;
+
+	UPDATE #tmpdbs0
+	SET isdone = 1
+	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
+	
+	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+	BEGIN	
+		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+		BEGIN
+			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ''' + REPLACE(@dbid, CHAR(39), CHAR(95)) + ''' AS [dbid], CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END FROM sys.dm_db_tuning_recommendations;'
+
+			BEGIN TRY
+				INSERT INTO #tblTuningRecommendationsCnt
+				EXECUTE sp_executesql @sqlcmd
+			END TRY
+			BEGIN CATCH
+				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+				SELECT @ErrorMessage = 'Tuning Recommendations subsection - Error raised in TRY block in database ' + @dbname +'. ' + ERROR_MESSAGE()
+				RAISERROR (@ErrorMessage, 16, 1);
+			END CATCH
+			
+			UPDATE #tmpdbs0
+			SET isdone = 1
+			WHERE [dbid] = @dbid
+		END
 	END;
 
-	IF @HasTR > 0
+	IF EXISTS (SELECT COUNT([DBName]) FROM #tblTuningRecommendationsCnt WHERE [HasRecommendations] = 1)
 	BEGIN
-		EXEC (';WITH CTE_Tuning_Recs AS (SELECT tr.reason, 
+		UPDATE #tmpdbs0
+		SET isdone = 0
+		FROM #tblTuningRecommendationsCnt AS trc
+		INNER JOIN #tmpdbs0 ON #tmpdbs0.[dbid] = trc.[dbid]
+		WHERE [state] <> 0;
+	
+		IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+		BEGIN	
+			WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
+			BEGIN
+				SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
+				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
+WITH CTE_Tuning_Recs AS (SELECT tr.reason, 
 		tr.score, pln.query_id, pln.regressedPlanId, pln.recommendedPlanId,
 		JSON_VALUE(tr.state,''$.currentValue'') AS CurrentState,
 		JSON_VALUE(tr.state,''$.reason'') AS CurrentStateReason,
@@ -9125,20 +9172,47 @@ BEGIN
 		recommendedPlanCpuTimeAverage float
 		) AS pln
 	)
-SELECT ''Performance_checks'' AS [Category], ''Automatic_Tuning_Recommendations'' AS [Check], 
-	''[INFORMATION: Found tuning recommendations. If Automatic Tuning is not configured to deploy these recommednations, review manually and decide which ones to deploy]'' AS Comment,
-	qsq.query_id, cte.reason, cte.score, cte.CurrentState, cte.CurrentStateReason, qsqt.query_sql_text,
+SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], qsq.query_id, cte.reason, cte.score, cte.CurrentState, cte.CurrentStateReason, qsqt.query_sql_text,
 	CAST(rp.query_plan AS XML) AS RegressedPlan, CAST(sp.query_plan AS XML) AS SuggestedPlan, cte.ImplementationScript
 FROM CTE_Tuning_Recs AS cte
 INNER JOIN sys.query_store_plan AS rp ON rp.query_id = cte.[query_id] AND rp.plan_id = cte.regressedPlanId
 INNER JOIN sys.query_store_plan AS sp ON sp.query_id = cte.[query_id] AND sp.plan_id = cte.recommendedPlanId
 INNER JOIN sys.query_store_query AS qsq	ON qsq.query_id = rp.query_id 
-INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_text_id;')
+INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_text_id;'
+
+			BEGIN TRY
+				INSERT INTO #tblTuningRecommendations
+				EXECUTE sp_executesql @sqlcmd
+			END TRY
+			BEGIN CATCH
+				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
+				SELECT @ErrorMessage = 'Tuning Recommendations List subsection - Error raised in TRY block in database ' + @dbname +'. ' + ERROR_MESSAGE()
+				RAISERROR (@ErrorMessage, 16, 1);
+			END CATCH
+			
+			UPDATE #tmpdbs0
+			SET isdone = 1
+			WHERE [dbid] = @dbid
+			END
+		END
+		
+		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], '[INFORMATION: Found tuning recommendations. If Automatic Tuning is not configured to deploy these recommednations, review manually and decide which ones to deploy]' AS Comment
+		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], DBName AS [Database_Name], 
+			[query_id], [reason], [score], [CurrentState], [CurrentStateReason],
+			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+				tr2.query_sql_text,
+				NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+				AS [text()]
+				FROM #tblTuningRecommendations (NOLOCK) AS tr
+				WHERE tr2.DBName = tr.DBName AND tr2.query_id = tr.query_id
+				FOR XML PATH(''), TYPE) AS [query_sql_text],
+			[RegressedPlan], [SuggestedPlan], [ImplementationScript]
+		FROM #tblTuningRecommendations AS tr;
 	END
 	ELSE
 	BEGIN
 		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], '[NA]' AS Comment
-	END;
+	END
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -12554,6 +12628,10 @@ IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id]
 DROP TABLE #tblQStoreInfo;
 IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
 DROP TABLE #tblAutoTuningInfo;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTuningRecommendationsCnt'))
+DROP TABLE #tblTuningRecommendationsCnt;
+IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTuningRecommendations'))
+DROP TABLE #tblTuningRecommendations;
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
 EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_keycols'')) DROP FUNCTION dbo.fn_createindex_keycols')

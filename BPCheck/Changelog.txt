@@ -371,3 +371,4 @@ v2.4.1.2 - 04/17/2019 - Improved Max Server Memory section to account for new, s
 						Fixed Indexing per Table checks (Thanks FifthMan);
 						Added check for recommended trace flag 7412 on SQL 2016+;
 						Fixed new MaxDOP recommendation.
+v2.4.1.3 - 04/18/2019 - Fixed Automatic Tuning recommendations section.
