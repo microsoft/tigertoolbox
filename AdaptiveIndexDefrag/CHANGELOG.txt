@@ -125,16 +125,16 @@ v1.6.5.4 - 8/04/2017 - Fixed error where @minPageCount wasn't getting passed int
 v1.6.5.5 - 8/11/2017 - Added support for fixed sampling rate for statistics.
 v1.6.5.7 - 10/19/2017 - Extended support for CCI under SQL 2016 and above.
 v1.6.6 	- 1/11/2018 - Added support to set or reset compression setting on all rowstore indexes;
-						Added support for MAXDOP in statistics operations.
+			Added support for MAXDOP in statistics operations.
 v1.6.6.1 - 1/12/2018 - Improved stats operations logging: stats that were updated as part of index rebuild, or where stats update was not needed at runtime are now logged. Columns [rows] and [rows_sampled] will have value -1.
 v1.6.6.2 - 2/24/2018 - Fixed stats operation logging issue when using @Exec_Print = 0;
-						Fixed vw_LastRun_Log view.
+			Fixed vw_LastRun_Log view.
 v1.6.6.3 - 3/27/2018 - Fixed stats operation logging issue.
 v1.6.6.4 - 6/25/2018 - Tested with Azure SQL Managed Instance;
-						Added extra debug output.
+			Added extra debug output.
 v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become uncompressed (by d-moloney);
-						Extended row mode counter info data type in debug mode (by d-moloney);
-						Fixed issue with @statsThreshold and large tables (by AndrewG2).
+			Extended row mode counter info data type in debug mode (by d-moloney);
+			Fixed issue with @statsThreshold and large tables (by AndrewG2).
 v1.6.6.6 - 10/28/2018 - Extended 2nd row mode counter info data type in debug mode (by CodyFitzpatrick);
-						Fixed compression data missing in working table (by ravseer).
+			Fixed compression data missing in working table (by ravseer).
 v1.6.6.7 - 04/17/2019 - Fixed resumable index DMV syntax error issue.
