@@ -2,24 +2,24 @@ Change log available in http://github.com/Microsoft/tigertoolbox/blob/master/Ada
 
 Options list available in http://github.com/Microsoft/tigertoolbox/blob/master/AdaptiveIndexDefrag/OPTIONS.md.
 
-**What’s the purpose of AdaptiveIndexDefrag?**
-The purpose for this procedure to perform an intelligent defrag on one or more indexes and statistics for one or more databases. In a nutshell, this procedure automatically chooses whether to rebuild or reorganize an index according to its fragmentation level, amongst other parameters, like if page locks are allowed or the existence of LOBs, while keeping statistics updated with a linear threshold. All within a specified time frame you choose, defaulting to 8 hours. The defrag priority can also be set, either on size, fragmentation level or index usage (based on range scan count), which is the default. It also handles partitioned indexes, columnstore indexes, indexes in In-Memory tables, statistics update (table-wide or only those related to indexes), rebuilding with the original fill factor or index padding and online operations, to name a few options.
+## What’s the purpose of AdaptiveIndexDefrag?
+The purpose for this procedure to perform an Intelligent defrag on one or more indexes, as well as required statistics update, for one or more databases. In a nutshell, this procedure automatically chooses whether to rebuild or reorganize an index according to its fragmentation level, amongst other parameters, like if page locks are allowed or the existence of LOBs, while keeping statistics updated with a linear threshold. All within a specified time frame you choose, defaulting to 8 hours. The defrag priority can also be set, either on size, fragmentation level or index usage (based on range scan count), which is the default. It also handles partitioned indexes, columnstore indexes, indexes in In-Memory tables, statistics update (table-wide or only those related to indexes), rebuilding with the original fill factor or index padding and online operations, to name a few options.
 
-**Does it only handle index and statistics?**
+## Does it only handle index and statistics?
 Yes, but it is used as a part of a full maintenance solution that also handles database integrity checks, errorlog cycling and other relevant SQL Server maintenance routines that every database administrator needs to handle. See more information in http://github.com/Microsoft/tigertoolbox/tree/master/MaintenanceSolution.
 
-**On what version of SQL can I use it?**
+## On what version of SQL can I use it?
 This procedure can be used from SQL Server 2005 SP2 onwards, because of the DMVs and DMFs involved.
 
-NOTE: no longer garanteed to work with SQL Server 2005. Use at your own volution.
+**NOTE:** no longer garanteed to work with SQL Server 2005. Use at your own volution.
 
-**How to deploy it?**
+## How to deploy it?
 Starting with v1.3.7, on any database context you choose to create the usp_AdaptiveIndexDefrag and its supporting objects, open the attached script, and either keep the @deploymode variable at the top to upgrade mode (preserving all historic data), or change for new deployments or overwrite old versions and objects (disregarding historic data).
 
-**How to use it?**
+## How to use it?
 After executing the attached script in a user database of your choice, either run the procedure usp_AdaptiveIndexDefrag with no parameters, since all are optional (If not specified, the defaults for each parameter are used), or customize its use with parameters. Check all available parameters in the OPTIONS.md file.
 
-**What objects are created when running the attached script?**
+## What objects are created when running the attached script?
 
 - Several control and logging tables are created:
   - tbl_AdaptiveIndexDefrag_Working, used to keep track of which objects to act on, and crucial information that influence how those objects are handled. It also keeps track of which indexes were already defragged in a previous run, if your defrag cycle must span several days due to time constraints.
@@ -38,7 +38,7 @@ After executing the attached script in a user database of your choice, either ru
   - vw_AvgMostUsedLst30Days, to check the average usage of each index in the last 30 days.
   - vw_LastRun_Log, to check in the log tables how the last execution did.
 
-A few common usage scenarios for this script:
+## A few common usage scenarios for this script
 
 **EXEC dbo.usp_AdaptiveIndexDefrag**
 The defaults are to defragment indexes with fragmentation greater than 5%; rebuild indexes with fragmentation greater than 30%; defragment ALL indexes; commands WILL be executed automatically; defragment indexes in DESC order of the RANGE_SCAN_COUNT value; time limit was specified and is 480 minutes (8 hours); ALL databases will be defragmented; ALL tables will be defragmented; WILL be rescanning indexes; the scan will be performed in LIMITED mode; LOBs will be compacted; limit defrags to indexes with more than 8 pages; indexes will be defragmented OFFLINE; indexes will be sorted in the DATABASE; indexes will have its ORIGINAL Fill Factor; only the right-most populated partitions will be considered if greater than 8 page(s); statistics WILL be updated on reorganized indexes; defragmentation will use system defaults for processors; does NOT print the t-sql commands; does NOT output fragmentation levels; waits 5s between index operations;
