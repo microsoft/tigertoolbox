@@ -6377,7 +6377,7 @@ FROM sys.database_query_store_options;'
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 		END
-	END
+	--END
 	
 	IF (SELECT COUNT([DBName]) FROM #tblQStoreInfo) > 0
 	BEGIN
@@ -6391,7 +6391,7 @@ FROM sys.database_query_store_options;'
 		SELECT 'Information' AS [Category], 'Query_Store' AS [Information] , '[INFORMATION: No databases have Query Store enabled]' AS [Comment];
 	END
 END;		
-
+END;
 --------------------------------------------------------------------------------------------------------------------------------
 -- Automatic Tuning info subsection
 --------------------------------------------------------------------------------------------------------------------------------
