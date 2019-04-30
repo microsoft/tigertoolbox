@@ -10496,7 +10496,7 @@ BEGIN
 	RAISERROR (N'  |-Starting Indexes with large keys (> %s bytes)', 10, 1,@MaxIndSizeStr) WITH NOWAIT
 	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE [KeyCols_data_length_bytes] > @MaxIndSize) > 0
 	BEGIN
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], '[WARNING: Some indexes have keys larger than 900 bytes. It is recommended to revise these]' AS [Deviation]
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], '[WARNING: Some indexes have keys larger than ' + @MaxIndSizeStr +  ' bytes. It is recommended to revise these]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], 
 			I.KeyCols, [KeyCols_data_length_bytes]
 		FROM #tblIxs1 I
