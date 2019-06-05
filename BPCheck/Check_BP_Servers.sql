@@ -206,7 +206,8 @@ DECLARE @agt smallint, @ole smallint, @sao smallint, @xcmd smallint
 DECLARE @ErrorSeverity int, @ErrorState int, @ErrorMessage NVARCHAR(4000)
 DECLARE @CMD NVARCHAR(4000)
 DECLARE @path NVARCHAR(2048)
-DECLARE @sqlminorver int, @sqlbuild int, @clustered bit, @osver VARCHAR(5), @ostype VARCHAR(10), @osdistro VARCHAR(20), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @ossp VARCHAR(25), @SystemManufacturer VARCHAR(128)
+DECLARE @sqlminorver int, @sqlbuild int, @clustered bit
+DECLARE @osver VARCHAR(5), @ostype VARCHAR(10), @osdistro VARCHAR(20), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @ossp VARCHAR(25), @SystemManufacturer VARCHAR(128), @BIOSVendor AS VARCHAR(128), @Processor_Name AS VARCHAR(128)
 DECLARE @existout int, @FSO int, @FS int, @OLEResult int, @FileID int
 DECLARE @FileName VARCHAR(200), @Text1 VARCHAR(2000), @CMD2 VARCHAR(100)
 DECLARE @src VARCHAR(255), @desc VARCHAR(255), @psavail VARCHAR(20), @psver tinyint
@@ -421,6 +422,8 @@ BEGIN
 END;
 
 SELECT @SystemManufacturer = [Data] FROM @machineinfo WHERE [Value] = 'SystemManufacturer';
+SELECT @BIOSVendor = [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor';
+SELECT @Processor_Name = [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString';
 
 SELECT 'Information' AS [Category], 'Machine' AS [Information], 
 	CASE @osver WHEN '5.2' THEN 'XP/WS2003'
@@ -438,10 +441,10 @@ SELECT 'Information' AS [Category], 'Machine' AS [Information],
 	@SystemManufacturer AS [System_Manufacturer],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'SystemFamily') AS [System_Family],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'SystemProductName') AS [System_ProductName],
-	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor') AS [BIOS_Vendor],
+	@BIOSVendor AS [BIOS_Vendor],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'BIOSVersion') AS [BIOS_Version],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'BIOSReleaseDate') AS [BIOS_Release_Date],
-	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString') AS [Processor_Name];
+	@Processor_Name AS [Processor_Name];
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Disk space subsection
@@ -556,7 +559,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
-DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(64), @cpuover32 int
+DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
 
 IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
 BEGIN
@@ -667,21 +670,33 @@ BEGIN
 	WHERE name = 'affinity64 mask';
 END;
 
+/*
 IF @cpucount > 32
 SELECT @cpuover32 = ABS(LEN(@affinity64mask) - (@cpucount-32))
 
 SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),@cpuover32)) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,@cpucount) END
+*/
+
+SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN @affinity64mask ELSE @affinitymask END
 
 SET @cpuaffin_fixed = @cpuaffin
 
 IF @numa > 1
 BEGIN
 	-- format binary mask by node for better reading
-	SET @i = @cpucount/@numa + 1
+	SET @i = CEILING(@cpucount*1.00/@numa) + 1
 	WHILE @i < @cpucount + @numa
 	BEGIN
-		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
-		SET @i = @i + @cpucount/@numa + 1
+		IF (@cpucount + @numa) - @i >= CEILING(@cpucount*1.00/@numa)
+		BEGIN
+			SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
+		END
+		ELSE
+		BEGIN
+			SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa), SUBSTRING(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa)))
+		END
+
+		SET @i = @i + CEILING(@cpucount*1.00/@numa) + 1
 	END
 END
 
@@ -1655,39 +1670,54 @@ RAISERROR (N'  |-Starting Number of available Processors for this instance vs. M
 DECLARE /*@cpucount int, @numa int, */@affined_cpus int
 
 /*
-DECLARE @i int, @cpuaffin_fixed VARCHAR(300)
+DECLARE @i int, @cpuaffin_fixed VARCHAR(1024)
 SET @cpuaffin_fixed = @cpuaffin
 SET @i = @cpucount/@numa + 1
 WHILE @i < @cpucount + @numa
 BEGIN
-	SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
-	SET @i = @i + @cpucount/@numa + 1
-END
+	IF (@cpucount + @numa) - @i >= CEILING(@cpucount*1.00/@numa)
+	BEGIN
+		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
+	END
+	ELSE
+	BEGIN
+		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa), SUBSTRING(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa)))
+	END
+
+	SET @i = @i + CEILING(@cpucount*1.00/@numa) + 1
+END;
 */
 
--- MaxDOP should be between 8 and 16. This is handled specifically on NUMA scenarios below.
+-- MaxDOP should be between 8 and 15. This is handled specifically on NUMA scenarios below.
 SELECT @affined_cpus = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64;
 --SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
-	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)]'
-		WHEN @numa = 1 AND @affined_cpus <= 16 AND ([value] = 0 OR [value] <> @affined_cpus) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
-		WHEN @numa = 1 AND @affined_cpus > 16 AND ([value] = 0 OR [value] <> 16) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
-		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 AND ([value] = 0 OR [value] <> CEILING(@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
-		WHEN @numa > 1 AND (@cpucount/@numa) > 16 AND ([value] = 0 OR [value] <> CEILING(@cpucount/@numa)/2) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)'
+		WHEN @numa = 1 AND @affined_cpus <= 8 AND [value] > 0 AND [value] <> @affined_cpus THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
+		WHEN @numa = 1 AND @affined_cpus > 8 AND ([value] = 0 OR [value] > 8) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) <= 15 AND ([value] = 0 OR [value] > CEILING(@cpucount*1.00/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) > 15 AND ([value] = 0 OR [value] > CEILING(@cpucount*1.00/@numa/2)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) < 8 AND ([value] = 0 OR [value] > CEILING(@cpucount*1.00/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) >= 8 AND ([value] = 0 OR [value] > 8 OR [value] > CEILING(@cpucount*1.00/@numa)) THEN 'WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
 		ELSE '[OK]'
 	END AS [Deviation]
-FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
+FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';	
 
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information], 
 	CASE 
-		-- If not NUMA, and up to 16 @affined_cpus then MaxDOP up to 16
-		WHEN @numa = 1 AND @affined_cpus <= 16 THEN @affined_cpus
-		-- If not NUMA, and more than 16 @affined_cpus then MaxDOP 16
-		WHEN @numa = 1 AND @affined_cpus > 16 THEN 16
-		-- If NUMA and # logical CPUs per NUMA up to 16, then MaxDOP is set as # logical CPUs per NUMA, up to 16 
-		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 THEN CEILING(@cpucount/@numa)
-		-- If NUMA and # logical CPUs per NUMA > 16, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
-		WHEN @numa > 1 AND (@cpucount/@numa) > 16 THEN CEILING((@cpucount/@numa)/2)
+		-- If not NUMA, and up to 8 @affined_cpus then MaxDOP up to 8
+		WHEN @numa = 1 AND @affined_cpus <= 8 THEN @affined_cpus
+		-- If not NUMA, and more than 8 @affined_cpus then MaxDOP 8 
+		WHEN @numa = 1 AND @affined_cpus > 8 THEN 8
+		-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA up to 15, then MaxDOP is set as # logical CPUs per NUMA, up to 15 
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) <= 15 THEN CEILING((@cpucount*1.00)/@numa)
+		-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA > 15, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) > 15 THEN 
+			CASE WHEN CEILING(@cpucount*1.00/@numa/2) > 16 THEN 16 ELSE CEILING(@cpucount*1.00/@numa/2) END
+		-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA up to 8, then MaxDOP is set as # logical CPUs per NUMA 
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) < 8 THEN CEILING(@cpucount*1.00/@numa)
+		-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA > 8, then MaxDOP 8
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) >= 8 THEN 8
 		ELSE 0
 	END AS [Recommended_MaxDOP],
 	[value] AS [Current_MaxDOP], @cpucount AS [Available_Processors], @affined_cpus AS [Affined_Processors], 
@@ -1725,6 +1755,27 @@ BEGIN
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
+-- Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594) subsection
+--------------------------------------------------------------------------------------------------------------------------------
+RAISERROR (N'  |-Starting Check for HP Logical Processor issue', 10, 1) WITH NOWAIT
+
+IF LOWER(@SystemManufacturer) <> 'microsoft' AND LOWER(@SystemManufacturer) <> 'vmware' AND LOWER(@ostype) = 'windows'
+BEGIN
+	IF LOWER(@BIOSVendor) = 'hp' AND LOWER(@Processor_Name) like '%xeon%e5%' --and
+	BEGIN
+		SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Information], '[WARNING: You may be affected by HP Logical Processor issue outlined in https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594]' AS [Deviation]
+	END    
+	ELSE
+    BEGIN
+        SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Check], '[INFORMATION: Not an affected HP Machine]' AS [Deviation];
+    END;
+END
+ELSE
+BEGIN
+	SELECT 'Processor_checks' AS [Category], 'HP_Logical_Processor_Issue' AS [Check], '[Not a Physical Machine]' AS [Deviation];
+END;
+
+--------------------------------------------------------------------------------------------------------------------------------
 -- Additional Processor information subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Additional Processor information', 10, 1) WITH NOWAIT
@@ -1738,19 +1789,6 @@ SELECT 'Processor_checks' AS [Category], 'Processor_Summary' AS [Information], c
 	@cpuaffin_fixed AS Affinity_Mask_Bitmask
 FROM sys.dm_os_sys_info (NOLOCK)
 OPTION (RECOMPILE);
-
--- Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594)
-IF LOWER(@SystemManufacturer) <> 'microsoft' and LOWER(@SystemManufacturer) <> 'vmware' and LOWER(@ostype) = 'windows'
-BEGIN
-	DECLARE @BIOSVendor AS varchar(128), @Processor_Name as varchar(128)
-
-	SELECT @BIOSVendor = [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor'
-	SELECT @Processor_Name = [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString'
-	IF LOWER(@BIOSVendor) = 'hp' AND LOWER(@Processor_Name) like '%xeon%e5%' --and
-	BEGIN
-		SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Information], 'Warning: You may be affected by HP Logical Processor issue outlined in https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594' AS [Deviation]
-	END
-END
 
 IF @ptochecks = 1
 BEGIN
