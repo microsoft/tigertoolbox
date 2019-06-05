@@ -2,10 +2,10 @@
 
 -- Replace CREATE PROCEDURE with ALTER PROCEDURE or CREATE OR ALTER PROCEDURE to allow new changes to the SP if the SP is already present.
 
-CREATE PROCEDURE usp_whatsup @sqluptime bit = 1, @requests bit = 1, @blocking bit = 1, @spstats bit = 0, @qrystats bit = 0, @trstats bit = 0, @fnstats bit = 0
+CREATE PROCEDURE usp_whatsup @sqluptime bit = 1, @requests bit = 1, @blocking bit = 1, @spstats bit = 0, @qrystats bit = 0, @trstats bit = 0, @fnstats bit = 0, @top smallint = 100
 AS
 
--- Returns running sessions/requests; blocking information; sessions that have been granted locks or waiting for locks; and optionally SP/Query/Trigger/Function execution stats.
+-- Returns running sessions/requests; blocking information; sessions that have been granted locks or waiting for locks; and optionally top SP/Query/Trigger/Function execution stats.
 
 SET NOCOUNT ON;
 
@@ -504,7 +504,7 @@ END;
 -- Query stats
 IF @qrystats = 1 AND @sqlmajorver >= 11
 BEGIN 
-	SELECT @sqlcmd = N'SELECT CASE WHEN CONVERT(int,pa.value) = 32767 THEN ''ResourceDB'' ELSE DB_NAME(CONVERT(int,pa.value)) END AS DatabaseName,
+	SELECT @sqlcmd = N'SELECT' + CASE WHEN @top IS NULL THEN '' ELSE ' TOP ' + CONVERT(NVARCHAR(10), @top) END + ' CASE WHEN CONVERT(int,pa.value) = 32767 THEN ''ResourceDB'' ELSE DB_NAME(CONVERT(int,pa.value)) END AS DatabaseName,
 	(SELECT st.text AS [text()] FROM sys.dm_exec_sql_text(qs.plan_handle) AS st FOR XML PATH(''''), TYPE) AS [sqltext],
 	qs.creation_time AS cached_time,
 	qs.last_execution_time,
@@ -540,7 +540,7 @@ END;
 -- Stored procedure stats
 IF @spstats = 1 AND @sqlmajorver >= 11
 BEGIN 
-	SET @sqlcmd = N'SELECT CASE WHEN ps.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(ps.database_id) END AS DatabaseName, 
+	SET @sqlcmd = N'SELECT' + CASE WHEN @top IS NULL THEN '' ELSE ' TOP ' + CONVERT(NVARCHAR(10), @top) END + ' CASE WHEN ps.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(ps.database_id) END AS DatabaseName, 
 	CASE WHEN ps.database_id = 32767 THEN NULL ELSE OBJECT_NAME(ps.[object_id], ps.database_id) END AS ObjectName,
 	type_desc,
 	(SELECT qt.text AS [text()] 
@@ -570,7 +570,7 @@ END;
 -- Trigger stats
 IF @trstats = 1 AND @sqlmajorver >= 11
 BEGIN
-	SET @sqlcmd = N'SELECT CASE WHEN ts.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(ts.database_id) END AS DatabaseName, 
+	SET @sqlcmd = N'SELECT' + CASE WHEN @top IS NULL THEN '' ELSE ' TOP ' + CONVERT(NVARCHAR(10), @top) END + ' CASE WHEN ts.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(ts.database_id) END AS DatabaseName, 
 	CASE WHEN ts.database_id = 32767 THEN NULL ELSE OBJECT_NAME(ts.[object_id], ts.database_id) END AS ObjectName,
 	type_desc,
 	(SELECT qt.text AS [text()] 
@@ -600,7 +600,7 @@ END;
 -- Function stats
 IF @fnstats = 1 AND @sqlmajorver >= 13
 BEGIN
-	SET @sqlcmd = N'SELECT CASE WHEN fs.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(fs.database_id) END AS DatabaseName, 
+	SET @sqlcmd = N'SELECT' + CASE WHEN @top IS NULL THEN '' ELSE 'TOP ' + CONVERT(NVARCHAR(10), @top) END + ' CASE WHEN fs.database_id = 32767 THEN ''ResourceDB'' ELSE DB_NAME(fs.database_id) END AS DatabaseName, 
 	CASE WHEN fs.database_id = 32767 THEN NULL ELSE OBJECT_NAME(fs.[object_id], fs.database_id) END AS ObjectName,
 	type_desc,
 	(SELECT qt.text AS [text()] 
