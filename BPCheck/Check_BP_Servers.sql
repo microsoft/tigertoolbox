@@ -1508,7 +1508,7 @@ RAISERROR (N'|-Excluding MS shipped by notable object names', 10, 1) WITH NOWAIT
 WHILE (SELECT COUNT(id) FROM #tmpdbs1 WHERE isdone = 0) > 0
 BEGIN
 	SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
-	SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
+	SET @sqlcmd = N'USE ' + QUOTENAME(@dbname) + N';
 IF (OBJECT_ID(''dbo.AR_Class'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.AR_Entity'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.AR_System'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ar_CreateEntity'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ar_CreateMethod'',''P'') IS NOT NULL)
 OR (OBJECT_ID(''dbo.Versions'',''U'') IS NOT NULL 
 	AND (OBJECT_ID(''dbo.ECMApplicationLog'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.ECMTerm'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ECM_GetPackage'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ECM_GetGroups'',''P'') IS NOT NULL)
@@ -1602,7 +1602,7 @@ OR (OBJECT_ID(''dbo.Activities'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.Scopes''
 OR (OBJECT_ID(''Core.Runbooks'',''U'') IS NOT NULL AND OBJECT_ID(''Core.Activities'',''U'') IS NOT NULL AND OBJECT_ID(''Core.Connections'',''U'') IS NOT NULL AND SCHEMA_ID(''Common'') IS NOT NULL)
 -- End SCSMA
 BEGIN
-	SELECT @MSdbOUT = ' + CONVERT(VARCHAR(10), @dbid) + '
+	SELECT @MSdbOUT = ' + CONVERT(VARCHAR(10), @dbid) + N'
 END'
 	SET @params = N'@MSdbOUT int OUTPUT';
 	EXECUTE sp_executesql @sqlcmd, @params, @MSdbOUT=@MSdb OUTPUT
