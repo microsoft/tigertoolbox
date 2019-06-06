@@ -374,3 +374,4 @@ v2.4.1.2 - 04/17/2019 - Improved Max Server Memory section to account for new, s
 v2.4.1.4 - 06/05/2019 - Fixed Automatic Tuning recommendations section;
 						Fixed MaxDOP check as per new documented recommendation;
 						Fixed issue with MS-shipped DBs exclusion with SQL 2019.
+v2.4.1.5 - 06/06/2019 - Fixed table error with Query Store and Auto Tuning sections when features are not enabled.

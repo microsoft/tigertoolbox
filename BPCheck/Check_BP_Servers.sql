@@ -6371,6 +6371,11 @@ IF @sqlmajorver > 12
 BEGIN
 	RAISERROR (N'  |-Starting Query Store info', 10, 1) WITH NOWAIT
 	
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
+	DROP TABLE #tblQStoreInfo;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
+	CREATE TABLE #tblQStoreInfo ([DBName] sysname, Actual_State NVARCHAR(60), Flush_Interval_Sec bigint, Interval_Length_Min bigint, Query_CaptureMode NVARCHAR(60), Max_Storage_Size_MB bigint, Current_Storage_Size_MB bigint);
+
 	UPDATE #tmpdbs0
 	SET isdone = 0;
 
@@ -6388,11 +6393,6 @@ BEGIN
 	
 	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 	BEGIN	
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
-		DROP TABLE #tblQStoreInfo;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
-		CREATE TABLE #tblQStoreInfo ([DBName] sysname, Actual_State NVARCHAR(60), Flush_Interval_Sec bigint, Interval_Length_Min bigint, Query_CaptureMode NVARCHAR(60), Max_Storage_Size_MB bigint, Current_Storage_Size_MB bigint);
-
 		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
@@ -6437,6 +6437,10 @@ RAISERROR (N'  |-Starting Automatic Tuning info', 10, 1) WITH NOWAIT
 
 IF @sqlmajorver > 13
 BEGIN
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
+	DROP TABLE #tblAutoTuningInfo;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
+	CREATE TABLE #tblAutoTuningInfo ([DBName] sysname, AutoTuning_Option NVARCHAR(128), Desired_State NVARCHAR(60), Actual_State NVARCHAR(60), Desired_diff_Actual_reason NVARCHAR(60));
 	
 	UPDATE #tmpdbs0
 	SET isdone = 0;
@@ -6451,11 +6455,6 @@ BEGIN
 	
 	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 	BEGIN	
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
-		DROP TABLE #tblAutoTuningInfo;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
-		CREATE TABLE #tblAutoTuningInfo ([DBName] sysname, AutoTuning_Option NVARCHAR(128), Desired_State NVARCHAR(60), Actual_State NVARCHAR(60), Desired_diff_Actual_reason NVARCHAR(60));
-
 		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
