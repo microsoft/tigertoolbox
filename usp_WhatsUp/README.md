@@ -55,3 +55,5 @@ In the output, you will find the following information in 6 sections:
 -  04/15/2019 Added support for input buffer DMF.
 -  04/17/2019 Fixed function stats query failing in SQL Server 2012 and 2014.
 -  06/05/2019 Added TOP option to return limited number of rows for execution statistics.
+-  06/06/2019 Fixed issue with CHAR(0) and XML conversion;
+   -  Fixed issue with @fnstats execution error.
