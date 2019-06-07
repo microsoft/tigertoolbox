@@ -145,7 +145,7 @@ BEGIN
 	-- Perms 2
 	INSERT INTO @permstbl
 	SELECT a.name
-	FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[OBJECT_ID] = b.major_id
+	FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[object_id] = b.major_id
 	WHERE a.type IN ('P', 'X') AND b.grantee_principal_id <>0 
 	AND b.grantee_principal_id <>2
 	AND b.grantee_principal_id = @masterpid;
@@ -449,7 +449,7 @@ SELECT 'Information' AS [Category], 'Machine' AS [Information],
 --------------------------------------------------------------------------------------------------------------------------------
 -- Disk space subsection
 --------------------------------------------------------------------------------------------------------------------------------
-IF @sqlmajorver > 9
+IF @sqlmajorver > 10 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
 	RAISERROR (N'|-Starting Disk space', 10, 1) WITH NOWAIT
 	SELECT DISTINCT 'Information' AS [Category], 'Disk_Space' AS [Information], vs.logical_volume_name,
@@ -5583,10 +5583,10 @@ SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Sta
 UNION ALL
 SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'xp_cmdshell' AS [Setting], @cmdshell AS [Current Value], CASE WHEN @cmdshell = 1 THEN '[WARNING: xp_cmdshell setting is enabled]' ELSE '[OK]' END AS [Deviation], '' AS [Comment];
 
-IF (SELECT COUNT([Name]) FROM master.sys.configurations WHERE [value] <> [value_in_use] AND [is_dynamic] = 0) > 0
+IF (SELECT COUNT([name]) FROM master.sys.configurations WHERE [value] <> [value_in_use] AND [is_dynamic] = 0) > 0
 BEGIN
-	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Check], '[WARNING: There are system configurations with differences between running and configured values]' AS [Deviation]
-	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Information], [Name] AS [Setting],
+	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending' AS [Check], '[WARNING: There are system configurations with differences between running and configured values]' AS [Deviation]
+	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending' AS [Information], [name] AS [Setting],
 		[value] AS 'Config_Value',
 		[value_in_use] AS 'Run_Value'
 	FROM master.sys.configurations (NOLOCK)
