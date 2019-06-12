@@ -57,3 +57,4 @@ In the output, you will find the following information in 6 sections:
 -  06/05/2019 Added TOP option to return limited number of rows for execution statistics.
 -  06/06/2019 Fixed issue with CHAR(0) and XML conversion;
    -  Fixed issue with @fnstats execution error.
+-  06/11/2019 Fixed issue with running requests in SQL Server 2019.

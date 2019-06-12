@@ -366,7 +366,7 @@ FROM sys.dm_exec_requests (NOLOCK) er
 	OUTER APPLY sys.dm_exec_query_statistics_xml(er.session_id) qes
 	OUTER APPLY sys.dm_exec_query_plan_stats(er.plan_handle) qps
 	OUTER APPLY sys.fn_PageResCracker(er.page_resource) pc  
-	OUTER APPLY sys.dm_db_page_info(pc.db_id, pc.file_id, pc.page_id, ''LIMITED'') pi
+	OUTER APPLY sys.dm_db_page_info(ISNULL(pc.db_id, 0), ISNULL(pc.file_id, 0), ISNULL(pc.page_id, 0), ''LIMITED'') pi
 WHERE er.session_id <> @@SPID AND es.is_user_process = 1
 ORDER BY er.total_elapsed_time DESC, er.logical_reads DESC, [database_name], session_id'
 	END
