@@ -10,7 +10,7 @@ Please complete these steps on your machine prior to attending the workshop, thi
 2. Download and install [SQL Server 2017 Developer](https://www.microsoft.com/en-us/sql-server/sql-server-downloads) edition, database engine only:
 ![Download Developer Edition](../media/DownloadDeveloperEdition.png)
 ![Install SQL Server 2017](../media/SQL2017Install.png)
-3. Download and install [SQL Server Management Studio 18.0](https://docs.microsoft.com/en-us/sql/ssms/download-sql-server-management-studio-ssms?view=sql-server-2017) (SSMS). If you have an earlier version, please upgrade if possible, this version will contain the latest Query Tuning Assistant (QTA) tool.
+3. Download and install [SQL Server Management Studio 18.1](https://docs.microsoft.com/en-us/sql/ssms/download-sql-server-management-studio-ssms?view=sql-server-2017) (SSMS). If you have an earlier version, please upgrade if possible, this version will contain the latest Query Tuning Assistant (QTA) tool.
 4. Download and install [Data Migration Assistant v4.3](https://www.microsoft.com/en-us/download/details.aspx?id=53595) (DMA).
 5. Download and install [Database Experimentation Assistant 2.6](https://www.microsoft.com/en-us/download/details.aspx?id=54090) (DEA).
 6. See your trainer for the scenario supporting files at the start of the lab exercise.
