@@ -7872,7 +7872,8 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
 	-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
 	-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
-	-- WRITELOG = log management system waiting for a log flush to disk. Examine the IO latency for the log file
+	-- HT* = batch mode syncpoint waits, probably large parallel table scans;   
+	-- WRITELOG = log management system waiting for a log flush to disk. Examine the I/O latency for the log file
 	-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> https://techcommunity.microsoft.com/t5/SQL-Server-Support/How-It-Works-CMemThread-and-Debugging-Them/ba-p/317488
 	-- SOS_RESERVEDMEMBLOCKLIST = look for procedures with a large number of parameters, or queries with a long list of expression values specified in an IN clause, which would require multi-page allocations
 	-- RESOURCE_SEMAPHORE_SMALL_QUERY or RESOURCE_SEMAPHORE = queries are waiting for execution memory. Look for plans with excessive hashing or sorts.
@@ -7905,7 +7906,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
 			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
 			WHEN W1.wait_type IN (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET', N'PROXY_NETWORK_IO', N'EXTERNAL_SCRIPT_NETWORK_IO') THEN N'Network IO' 
-			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER', N'HTBUILD', N'HTDELETE', N'HTMEMO', N'HTREINIT', N'HTREPARTITION') THEN N'CPU - Parallelism'
 			WHEN W1.wait_type IN (N'WAITFOR', N'WAIT_FOR_RESULTS', N'BROKER_RECEIVE_WAITFOR') THEN N'User Wait' 
 			WHEN W1.wait_type IN (N'TRACEWRITE', N'SQLTRACE_LOCK', N'SQLTRACE_FILE_BUFFER', N'SQLTRACE_FILE_WRITE_IO_COMPLETION', N'SQLTRACE_FILE_READ_IO_COMPLETION', N'SQLTRACE_PENDING_BUFFER_WRITERS', N'SQLTRACE_SHUTDOWN', N'QUERY_TRACEOUT', N'TRACE_EVTNOTIF') THEN N'Tracing' 
 			WHEN W1.wait_type LIKE N'FT_%' OR W1.wait_type IN (N'FULLTEXT GATHERER', N'MSSEARCH', N'PWAIT_RESOURCE_SEMAPHORE_FT_PARALLEL_QUERY_SYNC') THEN N'Full Text Search' 

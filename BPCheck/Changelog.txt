@@ -378,3 +378,4 @@ v2.4.1.5 - 06/06/2019 - Fixed table error with Query Store and Auto Tuning secti
 						Fixed Disk space subsection not working with SQL 2008;
 						Fixed case sensitivity issues (Thanks sm8680);
 						Fixed issues with XML conversion in plan cache queries.
+v2.4.1.5.1 - 06/25/2019 - Added batch mode syncpoint waits to wait stats section.   
