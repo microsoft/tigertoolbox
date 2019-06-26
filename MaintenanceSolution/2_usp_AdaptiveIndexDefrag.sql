@@ -947,7 +947,7 @@ UNION
 SELECT DISTINCT [dbID] FROM [' + DB_NAME() + '].dbo.tbl_AdaptiveIndexDefrag_Stats_Working
 UNION
 SELECT DISTINCT [dbID] FROM [' + DB_NAME() + '].dbo.tbl_AdaptiveIndexDefrag_Exceptions
-WHERE [dbID] IN (SELECT DISTINCT database_id FROM master.sys.databases sd
+WHERE [dbID] IN (SELECT DISTINCT database_id FROM sys.databases sd
 	WHERE LOWER(sd.[name]) NOT IN (''master'', ''tempdb'', ''model'', ''reportservertempdb'',''semanticsdb'')
 		AND [state] = 0 -- must be ONLINE
 		AND is_read_only = 0 -- cannot be READ_ONLY
@@ -968,14 +968,14 @@ WHERE [dbID] IN (SELECT DISTINCT database_id FROM master.sys.databases sd
 			
 			/* Retrieve the list of databases to loop, excluding Always On secondary replicas */	
 			SET @sqlcmd_CntTgt = 'SELECT [database_id], 0, 0 -- not yet scanned
-FROM master.sys.databases
+FROM sys.databases
 WHERE LOWER([name]) = ISNULL(LOWER(@dbScopeIN), LOWER([name]))	
 	AND LOWER([name]) NOT IN (''master'', ''tempdb'', ''model'', ''reportservertempdb'',''semanticsdb'') -- exclude system databases
 	AND [state] = 0 -- must be ONLINE
 	AND is_read_only = 0 -- cannot be READ_ONLY
 	AND is_distributor = 0'
 				
-			IF @sqlmajorver >= 11 -- Except all local Always On secondary replicas
+			IF @sqlmajorver >= 11 AND (SELECT @@VERSION) NOT LIKE 'Microsoft SQL Azure%' -- Except all local Always On secondary replicas
 			BEGIN
 				SET @sqlcmd_CntTgt = @sqlcmd_CntTgt + CHAR(10) + 'AND [database_id] NOT IN (SELECT dr.database_id FROM sys.dm_hadr_database_replica_states dr
 INNER JOIN sys.dm_hadr_availability_replica_states rs ON dr.group_id = rs.group_id
@@ -1106,7 +1106,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.8';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.9';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1228,14 +1228,14 @@ Execute in' + CASE WHEN @debugMode = 1 THEN ' DEBUG' ELSE ' SILENT' END + ' mode
 			RAISERROR('Retrieving list of databases to loop...', 0, 42) WITH NOWAIT;
 
 			SET @sqlcmdAO2 = 'SELECT [database_id], name, 0 -- not yet scanned for fragmentation
-FROM master.sys.databases
+FROM sys.databases
 WHERE LOWER([name]) = ISNULL(LOWER(@dbScopeIN), LOWER([name]))	
 	AND LOWER([name]) NOT IN (''master'', ''tempdb'', ''model'', ''reportservertempdb'',''semanticsdb'') -- exclude system databases
 	AND [state] = 0 -- must be ONLINE
 	AND is_read_only = 0 -- cannot be READ_ONLY
 	AND is_distributor = 0'
 				
-			IF @sqlmajorver >= 11 -- Except all local Always On secondary replicas
+			IF @sqlmajorver >= 11 AND (SELECT @@VERSION) NOT LIKE 'Microsoft SQL Azure%'-- Except all local Always On secondary replicas
 			BEGIN
 				SET @sqlcmdAO2 = @sqlcmdAO2 + CHAR(10) + 'AND [database_id] NOT IN (SELECT dr.database_id FROM sys.dm_hadr_database_replica_states dr
 INNER JOIN sys.dm_hadr_availability_replica_states rs ON dr.group_id = rs.group_id
@@ -3232,7 +3232,7 @@ EXEC usp_AdaptiveIndexDefrag_Exceptions @exceptionMask_DB = 'AdventureWorks2008R
 */
 SET NOCOUNT ON;
 
-IF @exceptionMask_DB IS NULL OR QUOTENAME(@exceptionMask_DB) NOT IN (SELECT QUOTENAME(name) FROM master.sys.sysdatabases)
+IF @exceptionMask_DB IS NULL OR QUOTENAME(@exceptionMask_DB) NOT IN (SELECT QUOTENAME(name) FROM sys.databases)
 RAISERROR('Syntax error. Please input a valid database name.', 15, 42) WITH NOWAIT;
 
 IF @exceptionMask_days IS NOT NULL AND
