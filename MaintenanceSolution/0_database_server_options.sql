@@ -21,9 +21,6 @@ IF CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff) >= 10
 EXEC sys.sp_configure N'optimize for ad hoc workloads', N'1'
 RECONFIGURE WITH OVERRIDE
 GO
-EXEC sys.sp_configure N'show advanced options', N'0'
-RECONFIGURE WITH OVERRIDE
-GO
 
 USE [master]
 GO
