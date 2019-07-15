@@ -10,4 +10,6 @@ This folder contains the various artifacts required for the 1-day Modern Migrati
 ## Lab Files
 - [Lab Setup Guide.md](./LabFiles/Lab%20Setup%20Guide.md)
 - [Lab Scenario.md](./LabFiles/Lab%20Scenario.md)
+- [Lab Instructor Guide.md](./LabFiles/Lab%20Instructor%20Guide.md)
+- [Lab Scenario Files](./LabFiles/AdventureWorks_PASSModernMigrationTour)
 
