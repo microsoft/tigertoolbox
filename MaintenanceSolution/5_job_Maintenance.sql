@@ -944,12 +944,12 @@ BEGIN
 	INSERT INTO #tmpdbs ([dbname], isdone)
 	(SELECT DISTINCT QUOTENAME(d.name), 0 FROM sys.databases d 
 	INNER JOIN sys.master_files smf ON d.database_id = smf.database_id
-	JOIN sys.dm_hadr_database_replica_states hadrdrs
+	JOIN sys.dm_hadr_database_replica_states hadrdrs ON d.database_id = hadrdrs.database_id
 	WHERE d.is_read_only = 0 AND d.state = 0 AND d.database_id <> 2 AND smf.type = 0 AND (smf.size * 8)/1024 < 4096 AND hadrdrs.is_primary_replica = 1)
 	UNION
 	(SELECT DISTINCT QUOTENAME(d.name), 0 FROM sys.databases d 
 	INNER JOIN sys.master_files smf ON d.database_id = smf.database_id
-	LEFT JOIN sys.dm_hadr_database_replica_states hadrdrs
+	LEFT JOIN sys.dm_hadr_database_replica_states hadrdrs ON d.database_id = hadrdrs.database_id
 	WHERE d.is_read_only = 0 AND d.state = 0 AND d.database_id <> 2 AND smf.type = 0 AND (smf.size * 8)/1024 < 4096 AND hadrdrs.database_id IS NULL);
 
 	WHILE (SELECT COUNT([dbname]) FROM #tmpdbs WHERE isdone = 0) > 0
