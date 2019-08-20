@@ -4541,6 +4541,7 @@ RAISERROR (N'|-Starting Instance Checks', 10, 1) WITH NOWAIT
 --------------------------------------------------------------------------------------------------------------------------------
 -- Recommended build check subsection
 --------------------------------------------------------------------------------------------------------------------------------
+/*
 RAISERROR (N'  |-Starting Recommended build check', 10, 1) WITH NOWAIT
 SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN (@sqlmajorver = 9 AND @sqlbuild < 5000)
@@ -4565,6 +4566,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductBuildType')) ELSE 'NA' END AS Product_Build_Type,
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateLevel')) ELSE 'NA' END AS Product_Update_Level,
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateReference')) ELSE 'NA' END AS Product_Update_Ref_KB;
+*/
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Backup checks subsection
@@ -4823,10 +4825,23 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 174)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-			'[INFORMATION: TF174  disables the background columnstore compression task]' 
+			'[INFORMATION: TF174 increases the SQL Server Database Engine plan cache bucket count from 40,009 to 160,001 on 64-bit systems]' 
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
-		WHERE [Global] = 1 AND TraceFlag = 634
+		WHERE [Global] = 1 AND TraceFlag = 174
+	END;
+
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 174)
+		AND ((@sqlmajorver = 11 AND @sqlbuild >= 3368)
+				OR (@sqlmajorver = 12 AND @sqlbuild >= 2480)
+				OR (@sqlmajorver >= 13)		
+		)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF174 to increase the SQL Server plan cache bucket count from 40,009 to 160,001 on 64-bit systems]'
+			END AS [Deviation], NULL AS 'TraceFlag'; 
+		FROM @tracestatus 
+		WHERE [Global] = 1 AND TraceFlag = 174
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 634)
@@ -4861,7 +4876,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 11
 				AND @has_colstrix > 0
-				THEN '[WARNING: TF834 (Large Page Support for BP) is discouraged when Columnstore Indexes are used]'
+				THEN '[WARNING: TF834 (Large Page Support for BP) is discouraged when Columnstore Indexes are used. In SQL Server 2019, use TF876 instead (preview) to set large-page allocations for columnstore only]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus
@@ -4874,7 +4889,7 @@ BEGIN
 			CASE WHEN SERVERPROPERTY('EngineEdition') = 2 --Standard SKU
 					AND ((@sqlmajorver = 10 AND ((@sqlminorver = 0 AND @sqlbuild >= 2714) OR @sqlminorver = 50)) 
 						OR (@sqlmajorver = 9 AND @sqlbuild >= 4226))
-					THEN '[INFORMATION: TF845 supports locking pages in memory in SQL Server Standard Editions]'
+					THEN '[INFORMATION: TF845 supports locking pages in memory in SQL Server Standard Edition]'
 				WHEN SERVERPROPERTY('EngineEdition') = 2 --Standard SKU
 					AND @sqlmajorver >= 11 
 					THEN '[WARNING: TF845 is not needed in SQL 2012 and above]'
@@ -4892,27 +4907,45 @@ BEGIN
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 902
 	END;
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1117)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 		CASE WHEN @sqlmajorver >= 13 --SQL 2016
-			THEN '[WARNING: TF1117 is not needed in SQL 2016 and above]'
+			THEN '[WARNING: TF1117 is not needed in SQL 2016 and higher versions]'
 			ELSE '[INFORMATION: TF1117 autogrows all files at the same time and affects all databases]' 
 		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1117
 	END;
 	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1117)
+		AND (@sqlmajorver < 13)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF1117 to autogrow all files at the same time and affects all databases]'
+			END AS [Deviation], NULL AS 'TraceFlag';
+	END;
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 		CASE WHEN @sqlmajorver >= 13 --SQL 2016
-			THEN '[WARNING: TF1118 is not needed in SQL 2016 and above]'
+			THEN '[WARNING: TF1118 is not needed in SQL 2016 and higher versions]'
 			ELSE '[INFORMATION: TF1118 forces uniform extent allocations instead of mixed page allocations]'
 		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1118
 	END;
+	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
+		AND (@sqlmajorver < 13)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF1118 to force uniform extent allocations instead of mixed page allocations]'
+			END AS [Deviation], NULL AS 'TraceFlag';
+	END;
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1204)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -4952,7 +4985,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1229)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[WARNING: TF1229 disables lock partitioning, which is a locking mechanism optimization on 16+ CPU servers]' --https://techcommunity.microsoft.com/t5/SQL-Server-Support/Strange-Sch-S-Sch-M-Deadlock-on-Machines-with-16-or-More/ba-p/317208
+			'[WARNING: TF1229 disables lock partitioning, which is a locking mechanism optimization on 16+ CPU servers]' --https://docs.microsoft.com/sql/relational-databases/sql-server-transaction-locking-and-row-versioning-guide#lock_partitioning
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1229
@@ -4962,12 +4995,20 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			CASE WHEN @sqlmajorver = 9 OR @sqlmajorver = 10 OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 4100)
-					THEN '[INFORMATION: TF1236 enables database lock partitioning]'
+					THEN '[INFORMATION: TF1236 enables database-level lock partitioning]'
 				WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver >= 13
 					THEN '[WARNING: TF1236 is not needed in SQL 2012 SP3, SQL Server 2014 SP1 and above]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1236
+	END;
+
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1236)
+		AND (@sqlmajorver = 9 OR @sqlmajorver = 10 OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 4100))
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[WARNING: Consider enabling TF1236 to allow database lock partitioning]'
+			AS [Deviation]
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1462)
@@ -4983,25 +5024,27 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 12
-				THEN '[INFORMATION: TF2312 enables New CE model, SQL Server 2014 version]' 
+				THEN '[INFORMATION: TF2312 enables the default CE model for SQL Server 2014 and higher versions, dependent of the compatibility level of the database]' 
 			WHEN @sqlmajorver >= 13
-				THEN '[INFORMATION: TF2312 enables New CE model to SQL Server 2014 or above versions, dependent of the compatibility level of the database]' 
+				THEN '[INFORMATION: TF2312 enables the default CE model for SQL Server 2014 and higher versions, dependent of the compatibility level of the database]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2312
 	END;
-	
+
+/*	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2330)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 9
-				THEN '[INFORMATION: TF2330 supresses data collection into sys.dm_db_index_usage_stats, which can lead to a non-yielding condition in SQL 2005]' --http://support.microsoft.com/default.aspx?scid=kb;en-US;2003031
+				THEN '[INFORMATION: TF2330 supresses recording of index usage stats, which can lead to a non-yielding condition in SQL Server 2005]' --http://support.microsoft.com/kb/2003031
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2330
 	END;
+*/
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2335)
 	BEGIN
@@ -5054,7 +5097,7 @@ BEGIN
 	END;
 	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
-		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12)
+		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver < 13)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF2371 to change the 20pct fixed rate threshold for update statistics into a dynamic percentage rate]' --http://blogs.msdn.com/b/saponsqlserver/archive/2011/09/07/changes-to-automatic-update-statistics-in-sql-server-traceflag-2371.aspx
@@ -5090,7 +5133,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2549)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[INFORMATION: TF2549 runs the DBCC CHECKDB command assuming each database file is on a unique disk drive]'
+			'[INFORMATION: TF2549 forces the DBCC CHECKDB command to assume each database file is on a unique disk drive, but treating different physical files as one logical file]'
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2549
@@ -5099,7 +5142,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2562)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[INFORMATION: TF2562 runs the DBCC CHECKDB command in a single batch regardless of the number of indexes in the database]'
+			'[INFORMATION: TF2562 forces the DBCC CHECKDB command to execute in a single batch regardless of the number of indexes in the database]'
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2562
@@ -5141,6 +5184,7 @@ BEGIN
 		WHERE [Global] = 1 AND TraceFlag = 3226
 	END;
 	
+	/*
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4135)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -5152,7 +5196,8 @@ BEGIN
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4135
 	END;
-
+	*/
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4136)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -5176,7 +5221,7 @@ BEGIN
 					OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2806)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 2316)
 					OR @sqlmajorver >= 12
-				THEN '[INFORMATION: TF4137 causes SQL Server to generate a plan using minimum selectivity when estimating AND predicates for filters to account for correlation, under the Legacy CE]'
+				THEN '[INFORMATION: TF4137 causes SQL Server to generate a plan using minimum selectivity when estimating AND predicates for filters to account for partial correlation under CE 70]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5215,7 +5260,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 4416 AND @sqlbuild < 5000)
 					OR (@sqlmajorver = 12 AND @sqlbuild BETWEEN 2474 AND 2480)
-				THEN '[INFORMATION: TF6498 enables more than one large query compilation to gain access to the big gateway when there is sufficient memory available]'
+				THEN '[INFORMATION: TF6498 enables more than one large query compilation to gain access to the big gateway when there is sufficient memory available, avoiding compilation waits for concurrent large queries]'
 			WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 				THEN '[WARNING: TF6498 is not needed in SQL 2014 SP2, SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
@@ -5227,15 +5272,33 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (6532,6533))
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
-					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
-				THEN '[INFORMATION: TF6532 and TF 6533 enable performance improvement of query operations with spatial data types]'
+			CASE WHEN (@sqlmajorver = 11 AND @sqlbuild = 6020)
+				THEN '[INFORMATION: TF6532 enable performance improvements of query operations with spatial data types]'
+			WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
+					OR (@sqlmajorver = 11 AND @sqlbuild >= 6518)
+				THEN '[INFORMATION: TF6532 and TF 6533 enable performance improvements of query operations with spatial data types]'
 			WHEN @sqlmajorver >= 13
 				THEN '[WARNING: TF6532 and TF 6533 are not needed in SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag IN (6532,6533)
+	END;
+
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6532)
+		AND (@sqlmajorver = 11 AND @sqlbuild = 6020)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF6532 to enable performance improvements of query operations with spatial data types]' 
+			AS [Deviation]
+	END;
+	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (6532,6533))
+		AND ((@sqlmajorver = 11 AND @sqlbuild >= 6518) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000))
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF6532 and TF6533 to enable performance improvements of query operations with spatial data types]' 
+			AS [Deviation]
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6534)
@@ -5251,8 +5314,16 @@ BEGIN
 		WHERE [Global] = 1 AND TraceFlag = 6534
 	END;
 	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6534)
+		AND ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)	OR @sqlmajorver >= 13)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF6534 to enable performance improvements of query operations with spatial data types]' 
+			AS [Deviation]
+	END;
+	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 7412)
-		AND @sqlmajorver >= 13
+		AND ((@sqlmajorver = 13 AND @sqlbuild >= 4001) OR (@sqlmajorver = 14))
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF7412 to enable the lightweight profiling infrastructure]' -- https://docs.microsoft.com/sql/relational-databases/performance/query-profiling-infrastructure
@@ -5431,11 +5502,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4199)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
-					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
-					OR (@sqlmajorver >= 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
-				THEN '[WARNING: TF4135 should be used instead of TF4199 in this SQL build]'
-			ELSE '[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
+			'[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4199;
@@ -5447,31 +5514,22 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 		FROM sys.databases sd
 		INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
 	END;
-END;
-		
-IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (4135,4199))
-BEGIN
-	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-		CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild >= 2766)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
-			THEN '[INFORMATION: Consider enabling TF4135 to support fixes and enhancements on the query optimizer]'
-			WHEN (@sqlmajorver = 9 AND @sqlbuild >= 4266) 
-				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1818 AND 1835)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 1702) OR @sqlmajorver = 11 OR @sqlmajorver = 12
-				OR (@sqlmajorver = 13 AND @sqlbuild >= 2149) OR @sqlmajorver > 13
-			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-		END AS [Deviation];
-		
-	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-		[name] AS [DBName], sd.compatibility_level, 'Off' AS [TF_4199],
-		CASE WHEN sd.compatibility_level < 130 THEN 'Disabled' ELSE 'Enabled' END AS 'QO_changes_from_previous_DB_compat_levels',
-		'Disabled' AS 'QO_changes_for_current_version_post_RTM'
-	FROM sys.databases sd
-	INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
-END;
 	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4199)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
+			'[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
+			END AS [Deviation], NULL AS 'TraceFlag';
+		
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			[name] AS [DBName], sd.compatibility_level, 'Off' AS [TF_4199],
+			CASE WHEN sd.compatibility_level >= 130 THEN 'Enabled' ELSE 'Disabled' END AS 'QO_changes_from_previous_DB_compat_levels',
+			'Disabled' AS 'QO_changes_for_current_version_post_RTM'
+		FROM sys.databases sd
+		INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
+	END;
+END;
+
 --------------------------------------------------------------------------------------------------------------------------------
 -- System configurations subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -6141,7 +6199,7 @@ END;
 
 IF EXISTS (SELECT TOP 1 id FROM sys.traces WHERE [path] LIKE '%blackbox%.trc' AND status = 1)
 BEGIN
-	SELECT 'Instance_checks' AS [Category], 'Blackbox_Trace' AS [Check], '[WARNING: Blackbox trace is configured and running]' AS [Deviation], '[This trace is designed to behave similarly to an airplane black box, to help you diagnose intermittent server crashes. It is quite a bit heavier than the default trace]' AS [Comment]
+	SELECT 'Instance_checks' AS [Category], 'Blackbox_Trace' AS [Check], '[WARNING: Blackbox trace is configured and running]' AS [Deviation], '[This trace is designed to behave similarly to an airplane black box, to help you diagnose intermittent server crashes. It consumes more resources than the default trace and should not be running for extended periods of time]' AS [Comment]
 END
 ELSE
 BEGIN
@@ -8331,6 +8389,7 @@ END;
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Plan use ratio subsection
+-- Refer to BOL for more information (https://docs.microsoft.com/sql/database-engine/configure-windows/optimize-for-ad-hoc-workloads-server-configuration-option)
 --------------------------------------------------------------------------------------------------------------------------------
 IF @ptochecks = 1
 BEGIN
@@ -9618,7 +9677,7 @@ AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 
 	IF (SELECT COUNT([Object]) FROM #tblHypObj) > 0
 	BEGIN
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Check], '[WARNING: Some databases have indexes or statistics that are marked as hypothetical. It is recommended to drop these objects as soon as possible]' AS [Deviation]
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Check], '[WARNING: Some databases have indexes or statistics that are marked as hypothetical. Hypothetical indexes are created by the Database Tuning Assistant (DTA) during its tests. If a DTA session was interrupted, these indexes may not be deleted. It is recommended to drop these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Information], DBName AS [Database_Name], [Table] AS [Table_Name], [Object] AS [Object_Name], [Type] AS [Object_Type]
 		FROM #tblHypObj
 		ORDER BY 2, 3, 5
