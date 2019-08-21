@@ -4839,7 +4839,7 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF174 to increase the SQL Server plan cache bucket count from 40,009 to 160,001 on 64-bit systems]'
-			END AS [Deviation], NULL AS 'TraceFlag'; 
+			AS [Deviation], NULL AS 'TraceFlag' 
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 174
 	END;
@@ -4924,7 +4924,7 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF1117 to autogrow all files at the same time and affects all databases]'
-			END AS [Deviation], NULL AS 'TraceFlag';
+			AS [Deviation], NULL AS 'TraceFlag';
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
@@ -4943,7 +4943,7 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF1118 to force uniform extent allocations instead of mixed page allocations]'
-			END AS [Deviation], NULL AS 'TraceFlag';
+			AS [Deviation], NULL AS 'TraceFlag';
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1204)
@@ -5503,7 +5503,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-			END AS [Deviation], TraceFlag
+			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4199;
 		
@@ -5519,7 +5519,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			'[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-			END AS [Deviation], NULL AS 'TraceFlag';
+			AS [Deviation], NULL AS 'TraceFlag';
 		
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			[name] AS [DBName], sd.compatibility_level, 'Off' AS [TF_4199],
