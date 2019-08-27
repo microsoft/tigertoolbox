@@ -1473,10 +1473,10 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 		'sbgatewaydatabase','sbmanagementdb', --Service Bus
 		'wfinstancemanagementdb','wfmanagementdb','wfresourcemanagementdb' --Workflow Manager
 	)
-	AND [dbname] NOT LIKE 'repANDtingservice[_]%' --SSRS
+	AND [dbname] NOT LIKE 'reportingservice[_]%' --SSRS
 	AND [dbname] NOT LIKE 'tfs[_]%' --TFS
 	AND [dbname] NOT LIKE 'defaultpowerpivotserviceapplicationdb%' --PowerPivot
-	AND [dbname] NOT LIKE 'perfANDmancepoint service[_]%' --PerfANDmancePoint Services
+	AND [dbname] NOT LIKE 'performancepoint service[_]%' --PerformancePoint Services
 	AND [dbname] NOT LIKE '%database nav%' --Dynamics NAV
 	AND [dbname] NOT LIKE '%[_]mscrm' --Dynamics CRM
 	AND [dbname] NOT LIKE 'dpmdb[_]%' --DPM
@@ -1489,13 +1489,13 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	--Sharepoint
 	AND [dbname] NOT LIKE 'sharepoint[_]admincontent%' AND [dbname] NOT LIKE 'sharepoint[_]config%' AND [dbname] NOT LIKE 'wss[_]content%' AND [dbname] NOT LIKE 'wss[_]search%'
 	AND [dbname] NOT LIKE 'sharedservices[_]db%' AND [dbname] NOT LIKE 'sharedservices[_]search[_]db%' AND [dbname] NOT LIKE 'sharedservices[_][_]db%' AND [dbname] NOT LIKE 'sharedservices[_][_]search[_]db%'
-	AND [dbname] NOT LIKE 'sharedservicescontent%' AND [dbname] NOT LIKE 'application[_]registry[_]service[_]db%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]propertystANDedb[_]%'
-	AND [dbname] NOT LIKE 'subscriptionsettings[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]stagingdb[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]repANDtingdb[_]%'
-	AND [dbname] NOT LIKE 'bdc[_]service[_]db[_]%' AND [dbname] NOT LIKE 'managed metadata service[_]%' AND [dbname] NOT LIKE 'perfANDmancepoint service application[_]%' 
-	AND [dbname] NOT LIKE 'search[_]service[_]application[_]crawlstANDedb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]db[_]%' AND [dbname] NOT LIKE 'secure[_]stANDe[_]service[_]db[_]%' AND [dbname] NOT LIKE 'stateservice%' 
+	AND [dbname] NOT LIKE 'sharedservicescontent%' AND [dbname] NOT LIKE 'application[_]registry[_]service[_]db%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]propertystoredb[_]%'
+	AND [dbname] NOT LIKE 'subscriptionsettings[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]stagingdb[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]reportingdb[_]%'
+	AND [dbname] NOT LIKE 'bdc[_]service[_]db[_]%' AND [dbname] NOT LIKE 'managed metadata service[_]%' AND [dbname] NOT LIKE 'performancepoint service application[_]%' 
+	AND [dbname] NOT LIKE 'search[_]service[_]application[_]crawlstoredb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]db[_]%' AND [dbname] NOT LIKE 'secure[_]store[_]service[_]db[_]%' AND [dbname] NOT LIKE 'stateservice%' 
 	AND [dbname] NOT LIKE 'user profile service application[_]profiledb[_]%' AND [dbname] NOT LIKE 'user profile service application[_]syncdb[_]%' AND [dbname] NOT LIKE 'user profile service application[_]socialdb[_]%' 
-	AND [dbname] NOT LIKE 'wANDdautomationservices[_]%' AND [dbname] NOT LIKE 'wss[_]logging%' AND [dbname] NOT LIKE 'wss[_]usageapplication%' AND [dbname] NOT LIKE 'appmng[_]service[_]db%' 
-	AND [dbname] NOT LIKE 'search[_]service[_]application[_]analyticsrepANDtingstANDedb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]linksstANDedb[_]%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' 
+	AND [dbname] NOT LIKE 'wordautomationservices[_]%' AND [dbname] NOT LIKE 'wss[_]logging%' AND [dbname] NOT LIKE 'wss[_]usageapplication%' AND [dbname] NOT LIKE 'appmng[_]service[_]db%' 
+	AND [dbname] NOT LIKE 'search[_]service[_]application[_]analyticsreportingstoredb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]linksstoredb[_]%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' 
 	AND [dbname] NOT LIKE 'settingsservicedb%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' AND [dbname] NOT LIKE 'translationservice[_]%' AND [dbname] NOT LIKE 'sharepoint translation services[_]%' AND [dbname] NOT LIKE 'sessionstateservice%' 
 
 IF EXISTS (SELECT name FROM msdb.sys.objects (NOLOCK) WHERE name='MSdistributiondbs' AND is_ms_shipped = 1) 
