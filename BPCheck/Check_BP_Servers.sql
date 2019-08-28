@@ -2457,7 +2457,8 @@ SELECT 'Pagefile_checks' AS [Category], 'Process_paged_out' AS [Check],
 IF @ptochecks = 1
 RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
 
---------------------------------------------------------------------------------------------------------------------------OUT VARCHAR(20), all in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
+--------------------------------------------------------------------------------------------------------------------------------
+-- I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
 -- io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.
 -- Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc). 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -10584,18 +10585,23 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
--- Indexes with large keys (> 900 bytes) subsection
+-- Indexes with large keys (> 900 bytes for clustered index; 1700 bytes for nonclustered index) subsection
 --------------------------------------------------------------------------------------------------------------------------------
 IF @ptochecks = 1
 BEGIN
-	RAISERROR (N'  |-Starting Indexes with large keys (> 900 bytes)', 10, 1) WITH NOWAIT
-	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE [KeyCols_data_length_bytes] > 900) > 0
+	RAISERROR (N'  |-Starting Indexes with large keys', 10, 1) WITH NOWAIT
+	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE ([KeyCols_data_length_bytes] > 900 AND @sqlmajorver < 13)
+			OR ([KeyCols_data_length_bytes] > 900 AND indexType IN (1,5) AND @sqlmajorver >= 13)
+			OR ([KeyCols_data_length_bytes] > 1700 AND indexType IN (2,6) AND @sqlmajorver >= 13)) > 0
 	BEGIN
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], '[WARNING: Some indexes have keys larger than 900 bytes. It is recommended to revise these]' AS [Deviation]
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], 
-			I.KeyCols, [KeyCols_data_length_bytes]
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], 
+			CASE WHEN @sqlmajorver < 13 THEN '[WARNING: Some indexes have keys larger than 900 bytes. It is recommended to revise these]' 
+				ELSE '[WARNING: Some indexes have keys larger than allowed (900 bytes for clustered index; 1700 bytes for nonclustered index). It is recommended to revise these]' END AS [Deviation]
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], I.indexType, I.KeyCols, [KeyCols_data_length_bytes]
 		FROM #tblIxs1 I
-		WHERE [KeyCols_data_length_bytes] > 900
+		WHERE ([KeyCols_data_length_bytes] > 900 AND @sqlmajorver < 13)
+			OR ([KeyCols_data_length_bytes] > 900 AND indexType IN (1,5) AND @sqlmajorver >= 13)
+			OR ([KeyCols_data_length_bytes] > 1700 AND indexType IN (2,6) AND @sqlmajorver >= 13)
 		ORDER BY I.[DatabaseName], I.schemaName, I.[objectName], I.[indexID]
 	END
 	ELSE
@@ -10766,7 +10772,7 @@ BEGIN
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
 	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] NVARCHAR(200), [parent_schema_name] NVARCHAR(100), 
 	[parent_table_name] NVARCHAR(200), parent_columns NVARCHAR(4000), [referenced_schema] NVARCHAR(100), [referenced_table_name] NVARCHAR(200), referenced_columns NVARCHAR(4000),
-	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name]))
+	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name], [parent_schema_name]))
 	
 	UPDATE #tmpdbs1
 	SET isdone = 0
