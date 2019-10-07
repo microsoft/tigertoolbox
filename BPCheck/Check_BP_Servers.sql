@@ -6082,12 +6082,11 @@ BEGIN
 	SELECT 'sys.trace_categories', 12, NULL UNION ALL
 	SELECT 'sys.trace_columns', 12, NULL UNION ALL
 	SELECT 'sys.trace_subclass_values', 12, NULL UNION ALL
-	-- discontinued on sql 2017
-	SELECT 'sp_addremotelogin', 10, 14 UNION ALL
-	SELECT 'sp_dropremotelogin', 10, 14 UNION ALL
-	SELECT 'sp_helpremotelogin', 10, 14 UNION ALL
-	SELECT 'sp_remoteoption', 10, 14
-
+	-- discontinued on sql 2019
+	SELECT 'disable_interleaved_execution_tvf', 10, 15 UNION ALL -- as DB Scoped config
+	SELECT 'disable_batch_mode_memory_grant_feedback', 10, 15 UNION ALL -- as DB Scoped config
+	SELECT 'disable_batch_mode_adaptive_joins', 10, 15 -- as DB Scoped config
+	
 	UPDATE #tmpdbs0
 	SET isdone = 0;
 
@@ -11137,10 +11136,10 @@ END'')
 		DBName NVARCHAR(1000),
 		[Table] NVARCHAR(255),
 		[ix_handle] int,
-		[User_Hits_on_Missing_Index] int,
+		[User_Hits_on_Missing_Index] bigint,
 		[Estimated_Improvement_Percent] DECIMAL(5,2),
-		[Avg_Total_User_Cost] int,
-		[Unique_Compiles] int,
+		[Avg_Total_User_Cost] float,
+		[Unique_Compiles] bigint,
 		[Score] NUMERIC(19,3),
 		[KeyCols] NVARCHAR(1000),
 		[IncludedCols] NVARCHAR(4000),

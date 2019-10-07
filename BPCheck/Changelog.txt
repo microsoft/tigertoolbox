@@ -385,3 +385,5 @@ v2.4.1.6.1 - 08/21/2019 - Fixed syntax errors in trace flag section.
 v2.4.2 - 08/28/2019 - Fixed various string formatting issues (Thanks Alex Protesenko);						
 						Updated Indexes with large keys check for SQL 2016+ (Thanks Petar Trbos);
 						Fixed PK violation in Foreign Keys with no Index check (Thanks Scott Ivey).
+v2.4.3 - 10/07/2019 - Extended deprecated features subsection;
+						Fixed conversion errors in Missing Indexes subsection.
