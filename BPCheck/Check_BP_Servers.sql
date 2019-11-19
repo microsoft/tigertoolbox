@@ -749,10 +749,8 @@ BEGIN
 		EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSReleaseDate';
 		INSERT INTO @machineinfo
 		EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
-		INSERT INTO tempdb.dbo.dbvars VALUES (
-			'ostype','Windows',
-			'osver', @osver 
-		)
+		INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('ostype','Windows')
+		INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('osver', @osver )
 	END;
 
 	SELECT @SystemManufacturer = [Data]
