@@ -2290,6 +2290,7 @@ END;
 	SELECT @affined_cpus = COUNT(cpu_id)
 	FROM sys.dm_os_schedulers
 	WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64;
+	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('affined_cpus', @affined_cpus  )
 	--SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
 	SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
 		CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)'
