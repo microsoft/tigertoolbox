@@ -3234,7 +3234,7 @@ BEGIN
 		INSERT INTO #tmp_dm_io_virtual_file_stats
 		SELECT @mincol, f.database_id, f.[file_id], DB_NAME(f.database_id), f.name AS logical_file_name, f.type_desc,
 			CAST (CASE 
-			-- Handle UNC paths (e.g. '\\fileserver\readonlydbs\dept_dw.ndf')
+			-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
 			WHEN LEFT (LTRIM (f.physical_name), 2) = '\\' 
 				THEN LEFT (LTRIM (f.physical_name),CHARINDEX('\',LTRIM(f.physical_name),CHARINDEX('\',LTRIM(f.physical_name), 3) + 1) - 1)
 				-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
@@ -3255,7 +3255,7 @@ BEGIN
 		INSERT INTO #tmp_dm_io_virtual_file_stats
 		SELECT @maxcol, f.database_id, f.[file_id], DB_NAME(f.database_id), f.name AS logical_file_name, f.type_desc,
 			CAST (CASE 
-			-- Handle UNC paths (e.g. '\\fileserver\readonlydbs\dept_dw.ndf')
+			-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
 			WHEN LEFT (LTRIM (f.physical_name), 2) = '\\' 
 				THEN LEFT (LTRIM (f.physical_name),CHARINDEX('\',LTRIM(f.physical_name),CHARINDEX('\',LTRIM(f.physical_name), 3) + 1) - 1)
 				-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
@@ -3433,7 +3433,7 @@ BEGIN
 			INSERT INTO #tblPendingIO
 			SELECT DISTINCT f.database_id, f.[file_id], DB_NAME(f.database_id) AS database_name, f.name AS logical_file_name, f.type_desc,
 				CAST (CASE 
-				-- Handle UNC paths (e.g. '\\fileserver\readonlydbs\dept_dw.ndf')
+				-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
 				WHEN LEFT (LTRIM (f.physical_name), 2) = '\\' 
 					THEN LEFT (LTRIM (f.physical_name),CHARINDEX('\',LTRIM(f.physical_name),CHARINDEX('\',LTRIM(f.physical_name), 3) + 1) - 1)
 					-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
