@@ -25,6 +25,7 @@ DECLARE @permstbl TABLE ([name] sysname)
 DECLARE @dbScope VARCHAR(256) 	
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
+DECLARE @bpool_consumer bit
 
 SELECT @masterpid = principal_id FROM master.sys.database_principals (NOLOCK) WHERE sid = SUSER_SID()
 
@@ -43,10 +44,16 @@ SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff)
 SELECT @clustered = CONVERT(bit,ISNULL(SERVERPROPERTY('IsClustered'),0))
 SELECT @dbScope = NULL -- (NULL = All DBs; '<database_name>')
 SELECT @ptochecks = 1 -- 1 for enable 0 for disable
-IF EXISTS (SELECT [object_id]
-FROM tempdb.sys.objects (NOLOCK)
-WHERE [object_id] = OBJECT_ID('tempdb.dbo.##bpvars'))
-SELECT @ostype = (SELECT VarValue FROM ##bpvars WHERE VarName = 'ostype');
+SELECT @bpoolconsumer = 1 -- 1 for enable 0 for disable
+
+IF NOT EXISTS (SELECT [object_id]
+	FROM tempdb.sys.objects (NOLOCK)
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.dbvars'))
+	BEGIN
+	CREATE TABLE tempdb.dbo.dbvars(VarName VarChar(256),VarValue VarChar(256))
+	END
+SELECT @ostype = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'ostype');
+SELECT @osver = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'osver');
 
 IF @sqlmajorver > 10
 BEGIN
@@ -71,7 +78,7 @@ $Cells = foreach ($Chunk in $SplitSQL[1..($SplitSQL.Length -2)]) {
         ## This is a code block
         try {
             $Code = $GlobalVariables + $Chunk.Trim()
-            New-ADSWorkBookCell -Type Code -Text $Code
+            New-ADSWorkBookCell -Type Code -Text $Code  -Collapse
         }
         catch {
             Write-Warning "Gah it went wrong"
