@@ -54,6 +54,7 @@ IF NOT EXISTS (SELECT [object_id]
 	END
 SELECT @ostype = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'ostype');
 SELECT @osver = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'osver');
+SELECT @affined_cpus = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'affined_cpus');
 
 IF @sqlmajorver > 10
 BEGIN
