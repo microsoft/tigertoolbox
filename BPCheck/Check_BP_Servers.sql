@@ -282,7 +282,11 @@ WHERE dp.state = ''G''
 	DECLARE @dbid int, @dbname NVARCHAR(1000)
 	DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
 	DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
-
+	DECLARE @langid smallint
+	DECLARE @lpim bit, @lognumber int, @logcount int
+	DECLARE @query NVARCHAR(1000)
+	
+	SELECT @langid = lcid FROM sys.syslanguages WHERE name = @@LANGUAGE
 	SELECT @instancename = CONVERT(VARCHAR(128),SERVERPROPERTY('InstanceName'))
 	SELECT @server = RTRIM(CONVERT(VARCHAR(128), SERVERPROPERTY('MachineName')))
 	--SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
@@ -2265,9 +2269,8 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	-- ### Number of available Processors for this instance vs. MaxDOP setting subsection
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Number of available Processors for this instance vs. MaxDOP setting', 10, 1) WITH NOWAIT
-	DECLARE @affined_cpus int/*@cpucount int, @numa int, */
 
-	/*
+	/*c
 DECLARE @i int, @cpuaffin_fixed VARCHAR(1024)
 SET @cpuaffin_fixed = @cpuaffin
 SET @i = @cpucount/@numa + 1
@@ -2924,7 +2927,6 @@ BEGIN
 	-- ### LPIM subsection
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting LPIM', 10, 1) WITH NOWAIT
-	DECLARE @lpim bit, @lognumber int, @logcount int
 
 	IF ((@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13)
 BEGIN
@@ -8454,7 +8456,7 @@ BEGIN
 	RAISERROR (N'  |-Starting VLF', 10, 1) WITH NOWAIT
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1
 BEGIN
-		DECLARE /*@dbid int,*/ @query NVARCHAR(1000)/*, @dbname VARCHAR(1000)*/, @count int, @count_used int, @logsize DECIMAL(20,1), @usedlogsize DECIMAL(20,1), @avgvlfsize DECIMAL(20,1)
+		DECLARE /*@dbid int,*/ /*, @dbname VARCHAR(1000)*/ @count int, @count_used int, @logsize DECIMAL(20,1), @usedlogsize DECIMAL(20,1), @avgvlfsize DECIMAL(20,1)
 		DECLARE @potsize DECIMAL(20,1), @n_iter int, @n_iter_final int, @initgrow DECIMAL(20,1), @n_init_iter int
 
 		IF EXISTS (SELECT [object_id]
@@ -15089,10 +15091,6 @@ BEGIN
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Errorlog based checks', 10, 1) WITH NOWAIT
 	--DECLARE @lognumber int, @logcount int
-	DECLARE @langid smallint
-	SELECT @langid = lcid
-	FROM sys.syslanguages
-	WHERE name = @@LANGUAGE
 
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) = 1 -- Is securityadmin
