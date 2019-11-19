@@ -2215,12 +2215,12 @@ SET isdone = 0;
 
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
-DROP TABLE #tmpdbs_userchoice;
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs_userchoice'))
+DROP TABLE tempdb.dbo.tmpdbs_userchoice;
 	IF NOT EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
-CREATE TABLE #tmpdbs_userchoice
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs_userchoice'))
+CREATE TABLE tempdb.dbo.tmpdbs_userchoice
 	(
 		[dbid] int PRIMARY KEY,
 		[dbname] NVARCHAR(1000)
@@ -2234,7 +2234,7 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)
 	AND [dbid] IN (' + REPLACE(@dbScope,' ','') + ')'
 
-		INSERT INTO #tmpdbs_userchoice
+		INSERT INTO tempdb.dbo.tmpdbs_userchoice
 			([dbid], [dbname])
 		EXEC sp_executesql @sqlcmd;
 
@@ -2248,7 +2248,7 @@ FROM #tmpdbs0 (NOLOCK)
 WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0 
 	AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)'
 
-		INSERT INTO #tmpdbs_userchoice
+		INSERT INTO tempdb.dbo.tmpdbs_userchoice
 			([dbid], [dbname])
 		EXEC sp_executesql @sqlcmd;
 	END;
@@ -5778,7 +5778,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	-- No Full backups
 	SELECT @neverbck = COUNT(DISTINCT d.name)
 	FROM master.sys.databases d (NOLOCK)
-		INNER JOIN #tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
+		INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
 	WHERE database_id NOT IN (2,3)
 		AND source_database_id IS NULL -- no snapshots
 		AND d.name NOT IN (SELECT b.database_name
@@ -5793,7 +5793,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		(
 			SELECT DISTINCT database_name AS cnt
 			FROM msdb.dbo.backupset b (NOLOCK)
-				INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 			WHERE b.type = 'D' -- Full backup
 				AND b.is_copy_only = 0 -- No COPY_ONLY backups
 				AND database_name IN (SELECT name
@@ -5814,7 +5814,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		(
 			SELECT DISTINCT database_name
 			FROM msdb.dbo.backupset b (NOLOCK)
-				INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 			WHERE b.type = 'L' -- Log backup
 				AND database_name IN (SELECT name
 				FROM master.sys.databases (NOLOCK)
@@ -5835,7 +5835,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	-- No Log backup since last full or diff backup, and DB in Full or Bulk-logged RM
 	SELECT @neverlog = COUNT(DISTINCT database_name)
 	FROM msdb.dbo.backupset b (NOLOCK)
-		INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+		INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 	WHERE database_name IN (SELECT name
 		FROM master.sys.databases (NOLOCK)
 		WHERE database_id NOT IN (2,3)
@@ -5858,7 +5858,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		(
 			SELECT DISTINCT database_name
 			FROM msdb.dbo.backupset b (NOLOCK)
-				INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 			WHERE b.type = 'L' -- Log backup
 				AND database_name IN (SELECT name
 				FROM master.sys.databases (NOLOCK)
@@ -5883,7 +5883,7 @@ BEGIN
 		-- No full backups in last 7 days
 					SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Full_Backup
 			FROM msdb.dbo.backupset b (NOLOCK)
-				INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 			WHERE b.type = 'D' -- Full backup
 				AND b.is_copy_only = 0 -- No COPY_ONLY backups
 				AND database_name IN (SELECT name
@@ -5897,7 +5897,7 @@ BEGIN
 			-- No full backups in history
 			SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Information], d.name AS [Database_Name], NULL AS Lst_Full_Backup
 			FROM master.sys.databases d (NOLOCK)
-				INNER JOIN #tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
+				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
 			WHERE database_id NOT IN (2,3)
 				AND source_database_id IS NULL -- no snapshots
 				AND recovery_model < 3 -- not SIMPLE recovery model
@@ -5924,7 +5924,7 @@ BEGIN
 			(
 				SELECT database_name, MAX(backup_finish_date) AS backup_finish_date
 				FROM msdb.dbo.backupset (NOLOCK) b
-					INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+					INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 				WHERE [type] IN ('D','I')
 				-- Full or Differential backup
 				GROUP BY database_name
@@ -5935,7 +5935,7 @@ BEGIN
 				FROM Bck c
 				WHERE c.database_name = b.database_name) AS Lst_FullDiff_Backup
 			FROM msdb.dbo.backupset b (NOLOCK)
-				INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 			WHERE b.type = 'L' -- Log backup
 				AND database_name IN (SELECT name
 				FROM master.sys.databases (NOLOCK)
@@ -5951,7 +5951,7 @@ BEGIN
 			-- No log backup in history but full backup exists
 			SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Information], database_name AS [Database_Name], NULL AS Lst_Log_Backup, MAX(backup_finish_date) AS Lst_FullDiff_Backup
 			FROM msdb.dbo.backupset b (NOLOCK)
-				INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 			WHERE database_name IN (SELECT name
 				FROM master.sys.databases (NOLOCK)
 				WHERE database_id NOT IN (2,3)
@@ -5979,7 +5979,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Check], '[WARNING: Some databases in Full or Bulk-Logged recovery model have their latest log backup older than 24H]' AS [Deviation]
 		SELECT DISTINCT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Log_Backup
 		FROM msdb.dbo.backupset b (NOLOCK)
-			INNER JOIN #tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
+			INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 		WHERE b.type = 'L' -- Log backup
 			AND database_name IN (SELECT name
 			FROM master.sys.databases (NOLOCK)
@@ -15676,8 +15676,8 @@ DROP TABLE #tblCode;
 DROP TABLE #tblWorking;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs_userchoice'))
-DROP TABLE #tmpdbs_userchoice;
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tempdb.dbo.tmpdbs_userchoice'))
+DROP TABLE tempdb.dbo.tmpdbs_userchoice;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
 	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#xp_cmdshell_CluNodesOutput'))
