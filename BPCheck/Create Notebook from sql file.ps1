@@ -44,7 +44,7 @@ SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff)
 SELECT @clustered = CONVERT(bit,ISNULL(SERVERPROPERTY('IsClustered'),0))
 SELECT @dbScope = NULL -- (NULL = All DBs; '<database_name>')
 SELECT @ptochecks = 1 -- 1 for enable 0 for disable
-SELECT @bpoolconsumer = 1 -- 1 for enable 0 for disable
+SELECT @bpool_consumer = 1 -- 1 for enable 0 for disable
 
 IF NOT EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
