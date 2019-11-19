@@ -750,7 +750,7 @@ BEGIN
 		INSERT INTO @machineinfo
 		EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
 		INSERT INTO tempdb.dbo.dbvars VALUES (
-			'ostype','Windows'
+			'ostype','Windows',
 			'osver', @osver 
 		)
 	END;
