@@ -102,6 +102,16 @@ BEGIN
 
 	RAISERROR (N'Starting Pre-requisites section', 10, 1) WITH NOWAIT
 
+	IF EXISTS (SELECT [object_id]
+	FROM tempdb.sys.objects (NOLOCK)
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.dbvars'))
+	BEGIN
+		DROP TABLE tempdb.dbo.dbvars
+	END
+	
+	CREATE TABLE tempdb.dbo.dbvars(VarName VarChar(256),VarValue VarChar(256))
+
+
 	-- ## Pre-requisites section
 
 	DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(600), @sqlmajorver int
@@ -420,6 +430,12 @@ The Set-ExecutionPolicy cmdlet enables you to determine which Windows PowerShell
 -- ## Pre-requisites section
 -- Check pre-requisites for all checks
 --------------------------------------------------------------------------------------------------------------------------------
+IF EXISTS (SELECT [object_id]
+FROM tempdb.sys.objects (NOLOCK)
+WHERE [object_id] = OBJECT_ID('tempdb.dbo.dbvars'))
+BEGIN
+	DROP TABLE tempdb.dbo.dbvars
+END
 
 IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
 BEGIN
@@ -706,18 +722,6 @@ BEGIN
 		SELECT @str3 = RIGHT(@str2, LEN(@str2)-CHARINDEX(': ',@str2))
 		SELECT @ossp = LTRIM(LEFT(@str3, CHARINDEX(')',@str3) -1))
 		SET @ostype = 'Windows'
-		IF NOT EXISTS (SELECT [object_id]
-		FROM tempdb.sys.objects (NOLOCK)
-		WHERE [object_id] = OBJECT_ID('tempdb.dbo.##bpvars'))
-		CREATE TABLE ##bpvars (
-			VarName VARCHAR(256),
-			VarValue VARCHAR(256)
-			)
-
-		INSERT INTO ##bpvars VALUES (
-			'ostype',
-			'Windows'
-		)
 	END TRY
 	BEGIN CATCH
 		SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
@@ -745,6 +749,10 @@ BEGIN
 		EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\BIOS','BIOSReleaseDate';
 		INSERT INTO @machineinfo
 		EXEC xp_instance_regread 'HKEY_LOCAL_MACHINE','HARDWARE\DESCRIPTION\System\CentralProcessor\0','ProcessorNameString';
+		INSERT INTO tempdb.dbo.dbvars VALUES (
+			'ostype','Windows'
+			'osver', @osver 
+		)
 	END;
 
 	SELECT @SystemManufacturer = [Data]
@@ -2259,7 +2267,7 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	-- ### Number of available Processors for this instance vs. MaxDOP setting subsection
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Number of available Processors for this instance vs. MaxDOP setting', 10, 1) WITH NOWAIT
-	DECLARE /*@cpucount int, @numa int, */@affined_cpus int
+	DECLARE @affined_cpus int/*@cpucount int, @numa int, */
 
 	/*
 DECLARE @i int, @cpuaffin_fixed VARCHAR(1024)
@@ -15771,10 +15779,12 @@ DROP TABLE #tblTuningRecommendationsCnt;
 	FROM tempdb.sys.objects (NOLOCK)
 	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblTuningRecommendations'))
 DROP TABLE #tblTuningRecommendations;
-	IF EXISTS (SELECT [object_id]
-	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.##bpvars'))
-DROP TABLE ##bpvars;
+IF EXISTS (SELECT [object_id]
+FROM tempdb.sys.objects (NOLOCK)
+WHERE [object_id] = OBJECT_ID('tempdb.dbo.dbvars'))
+BEGIN
+	DROP TABLE tempdb.dbo.dbvars
+END
 
 	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
