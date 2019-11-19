@@ -26,6 +26,12 @@ DECLARE @dbScope VARCHAR(256)
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
 DECLARE @bpool_consumer bit
+DECLARE @allow_xpcmdshell bit
+DECLARE @custompath NVARCHAR(500) = NULL
+DECLARE @affined_cpus int
+DECLARE @langid smallint
+DECLARE @lpim bit, @lognumber int, @logcount int
+DECLARE @query NVARCHAR(1000)
 
 SELECT @masterpid = principal_id FROM master.sys.database_principals (NOLOCK) WHERE sid = SUSER_SID()
 
@@ -45,6 +51,9 @@ SELECT @clustered = CONVERT(bit,ISNULL(SERVERPROPERTY('IsClustered'),0))
 SELECT @dbScope = NULL -- (NULL = All DBs; '<database_name>')
 SELECT @ptochecks = 1 -- 1 for enable 0 for disable
 SELECT @bpool_consumer = 1 -- 1 for enable 0 for disable
+SELECT @allow_xpcmdshell = 1 -- 1 for enable 0 for disable
+SELECT @custompath = NULL
+SELECT @langid = lcid FROM sys.syslanguages WHERE name = @@LANGUAGE
 
 IF NOT EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
