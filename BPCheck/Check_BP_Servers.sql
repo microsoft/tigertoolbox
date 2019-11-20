@@ -132,7 +132,14 @@ BEGIN
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
 BEGIN
 		DECLARE @pid int, @pname sysname, @msdbpid int, @masterpid int
-		DECLARE @permstbl TABLE ([name] sysname);
+
+		IF EXISTS (SELECT [object_id]
+		FROM tempdb.sys.objects (NOLOCK)
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.permstbl'))
+		BEGIN
+			DROP TABLE tempdb.dbo.permstbl
+		END
+		CREATE TABLE tempdb.dbo.permstbl ([name] sysname);
 
 		IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
@@ -185,7 +192,7 @@ BEGIN
 		END
 
 		-- Perms 2
-		INSERT INTO @permstbl
+		INSERT INTO tempdb.dbo.permstbl
 		SELECT a.name
 		FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[object_id] = b.major_id
 		WHERE a.type IN ('P', 'X') AND b.grantee_principal_id <>0
@@ -220,18 +227,18 @@ WHERE dp.state = ''G''
 		--RETURN
 		END
 	ELSE IF (ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) <> 1) AND ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_enumerrorlogs') = 0 OR (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_readerrorlog') = 0 OR (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_readerrorlog') = 0)
 	BEGIN
 			RAISERROR('[WARNING: If not sysadmin, then you must be a member of the securityadmin server role, or have EXECUTE permission on the following extended sprocs to run full scope of checks: xp_enumerrorlogs, xp_readerrorlog, sp_readerrorlog]', 16, 1, N'secperms')
 		--RETURN
 		END
 	ELSE IF (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_cmdshell') = 0 OR (SELECT COUNT(credential_id)
 			FROM master.sys.credentials
 			WHERE name = '##xp_cmdshell_proxy_account##') = 0
@@ -240,35 +247,35 @@ WHERE dp.state = ''G''
 		--RETURN
 		END
 	ELSE IF (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_fileexist') = 0 OR
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OAGetErrorInfo') = 0 OR
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OACreate') = 0 OR
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OADestroy') = 0 OR
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regenumvalues') = 0 OR
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regread') = 0 OR
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_instance_regread') = 0 OR
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_servicecontrol') = 0 
 	BEGIN
 			RAISERROR('[WARNING: Must be a granted EXECUTE permissions on the following extended sprocs to run full scope of checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_fileexist, xp_regread, xp_instance_regread, xp_servicecontrol and xp_regenumvalues]', 16, 1, N'extended_sprocs')
 		--RETURN
 		END
 	ELSE IF (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_msver') = 0 AND @sqlmajorver < 11
 	BEGIN
 			RAISERROR('[WARNING: Must be granted EXECUTE permissions on xp_msver to run full scope of checks]', 16, 1, N'extended_sprocs')
@@ -327,10 +334,10 @@ BEGIN
 					AND QUOTENAME(l.name) = QUOTENAME(USER_NAME())) = 0) -- Is not sysadmin but has alter settings permission
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 			AND ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regread') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_cmdshell') > 0)))
 	BEGIN
 			DECLARE @pstbl_avail TABLE ([KeyExist] int)
@@ -462,7 +469,13 @@ END;
 IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
 BEGIN
 	DECLARE @pid int, @pname sysname, @msdbpid int
-	DECLARE @permstbl TABLE ([name] sysname);
+	IF EXISTS (SELECT [object_id]
+		FROM tempdb.sys.objects (NOLOCK)
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.permstbl'))
+		BEGIN
+			DROP TABLE tempdb.dbo.permstbl
+		END
+		CREATE TABLE tempdb.dbo.permstbl ([name] sysname);
 
 	IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
@@ -512,7 +525,7 @@ BEGIN
     END;
 
 	-- Perms 2
-	INSERT INTO @permstbl
+	INSERT INTO tempdb.dbo.permstbl
 	SELECT a.name
 	FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[OBJECT_ID] = b.major_id
 	WHERE a.type IN ('P', 'X') AND b.grantee_principal_id <>0 
@@ -540,29 +553,29 @@ WHERE dp.state = ''G''
 		RAISERROR('WARNING: If not sysadmin, then you must be a member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB to run full scope of checks', 16, 1, N'msdbperms')
 		--RETURN
     END
-	ELSE IF (ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) <> 1) AND ((SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_enumerrorlogs') = 0 OR (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'sp_readerrorlog') = 0 OR (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_readerrorlog') = 0)
+	ELSE IF (ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) <> 1) AND ((SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_enumerrorlogs') = 0 OR (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'sp_readerrorlog') = 0 OR (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_readerrorlog') = 0)
 	BEGIN
 		RAISERROR('WARNING: If not sysadmin, then you must be a member of the securityadmin server role, or have EXECUTE permission on the following extended sprocs to run full scope of checks: xp_enumerrorlogs, xp_readerrorlog, sp_readerrorlog', 16, 1, N'secperms')
 		--RETURN
 	END
-	ELSE IF (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') = 0 OR (SELECT COUNT(credential_id) FROM master.sys.credentials WHERE name = '##xp_cmdshell_proxy_account##') = 0
+	ELSE IF (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_cmdshell') = 0 OR (SELECT COUNT(credential_id) FROM master.sys.credentials WHERE name = '##xp_cmdshell_proxy_account##') = 0
 	BEGIN
 		RAISERROR('WARNING: If not sysadmin, then you must be granted EXECUTE permissions on xp_cmdshell and a xp_cmdshell proxy account should exist to run full scope of checks', 16, 1, N'xp_cmdshellproxy')
 		--RETURN
 	END
-	ELSE IF (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_fileexist') = 0 OR
-		(SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'sp_OAGetErrorInfo') = 0 OR
-		(SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'sp_OACreate') = 0 OR
-		(SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'sp_OADestroy') = 0 OR
-		(SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_regenumvalues') = 0 OR
-		(SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_regread') = 0 OR 
-		(SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_instance_regread') = 0 OR
-		(SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_servicecontrol') = 0 
+	ELSE IF (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_fileexist') = 0 OR
+		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'sp_OAGetErrorInfo') = 0 OR
+		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'sp_OACreate') = 0 OR
+		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'sp_OADestroy') = 0 OR
+		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_regenumvalues') = 0 OR
+		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_regread') = 0 OR 
+		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_instance_regread') = 0 OR
+		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_servicecontrol') = 0 
 	BEGIN
 		RAISERROR('WARNING: Must be a granted EXECUTE permissions on the following extended sprocs to run full scope of checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_fileexist, xp_regread, xp_instance_regread, xp_servicecontrol and xp_regenumvalues', 16, 1, N'extended_sprocs')
 		--RETURN
 	END
-	ELSE IF (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_msver') = 0 AND @sqlmajorver < 11
+	ELSE IF (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_msver') = 0 AND @sqlmajorver < 11
 	BEGIN
 		RAISERROR('WARNING: Must be granted EXECUTE permissions on xp_msver to run full scope of checks', 16, 1, N'extended_sprocs')
 		--RETURN
@@ -587,8 +600,8 @@ IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
             AND p.permission_name = 'ALTER SETTINGS'
             AND QUOTENAME(l.name) = QUOTENAME(USER_NAME())) = 0) -- Is not sysadmin but has alter settings permission
     OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1 
-        AND ((SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_regread') > 0 AND
-        (SELECT COUNT([name]) FROM @permstbl WHERE [name] = 'xp_cmdshell') > 0)))
+        AND ((SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_regread') > 0 AND
+        (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_cmdshell') > 0)))
 BEGIN
     DECLARE @pstbl_avail TABLE ([KeyExist] int)
     BEGIN TRY
@@ -935,7 +948,7 @@ BEGIN
 	IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
 BEGIN
 		IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1) OR ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regread') = 1)
 	BEGIN
 			BEGIN TRY
@@ -987,7 +1000,7 @@ BEGIN
 	END
 
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1) OR ((SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'xp_instance_regread') = 1)
 BEGIN
 		BEGIN TRY
@@ -2618,7 +2631,7 @@ to a maximum of 64 MB. The default level that signals a high-memory-resource not
 */
 
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1) OR ((SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'xp_regread') = 1)
 BEGIN
 		BEGIN TRY
@@ -2969,13 +2982,13 @@ BEGIN
 		IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 			OR ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) = 1 -- Is securityadmin
 			OR ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_readerrorlog') > 0
 			AND (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_readerrorlog') > 0
 			AND (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_enumerrorlogs') > 0)
 	BEGIN
 			IF EXISTS (SELECT [object_id]
@@ -3121,7 +3134,7 @@ FROM sys.dm_os_sys_memory (NOLOCK)';
 	EXECUTE sp_executesql @sqlcmd, @params, @pagefileOUT=@pagefile OUTPUT, @freepagefileOUT=@freepagefile OUTPUT, @pagedOUT=@paged OUTPUT;
 
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1) OR ((SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'xp_regread') = 1)
 BEGIN
 		BEGIN TRY
@@ -3585,28 +3598,28 @@ BEGIN
 					AND QUOTENAME(l.name) = QUOTENAME(USER_NAME())) = 0) -- Is not sysadmin but has alter settings permission
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 			AND ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_fileexist') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_instance_regread') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regread') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OAGetErrorInfo') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OACreate') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OADestroy') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_cmdshell') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regenumvalues') > 0)))
 	BEGIN
 			DECLARE @diskpart int
@@ -3859,28 +3872,28 @@ BEGIN
 					AND QUOTENAME(l.name) = QUOTENAME(USER_NAME())) = 0) -- Is not sysadmin but has alter settings permission
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 			AND ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_fileexist') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_instance_regread') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regread') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OAGetErrorInfo') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OACreate') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OADestroy') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_cmdshell') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regenumvalues') > 0)))
 	BEGIN
 			DECLARE @ntfs int
@@ -4134,28 +4147,28 @@ BEGIN
 						AND QUOTENAME(l.name) = QUOTENAME(USER_NAME())) = 0) -- Is not sysadmin but has alter settings permission
 				OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 				AND ((SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_fileexist') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_instance_regread') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_regread') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'sp_OAGetErrorInfo') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'sp_OACreate') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'sp_OADestroy') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_cmdshell') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_regenumvalues') > 0)))
 		BEGIN
 				DECLARE @frag int
@@ -4443,7 +4456,7 @@ BEGIN
 				WHERE name = '##xp_cmdshell_proxy_account##') > 0)) -- Is not sysadmin but proxy account exists
 				OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 				AND (SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_cmdshell') > 0))
 		BEGIN
 				SELECT @sao = CAST([value] AS smallint)
@@ -4635,28 +4648,28 @@ BEGIN
 						AND QUOTENAME(l.name) = QUOTENAME(USER_NAME())) = 0) -- Is not sysadmin but has alter settings permission
 				OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 				AND ((SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_fileexist') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_instance_regread') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_regread') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'sp_OAGetErrorInfo') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'sp_OACreate') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'sp_OADestroy') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_cmdshell') > 0 AND
 				(SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_regenumvalues') > 0)))
 		BEGIN
 				DECLARE @clunic int, @maxnic int
@@ -4892,7 +4905,7 @@ BEGIN
 				WHERE name = '##xp_cmdshell_proxy_account##') > 0)) -- Is not sysadmin but proxy account exists
 				OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 				AND (SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_cmdshell') > 0))
 		BEGIN
 				SELECT @sao = CAST([value] AS smallint)
@@ -5060,10 +5073,10 @@ BEGIN
 	RAISERROR (N'  |-Starting Service Accounts Status', 10, 1) WITH NOWAIT
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1)
 		OR ((SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'xp_regread') = 1 AND
 		(SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'xp_servicecontrol') = 1)
 BEGIN
 		DECLARE @rc int, @profile NVARCHAR(128)
@@ -5556,7 +5569,7 @@ BEGIN
 			WHERE name = '##xp_cmdshell_proxy_account##') > 0)) -- Is not sysadmin but proxy account exists
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 			AND (SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_cmdshell') > 0))
 	BEGIN
 			RAISERROR ('    |-Configuration options set for SPN check', 10, 1) WITH NOWAIT
@@ -7156,7 +7169,7 @@ BEGIN
 				WHERE name = '##xp_cmdshell_proxy_account##') > 0)) -- Is not sysadmin but proxy account exists
 				OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 				AND (SELECT COUNT([name])
-				FROM @permstbl
+				FROM tempdb.dbo.permstbl
 				WHERE [name] = 'xp_cmdshell') > 0))
 		BEGIN
 				RAISERROR ('    |-Configuration options set for IFI check', 10, 1) WITH NOWAIT
@@ -7261,7 +7274,7 @@ BEGIN
 	IF (SELECT ISNULL(FULLTEXTSERVICEPROPERTY('IsFulltextInstalled'),0)) = 1
 BEGIN
 		IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1) OR ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_instance_regread') = 1)
 	BEGIN
 			BEGIN TRY
@@ -8790,28 +8803,28 @@ BEGIN
 					AND QUOTENAME(l.name) = QUOTENAME(USER_NAME())) = 0) -- Is not sysadmin but has alter settings permission 
 			OR ((ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) <> 1
 			AND ((SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_fileexist') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_instance_regread') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regread') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OAGetErrorInfo') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OACreate') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'sp_OADestroy') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_cmdshell') > 0 AND
 			(SELECT COUNT([name])
-			FROM @permstbl
+			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_regenumvalues') > 0)))
 	BEGIN
 			IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild <= 2500)
@@ -15119,13 +15132,13 @@ BEGIN
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) = 1 -- Is securityadmin
 		OR ((SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'sp_readerrorlog') > 0
 		AND (SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'xp_readerrorlog') > 0
 		AND (SELECT COUNT([name])
-		FROM @permstbl
+		FROM tempdb.dbo.permstbl
 		WHERE [name] = 'xp_enumerrorlogs') > 0)
 BEGIN
 		SET @lognumber = 0
@@ -15806,6 +15819,18 @@ WHERE [object_id] = OBJECT_ID('tempdb.dbo.dbvars'))
 BEGIN
 	DROP TABLE tempdb.dbo.dbvars
 END
+IF EXISTS (SELECT [object_id]
+		FROM tempdb.sys.objects (NOLOCK)
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.permstbl'))
+		BEGIN
+			DROP TABLE tempdb.dbo.permstbl
+		END
+IF EXISTS (SELECT [object_id]
+		FROM tempdb.sys.objects (NOLOCK)
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.permstbl_msdb'))
+		BEGIN
+			DROP TABLE tempdb.dbo.permstbl_msdb
+		END
 
 	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
