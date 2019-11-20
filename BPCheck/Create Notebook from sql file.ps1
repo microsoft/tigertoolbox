@@ -21,7 +21,6 @@ DECLARE @dbid int, @dbname NVARCHAR(1000)
 DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(600)
 DECLARE @sqlmajorver int, @sqlminorver int, @sqlbuild int, @masterpid int, @clustered bit
 DECLARE @ptochecks int
-DECLARE @permstbl TABLE ([name] sysname)
 DECLARE @dbScope VARCHAR(256) 	
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
@@ -46,14 +45,6 @@ DECLARE @ixfragscanmode VARCHAR(8) = 'LIMITED' --(Valid inputs are DEFAULT, NULL
 DECLARE @logdetail bit = 0 --(1 = ON; 0 = OFF)
 
 SELECT @masterpid = principal_id FROM master.sys.database_principals (NOLOCK) WHERE sid = SUSER_SID()
-
-INSERT INTO @permstbl
-SELECT a.name
-FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[OBJECT_ID] = b.major_id
-WHERE a.type IN ('P', 'X') AND b.grantee_principal_id <>0 
-AND b.grantee_principal_id <> 2
-AND b.grantee_principal_id = @masterpid;
-
 SELECT @instancename = CONVERT(VARCHAR(128),SERVERPROPERTY('InstanceName')) 
 SELECT @server = RTRIM(CONVERT(VARCHAR(128), SERVERPROPERTY('MachineName')))
 SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff)
