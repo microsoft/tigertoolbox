@@ -143,9 +143,9 @@ $Cells = foreach ($Chunk in $SplitSQL[1..($SplitSQL.Length -2)]) {
     if ($Chunk.Trim().StartsWith('--- #sponly#')) { 
         # Ignore this tag
     }
-    elseif ($Chunk.trim().StartsWith('--')) {  
+    elseif ($Chunk.trim().StartsWith('---')) {  
         ## This is a text block
-        $MarkDown = $Chunk.Trim().Replace('--', '').replace('*/','')
+        $MarkDown = $Chunk.Trim().Replace('-- ', '').replace('*/','')
         New-ADSWorkBookCell -Type Text -Text $MarkDown
     }
     else {
