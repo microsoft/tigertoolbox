@@ -8327,8 +8327,7 @@ FROM sys.database_query_store_options;'
 	-- ### Automatic Tuning info subsection
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Automatic Tuning info', 10, 1) WITH NOWAIT
-
-	IF @sqlmajorver > 13
+IF @sqlmajorver > 13
 BEGIN
 		IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
@@ -8345,65 +8344,61 @@ BEGIN
 			Actual_State NVARCHAR(60),
 			Desired_diff_Actual_reason NVARCHAR(60)
 		);
-
 		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
-
 		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
-
 		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
-
 		IF (SELECT COUNT(id)
 		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
-	BEGIN
+		BEGIN
 			WHILE (SELECT COUNT(id)
 			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
-		BEGIN
+			BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
 				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
-
-				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
-SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], name, desired_state_desc, actual_state_desc, reason_desc
-FROM sys.database_automatic_tuning_options;'
-
-				BEGIN TRY
+				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + '; SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], name, desired_state_desc, actual_state_desc, reason_desc FROM sys.database_automatic_tuning_options;'
+			BEGIN TRY
 				INSERT INTO #tblAutoTuningInfo
-				EXECUTE sp_executesql @sqlcmd
-			END TRY
+			EXECUTE sp_executesql @sqlcmd
+			END TRY		
 			BEGIN CATCH
 				SELECT ERROR_NUMBER() AS ErrorNumber, ERROR_MESSAGE() AS ErrorMessage;
 				SELECT @ErrorMessage = 'Automatic Tuning subsection - Error raised in TRY block. ' + ERROR_MESSAGE()
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE tempdb.dbo.tmpdbs0
-			SET isdone = 1
+			UPDATE tempdb.dbo.tmpdbs0 
+			SET isdone = 1 
 			WHERE [dbid] = @dbid
 			END
 		END
-
-		IF (SELECT COUNT(AutoTuning_Option)
+		SELECT COUNT(AutoTuning_Option)
+		FROM #tblAutoTuningInfo
+	IF (SELECT COUNT(AutoTuning_Option)
 		FROM #tblAutoTuningInfo) > 0
-	BEGIN
+		BEGIN
 			SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information], DBName AS [Database_Name],
 				AutoTuning_Option, Desired_State, Actual_State, Desired_diff_Actual_reason
 			FROM #tblAutoTuningInfo
 			ORDER BY DBName;
 		END
 	ELSE
-	BEGIN
-			SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information] , '[INFORMATION: No databases have Automatic Tuning enabled]' AS [Comment];
-		END
-	END;
-
+	BEGIN  
+	SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information] , '[INFORMATION: No databases have Automatic Tuning enabled]' AS [Comment];
+	END
+END;
+ELSE
+BEGIN  
+	SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information] , '[INFORMATION: No databases have Automatic Tuning enabled]' AS [Comment];
+END
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### DBs with Sparse files subsection
 	--------------------------------------------------------------------------------------------------------------------------------
