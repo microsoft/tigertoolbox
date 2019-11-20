@@ -373,6 +373,7 @@ BEGIN
 				SELECT @psavail = [PS_OUTPUT]
 				FROM @psavail_output
 				WHERE [PS_OUTPUT] IS NOT NULL;
+				INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 			END
 		ELSE
 		BEGIN
@@ -1267,12 +1268,12 @@ BEGIN
 
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
-DROP TABLE #tmpdbs0;
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs0'))
+DROP TABLE tmpdbs0;
 	IF NOT EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0'))
-CREATE TABLE #tmpdbs0
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs0'))
+CREATE TABLE tempdb.dbo.tmpdbs0
 	(
 		id int IDENTITY(1,1),
 		[dbid] int,
@@ -1332,7 +1333,7 @@ CREATE TABLE ##tmpdbsizes
 	IF @sqlmajorver < 11
 BEGIN
 		SET @sqlcmd = 'SELECT database_id, name, [compatibility_level], is_read_only, [state], is_distributor, 1, 1, 0, 0 FROM master.sys.databases (NOLOCK)'
-		INSERT INTO #tmpdbs0
+		INSERT INTO tempdb.dbo.tmpdbs0
 			([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_query_store_on, [isdone])
 		EXEC sp_executesql @sqlcmd;
 	END;
@@ -1346,7 +1347,7 @@ BEGIN
 		LEFT JOIN sys.dm_hadr_availability_replica_states (NOLOCK) ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
 		LEFT JOIN sys.dm_hadr_database_replica_cluster_states (NOLOCK) rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
 	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready;'
-		INSERT INTO #tmpdbs0
+		INSERT INTO tempdb.dbo.tmpdbs0
 			([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, is_query_store_on, [isdone])
 		EXEC sp_executesql @sqlcmd;
 	END;
@@ -1360,7 +1361,7 @@ BEGIN
 		LEFT JOIN sys.dm_hadr_availability_replica_states (NOLOCK) ars ON d.group_id = ars.group_id AND d.replica_id = ars.replica_id
 		LEFT JOIN sys.dm_hadr_database_replica_cluster_states (NOLOCK) rcs ON rcs.database_name = sd.name AND rcs.replica_id = ar.replica_id
 	GROUP BY sd.database_id, sd.name, sd.is_read_only, sd.[state], sd.is_distributor, ar.secondary_role_allow_connections, sd.[compatibility_level], rcs.is_database_joined, rcs.is_failover_ready, sd.is_query_store_on;'
-		INSERT INTO #tmpdbs0
+		INSERT INTO tempdb.dbo.tmpdbs0
 			([dbid], [dbname], [compatibility_level], is_read_only, [state], is_distributor, [role], [secondary_role_allow_connections], is_database_joined, is_failover_ready, is_query_store_on, [isdone])
 		EXEC sp_executesql @sqlcmd;
 	END;
@@ -1375,18 +1376,18 @@ BEGIN
 	RAISERROR (N'  |-Applying specific database scope list, if any', 10, 1) WITH NOWAIT
 	IF @dbScope IS NOT NULL
 BEGIN
-		SELECT @sqlcmd = 'DELETE FROM #tmpdbs0 WHERE [dbid] > 4 AND [dbid] NOT IN (' + REPLACE(@dbScope,' ','') + ')'
+		SELECT @sqlcmd = 'DELETE FROM tempdb.dbo.tmpdbs0 WHERE [dbid] > 4 AND [dbid] NOT IN (' + REPLACE(@dbScope,' ','') + ')'
 		EXEC sp_executesql @sqlcmd;
 	END;
 
 	/* Populate data file info*/
 	WHILE (SELECT COUNT(id)
-	FROM #tmpdbs0
+	FROM tempdb.dbo.tmpdbs0
 	WHERE isdone = 0) > 0
 BEGIN
 		SELECT TOP 1
 			@curdbname = [dbname], @curdbid = [dbid], @currole = [role], @state = [state], @cursecondary_role_allow_connections = secondary_role_allow_connections
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0
 		IF (@currole = 2 AND @cursecondary_role_allow_connections = 0) OR @state <> 0
 	BEGIN
@@ -1410,7 +1411,7 @@ FROM sys.database_files (NOLOCK)'
 		RAISERROR (@ErrorMessage, 16, 1);
 	END CATCH
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [dbid] = @curdbid
 	END;
@@ -1597,30 +1598,30 @@ BEGIN
 			[MemoryUsed_MemoryOptimizedObjects_KB] DECIMAL(18,2)
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			RAISERROR (N'  |-Starting Storage analysis for In-Memory OLTP Engine', 10, 1) WITH NOWAIT
 
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
@@ -1638,7 +1639,7 @@ ISNULL((SELECT CONVERT(DECIMAL(18,2),(SUM(tms.memory_used_by_table_kb) + SUM(tms
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -1746,28 +1747,28 @@ BEGIN
 			[is_not_for_replication] bit
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
@@ -1788,7 +1789,7 @@ ORDER BY stb.name, st.name;'
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -1834,28 +1835,28 @@ BEGIN
 			[Feature_Name] VARCHAR(100)
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
@@ -1885,7 +1886,7 @@ SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Dyn
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -1895,7 +1896,7 @@ SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Dyn
 	BEGIN
 			INSERT INTO #tblPerSku
 			SELECT [dbname], 'Always_On' AS feature_name
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE is_database_joined = 1;
 		END;
 
@@ -2031,7 +2032,7 @@ CREATE TABLE #tmpdbs1
 	INSERT INTO #tmpdbs1
 		([dbid], [dbname], [role], [secondary_role_allow_connections], [isdone])
 	SELECT [dbid], [dbname], [role], [secondary_role_allow_connections], 0
-	FROM #tmpdbs0 (NOLOCK)
+	FROM tempdb.dbo.tmpdbs0 (NOLOCK)
 	WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 		AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)
 		AND lower([dbname]) NOT IN ('virtualmanagerdb', --Virtual Machine Manager
@@ -2233,7 +2234,7 @@ CREATE TABLE tempdb.dbo.tmpdbs_userchoice
 	IF @dbScope IS NOT NULL
 BEGIN
 		SELECT @sqlcmd = 'SELECT [dbid], [dbname] 
-FROM #tmpdbs0 (NOLOCK) 
+FROM tempdb.dbo.tmpdbs0 (NOLOCK) 
 WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)
 	AND [dbid] IN (' + REPLACE(@dbScope,' ','') + ')'
@@ -2248,7 +2249,7 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 ELSE 
 BEGIN
 		SELECT @sqlcmd = 'SELECT [dbid], [dbname]  
-FROM #tmpdbs0 (NOLOCK)  
+FROM tempdb.dbo.tmpdbs0 (NOLOCK)  
 WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0 
 	AND [role] <> 2 AND (secondary_role_allow_connections <> 0 OR secondary_role_allow_connections IS NULL)'
 
@@ -2588,6 +2589,10 @@ BEGIN
 	SELECT @numa_nodes_afinned = COUNT (DISTINCT parent_node_id)
 	FROM sys.dm_os_schedulers
 	WHERE scheduler_id < 255 AND parent_node_id < 64 AND is_online = 1
+
+	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('maxservermem', @maxservermem )
+	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('systemmem', @systemmem )
+	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('mwthreads_count', @mwthreads_count )
 
 	/* 
 From Windows Internals book by David Solomon and Mark Russinovich:
@@ -5416,7 +5421,9 @@ BEGIN
 		RAISERROR (@ErrorMessage, 16, 1);
 	END CATCH
 
-															SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server' AS [Service], @statussqlservice AS [Status], @accntsqlservice AS [Account],
+	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('accntsqlservice', @accntsqlservice )
+
+			SELECT 'Service_Account_checks' AS [Category], 'Service_Status' AS [Check], 'SQL_Server' AS [Service], @statussqlservice AS [Status], @accntsqlservice AS [Account],
 				CASE WHEN @statussqlservice = 'Not Installed' THEN '[INFORMATION: Service is not installed]'
 			WHEN @statussqlservice LIKE 'Stopped%' THEN '[WARNING: Service is stopped]'
 			WHEN @accntsqlservice IS NULL THEN '[WARNING: Could not detect account for check]' 
@@ -6033,28 +6040,28 @@ BEGIN
 			[Object] VARCHAR(255)
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname0 = [dbname], @dbid0 = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				SET @sqlcmd0 = 'USE ' + QUOTENAME(@dbname0) + ';
@@ -6076,7 +6083,7 @@ WHERE i.[type] IN (5,6,7)'
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid0
 			END
@@ -6086,7 +6093,7 @@ WHERE i.[type] IN (5,6,7)'
 		FROM #tblColStoreIXs
 
 		SELECT @min_compat_level = min([compatibility_level])
-		from #tmpdbs0
+		from tempdb.dbo.tmpdbs0
 
 	END;
 
@@ -6911,7 +6918,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 				'Enabled' AS 'QO_changes_from_previous_DB_compat_levels',
 				'Enabled' AS 'QO_changes_for_current_version_post_RTM'
 			FROM sys.databases sd
-				INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
+				INNER JOIN tempdb.dbo.tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
 		END;
 
 		IF NOT EXISTS (SELECT TraceFlag
@@ -6927,7 +6934,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 				CASE WHEN sd.compatibility_level >= 130 THEN 'Enabled' ELSE 'Disabled' END AS 'QO_changes_from_previous_DB_compat_levels',
 				'Disabled' AS 'QO_changes_for_current_version_post_RTM'
 			FROM sys.databases sd
-				INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
+				INNER JOIN tempdb.dbo.tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
 		END;
 	END;
 
@@ -7218,7 +7225,7 @@ BEGIN
 			SET @ifi = 0
 		END
 	END;
-
+	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('ifi', @ifi )
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Full Text Configurations subsection
 	--------------------------------------------------------------------------------------------------------------------------------
@@ -7813,28 +7820,28 @@ BEGIN
 			SELECT 'disable_batch_mode_adaptive_joins', 10, 15
 		-- as DB Scoped config
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
@@ -7856,7 +7863,7 @@ AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -8213,32 +8220,32 @@ BEGIN
 			Current_Storage_Size_MB bigint
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE is_query_store_on = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
@@ -8255,7 +8262,7 @@ FROM sys.database_query_store_options;'
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -8298,28 +8305,28 @@ BEGIN
 			Desired_diff_Actual_reason NVARCHAR(60)
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
@@ -8336,7 +8343,7 @@ FROM sys.database_automatic_tuning_options;'
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -8496,28 +8503,28 @@ BEGIN
 			growth_iteration int
 		)
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				IF (SELECT CHARINDEX(CHAR(39), @dbname)) > 0
@@ -8684,7 +8691,7 @@ BEGIN
 					);
 				END;
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -10523,28 +10530,28 @@ BEGIN
 				Hint VARCHAR(30)
 			);
 
-			UPDATE #tmpdbs0
+			UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 0;
 
-			UPDATE #tmpdbs0
+			UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 1
 		WHERE [state] <> 0 OR [dbid] < 5;
 
-			UPDATE #tmpdbs0
+			UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 1
 		WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 			IF (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				WHILE (SELECT COUNT(id)
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0) > 0
 			BEGIN
 					SELECT TOP 1
 						@dbname = [dbname], @dbid = [dbid]
-					FROM #tmpdbs0
+					FROM tempdb.dbo.tmpdbs0
 					WHERE isdone = 0
 
 					SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
@@ -10572,7 +10579,7 @@ AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 					RAISERROR (@ErrorMessage, 16, 1);
 				END CATCH
 
-					UPDATE #tmpdbs0
+					UPDATE tempdb.dbo.tmpdbs0
 				SET isdone = 1
 				WHERE [dbid] = @dbid
 				END
@@ -11357,28 +11364,28 @@ BEGIN
 			[ImplementationScript] NVARCHAR(100)
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] = 2;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ''' + REPLACE(@dbid, CHAR(39), CHAR(95)) + ''' AS [dbid], CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END FROM sys.dm_db_tuning_recommendations;'
@@ -11393,7 +11400,7 @@ SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ''' + REPLA
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -11403,23 +11410,23 @@ SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], ''' + REPLA
 		FROM #tblTuningRecommendationsCnt
 		WHERE [HasRecommendations] = 1)
 	BEGIN
-			UPDATE #tmpdbs0
+			UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 0
 		FROM #tblTuningRecommendationsCnt AS trc
-				INNER JOIN #tmpdbs0 ON #tmpdbs0.[dbid] = trc.[dbid]
+				INNER JOIN tempdb.dbo.tmpdbs0 ON tempdb.dbo.tmpdbs0.[dbid] = trc.[dbid]
 		WHERE [state] <> 0 AND trc.[HasRecommendations] = 1;
 
 			IF (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				WHILE (SELECT COUNT(id)
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0) > 0
 			BEGIN
 					SELECT TOP 1
 						@dbname = [dbname], @dbid = [dbid]
-					FROM #tmpdbs0
+					FROM tempdb.dbo.tmpdbs0
 					WHERE isdone = 0
 					SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 ;WITH CTE_Tuning_Recs AS (SELECT tr.reason, 
@@ -11453,7 +11460,7 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-					UPDATE #tmpdbs0
+					UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 				END
@@ -11609,14 +11616,14 @@ RAISERROR (N'|-Starting Indexes and Statistics Checks', 10, 1) WITH NOWAIT
 BEGIN
 		RAISERROR (N'  |-Starting Statistics update', 10, 1) WITH NOWAIT
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
@@ -11650,16 +11657,16 @@ BEGIN
 		)
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid], @dbcmptlevel = [compatibility_level]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 				IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver > 11) AND @dbcmptlevel > 80
 			BEGIN
@@ -11704,7 +11711,7 @@ HAVING SUM(p.[rows]) > 0
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
@@ -11796,28 +11803,28 @@ BEGIN
 				steps int
 			)
 
-			UPDATE #tmpdbs0
+			UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 0;
 
-			UPDATE #tmpdbs0
+			UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 1
 		WHERE [state] <> 0 OR [dbid] < 5;
 
-			UPDATE #tmpdbs0
+			UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 1
 		WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 			IF (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				WHILE (SELECT COUNT(id)
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0) > 0
 			BEGIN
 					SELECT TOP 1
 						@dbname = [dbname], @dbid = [dbid], @dbcmptlevel = [compatibility_level]
-					FROM #tmpdbs0
+					FROM tempdb.dbo.tmpdbs0
 					WHERE isdone = 0
 					IF @dbcmptlevel > 80
 				BEGIN
@@ -11843,7 +11850,7 @@ WHERE sp.[rows] > 0
 					END CATCH
 					END
 
-					UPDATE #tmpdbs0
+					UPDATE tempdb.dbo.tmpdbs0
 				SET isdone = 1
 				WHERE [dbid] = @dbid
 				END
@@ -11896,28 +11903,28 @@ BEGIN
 			[Type] VARCHAR(10)
 		);
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] = 2;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF (SELECT COUNT(id)
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0) > 0
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 				SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], QUOTENAME(t.name), QUOTENAME(o.[name]), i.name, ''INDEX'' 
@@ -11945,13 +11952,13 @@ AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 			SET isdone = 1
 			WHERE [dbid] = @dbid
 			END
 		END;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
 		IF (SELECT COUNT([Object])
@@ -12137,29 +12144,29 @@ BEGIN
 
 		RAISERROR (N'    |-Populating support table...', 10, 1) WITH NOWAIT
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [state] <> 0 OR [dbid] < 5;
 
-		UPDATE #tmpdbs0
+		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
 		IF EXISTS (SELECT TOP 1
 			id
-		FROM #tmpdbs0
+		FROM tempdb.dbo.tmpdbs0
 		WHERE isdone = 0)
 	BEGIN
 			WHILE (SELECT COUNT(id)
-			FROM #tmpdbs0
+			FROM tempdb.dbo.tmpdbs0
 			WHERE isdone = 0) > 0
 		BEGIN
 				SELECT TOP 1
 					@dbname = [dbname], @dbid = [dbid]
-				FROM #tmpdbs0
+				FROM tempdb.dbo.tmpdbs0
 				WHERE isdone = 0
 
 				IF (SELECT CHARINDEX(CHAR(39), @dbname)) > 0
@@ -12258,7 +12265,7 @@ WHERE o.[type] = ''U'''
 					END;
 				END;
 
-				UPDATE #tmpdbs0
+				UPDATE tempdb.dbo.tmpdbs0
 		SET isdone = 1
 		WHERE [dbid] = @dbid;
 			END;
@@ -15494,8 +15501,8 @@ DROP TABLE #tblIOStall;
 DROP TABLE #tmpdbs1;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs0')) 
-DROP TABLE #tmpdbs0;
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs0')) 
+DROP TABLE tempdb.dbo.tmpdbs0;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
 	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblPerfCount')) 
