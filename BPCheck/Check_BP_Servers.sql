@@ -12503,12 +12503,12 @@ BEGIN
 		RAISERROR (N'  |-Starting Duplicate or Redundant indexes', 10, 1) WITH NOWAIT
 		IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
-		WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
-	DROP TABLE #tblIxs1;
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblIxs1'))
+	DROP TABLE tempdb.dbo.tblIxs1;
 		IF NOT EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
-		WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1'))
-	CREATE TABLE #tblIxs1
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblIxs1'))
+	CREATE TABLE tempdb.dbo.tblIxs1
 		(
 			[databaseID] int,
 			[DatabaseName] sysname,
@@ -12618,7 +12618,7 @@ ORDER BY objectName
 OPTION (MAXDOP 2);'
 
 			BEGIN TRY
-			INSERT INTO #tblIxs1
+			INSERT INTO tempdb.dbo.tblIxs1
 			EXECUTE sp_executesql @sqlcmd
 		END TRY
 		BEGIN CATCH
@@ -12633,7 +12633,7 @@ OPTION (MAXDOP 2);'
 		END
 
 		IF (SELECT COUNT(*)
-		FROM #tblIxs1 I INNER JOIN #tblIxs1 I2 ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
+		FROM tempdb.dbo.tblIxs1 I INNER JOIN tempdb.dbo.tblIxs1 I2 ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
 				AND I.[KeyCols] = I2.[KeyCols] AND (I.IncludedCols = I2.IncludedCols OR (I.IncludedCols IS NULL AND I2.IncludedCols IS NULL))
 				AND ((I.filter_definition = I2.filter_definition) OR (I.filter_definition IS NULL AND I2.filter_definition IS NULL))) > 0
 	BEGIN
@@ -12641,7 +12641,7 @@ OPTION (MAXDOP 2);'
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name],
 				I.[indexID], I.[indexName] AS [Index_Name], I.is_primary_key, I.is_unique_constraint, I.is_unique, I.fill_factor, I.is_padded, I.has_filter, I.filter_definition,
 				I.KeyCols, I.IncludedCols, CASE WHEN I.IncludedCols IS NULL THEN I.[KeyCols] ELSE I.[KeyCols] + ',' + I.IncludedCols END AS [AllColsOrdered]
-			FROM #tblIxs1 I INNER JOIN #tblIxs1 I2
+			FROM tempdb.dbo.tblIxs1 I INNER JOIN tempdb.dbo.tblIxs1 I2
 				ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
 					AND I.[KeyCols] = I2.[KeyCols] AND (I.IncludedCols = I2.IncludedCols OR (I.IncludedCols IS NULL AND I2.IncludedCols IS NULL))
 					AND ((I.filter_definition = I2.filter_definition) OR (I.filter_definition IS NULL AND I2.filter_definition IS NULL))
@@ -12654,24 +12654,24 @@ OPTION (MAXDOP 2);'
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Duplicate_Indexes_toDrop' AS [Check], I.[DatabaseName], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name],
 				I.[indexID], I.[indexName] AS [Index_Name], I.is_primary_key, I.is_unique_constraint, I.is_unique, I.fill_factor, I.is_padded, I.has_filter, I.filter_definition,
 				I.KeyCols, I.IncludedCols, CASE WHEN I.IncludedCols IS NULL THEN I.[KeyCols] ELSE I.[KeyCols] + ',' + I.IncludedCols END AS [AllColsOrdered]
-			FROM #tblIxs1 I INNER JOIN #tblIxs1 I2
+			FROM tempdb.dbo.tblIxs1 I INNER JOIN tempdb.dbo.tblIxs1 I2
 				ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
 					AND I.[KeyCols] = I2.[KeyCols] AND (I.IncludedCols = I2.IncludedCols OR (I.IncludedCols IS NULL AND I2.IncludedCols IS NULL))
 					AND ((I.filter_definition = I2.filter_definition) OR (I.filter_definition IS NULL AND I2.filter_definition IS NULL))
 			WHERE I.indexType IN (1,2,5,6) -- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 				AND I2.indexType IN (1,2,5,6) -- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 				AND I.[indexID] NOT IN (
-				SELECT COALESCE((SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+				SELECT COALESCE((SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 				WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 					AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 					AND (tI3.is_unique = 1 AND tI3.is_primary_key = 1)
 				GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered),
-				(SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+				(SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 				WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 					AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 					AND (tI3.is_unique = 1 OR tI3.is_primary_key = 1)
 				GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered),
-				(SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+				(SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 				WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 					AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 				GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered)
@@ -12691,24 +12691,24 @@ In this case, make the appropriate changes in the clustered index (making it uni
 				PRINT CHAR(10) + '--############# Existing Duplicate indexes drop statements #############' + CHAR(10)
 				DECLARE Dup_Stats CURSOR FAST_FORWARD FOR SELECT 'USE ' + I.[DatabaseName] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ I.[indexName] + ''')' + CHAR(10) +
 			'DROP INDEX ' + QUOTENAME(I.[indexName]) + ' ON ' + QUOTENAME(I.[schemaName]) + '.' + QUOTENAME(I.[objectName]) + ';' + CHAR(10) + 'GO' + CHAR(10)
-				FROM #tblIxs1 I INNER JOIN #tblIxs1 I2
+				FROM tempdb.dbo.tblIxs1 I INNER JOIN tempdb.dbo.tblIxs1 I2
 					ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
 						AND I.[KeyCols] = I2.[KeyCols] AND (I.IncludedCols = I2.IncludedCols OR (I.IncludedCols IS NULL AND I2.IncludedCols IS NULL))
 						AND ((I.filter_definition = I2.filter_definition) OR (I.filter_definition IS NULL AND I2.filter_definition IS NULL))
 				WHERE I.indexType IN (1,2,5,6) -- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 					AND I2.indexType IN (1,2,5,6) -- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 					AND I.[indexID] NOT IN (
-					SELECT COALESCE((SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+					SELECT COALESCE((SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 					WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 						AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 						AND (tI3.is_unique = 1 AND tI3.is_primary_key = 1)
 					GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered),
-					(SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+					(SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 					WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 						AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 						AND (tI3.is_unique = 1 OR tI3.is_primary_key = 1)
 					GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered),
-					(SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+					(SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 					WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 						AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 					GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered)
@@ -12731,24 +12731,24 @@ In this case, make the appropriate changes in the clustered index (making it uni
 			RAISERROR (N'    |-Starting index search in sql modules...', 10, 1) WITH NOWAIT
 
 			DECLARE Dup_HardCoded CURSOR FAST_FORWARD FOR SELECT I.[DatabaseName], I.[indexName]
-			FROM #tblIxs1 I INNER JOIN #tblIxs1 I2
+			FROM tempdb.dbo.tblIxs1 I INNER JOIN tempdb.dbo.tblIxs1 I2
 				ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
 					AND I.[KeyCols] = I2.[KeyCols] AND (I.IncludedCols = I2.IncludedCols OR (I.IncludedCols IS NULL AND I2.IncludedCols IS NULL))
 					AND ((I.filter_definition = I2.filter_definition) OR (I.filter_definition IS NULL AND I2.filter_definition IS NULL))
 			WHERE I.indexType IN (1,2,5,6) -- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 				AND I2.indexType IN (1,2,5,6) -- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 				AND I.[indexID] NOT IN (
-				SELECT COALESCE((SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+				SELECT COALESCE((SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 				WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 					AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 					AND (tI3.is_unique = 1 AND tI3.is_primary_key = 1)
 				GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered),
-				(SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+				(SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 				WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 					AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 					AND (tI3.is_unique = 1 OR tI3.is_primary_key = 1)
 				GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered),
-				(SELECT MIN(tI3.[indexID]) FROM #tblIxs1 tI3
+				(SELECT MIN(tI3.[indexID]) FROM tempdb.dbo.tblIxs1 tI3
 				WHERE tI3.[databaseID] = I.[databaseID] AND tI3.[objectID] = I.[objectID] 
 					AND tI3.[KeyCols] = I.[KeyCols] AND (tI3.IncludedCols = I.IncludedCols OR (tI3.IncludedCols IS NULL AND I.IncludedCols IS NULL))
 				GROUP BY tI3.[objectID], tI3.KeyCols, tI3.IncludedCols, tI3.[KeyColsOrdered], tI3.IncludedColsOrdered)
@@ -12796,7 +12796,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 		END;
 
 		IF (SELECT COUNT(*)
-		FROM #tblIxs1 I INNER JOIN #tblIxs1 I2 ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
+		FROM tempdb.dbo.tblIxs1 I INNER JOIN tempdb.dbo.tblIxs1 I2 ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
 				AND (I.[KeyCols] <> I2.[KeyCols] OR I.IncludedCols <> I2.IncludedCols)
 				AND (((I.[KeyColsOrdered] <> I2.[KeyColsOrdered] OR I.IncludedColsOrdered <> I2.IncludedColsOrdered)
 				AND ((CASE WHEN I.IncludedColsOrdered IS NULL THEN I.[KeyColsOrdered] ELSE I.[KeyColsOrdered] + ',' + I.IncludedColsOrdered END) = (CASE WHEN I2.IncludedColsOrdered IS NULL THEN I2.[KeyColsOrdered] ELSE I2.[KeyColsOrdered] + ',' + I2.IncludedColsOrdered END)
@@ -12805,7 +12805,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 				OR (I.[KeyColsOrdered] = I2.[KeyColsOrdered] AND I.IncludedColsOrdered <> I2.IncludedColsOrdered)
 				OR ((I.[AllColsOrdered] = I2.[AllColsOrdered] AND I.filter_definition IS NULL AND I2.filter_definition IS NOT NULL) OR (I.[AllColsOrdered] = I2.[AllColsOrdered] AND I.filter_definition IS NOT NULL AND I2.filter_definition IS NULL)))
 				AND I.indexID NOT IN (SELECT I3.[indexID]
-				FROM #tblIxs1 I3 INNER JOIN #tblIxs1 I4
+				FROM tempdb.dbo.tblIxs1 I3 INNER JOIN tempdb.dbo.tblIxs1 I4
 					ON I3.[databaseID] = I4.[databaseID] AND I3.[objectID] = I4.[objectID] AND I3.[indexID] <> I4.[indexID]
 						AND I3.[KeyCols] = I4.[KeyCols] AND (I3.IncludedCols = I4.IncludedCols OR (I3.IncludedCols IS NULL AND I4.IncludedCols IS NULL))
 				WHERE I3.[databaseID] = I.[databaseID] AND I3.[objectID] = I.[objectID]
@@ -12820,7 +12820,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Redundant_Indexes' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name],
 				I.[indexID], I.[indexName] AS [Index_Name], I.is_unique, I.fill_factor, I.is_padded, I.has_filter, I.filter_definition,
 				I.KeyCols, I.IncludedCols, CASE WHEN I.IncludedColsOrdered IS NULL THEN I.[KeyColsOrdered] ELSE I.[KeyColsOrdered] + ',' + I.IncludedColsOrdered END AS [KeyInclColsOrdered]
-			FROM #tblIxs1 I INNER JOIN #tblIxs1 I2
+			FROM tempdb.dbo.tblIxs1 I INNER JOIN tempdb.dbo.tblIxs1 I2
 				ON I.[databaseID] = I2.[databaseID] AND I.[objectID] = I2.[objectID] AND I.[indexID] <> I2.[indexID]
 					AND (((I.[KeyColsOrdered] <> I2.[KeyColsOrdered] OR I.IncludedColsOrdered <> I2.IncludedColsOrdered)
 					AND ((CASE WHEN I.IncludedColsOrdered IS NULL THEN I.[KeyColsOrdered] ELSE I.[KeyColsOrdered] + ',' + I.IncludedColsOrdered END) = (CASE WHEN I2.IncludedColsOrdered IS NULL THEN I2.[KeyColsOrdered] ELSE I2.[KeyColsOrdered] + ',' + I2.IncludedColsOrdered END)
@@ -12829,7 +12829,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 					OR (I.[KeyColsOrdered] = I2.[KeyColsOrdered] AND I.IncludedColsOrdered <> I2.IncludedColsOrdered)
 					OR ((I.[AllColsOrdered] = I2.[AllColsOrdered] AND I.filter_definition IS NULL AND I2.filter_definition IS NOT NULL) OR (I.[AllColsOrdered] = I2.[AllColsOrdered] AND I.filter_definition IS NOT NULL AND I2.filter_definition IS NULL)))
 					AND I.indexID NOT IN (SELECT I3.[indexID]
-					FROM #tblIxs1 I3 INNER JOIN #tblIxs1 I4
+					FROM tempdb.dbo.tblIxs1 I3 INNER JOIN tempdb.dbo.tblIxs1 I4
 						ON I3.[databaseID] = I4.[databaseID] AND I3.[objectID] = I4.[objectID] AND I3.[indexID] <> I4.[indexID]
 							AND I3.[KeyCols] = I4.[KeyCols] AND (I3.IncludedCols = I4.IncludedCols OR (I3.IncludedCols IS NULL AND I4.IncludedCols IS NULL))
 					WHERE I3.[databaseID] = I.[databaseID] AND I3.[objectID] = I.[objectID]
@@ -13114,7 +13114,7 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 BEGIN
 		RAISERROR (N'  |-Starting Indexes with large keys', 10, 1) WITH NOWAIT
 		IF (SELECT COUNT(*)
-		FROM #tblIxs1
+		FROM tempdb.dbo.tblIxs1
 		WHERE ([KeyCols_data_length_bytes] > 900 AND @sqlmajorver < 13)
 			OR ([KeyCols_data_length_bytes] > 900 AND indexType IN (1,5) AND @sqlmajorver >= 13)
 			OR ([KeyCols_data_length_bytes] > 1700 AND indexType IN (2,6) AND @sqlmajorver >= 13)) > 0
@@ -13123,7 +13123,7 @@ BEGIN
 				CASE WHEN @sqlmajorver < 13 THEN '[WARNING: Some indexes have keys larger than 900 bytes. It is recommended to revise these]' 
 				ELSE '[WARNING: Some indexes have keys larger than allowed (900 bytes for clustered index; 1700 bytes for nonclustered index). It is recommended to revise these]' END AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], I.indexType, I.KeyCols, [KeyCols_data_length_bytes]
-			FROM #tblIxs1 I
+			FROM tempdb.dbo.tblIxs1 I
 			WHERE ([KeyCols_data_length_bytes] > 900 AND @sqlmajorver < 13)
 				OR ([KeyCols_data_length_bytes] > 900 AND indexType IN (1,5) AND @sqlmajorver >= 13)
 				OR ([KeyCols_data_length_bytes] > 1700 AND indexType IN (2,6) AND @sqlmajorver >= 13)
@@ -13142,13 +13142,13 @@ BEGIN
 BEGIN
 		RAISERROR (N'  |-Starting Indexes with fill factor < 80 pct', 10, 1) WITH NOWAIT
 		IF (SELECT COUNT(*)
-		FROM #tblIxs1
+		FROM tempdb.dbo.tblIxs1
 		WHERE [fill_factor] BETWEEN 1 AND 79) > 0
 	BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Low_Fill_Factor' AS [Check], '[WARNING: Some indexes have a fill factor lower than 80 percent. Revise the need to maintain such a low value]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Low_Fill_Factor' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name],
 				[fill_factor], I.KeyCols, I.IncludedCols, CASE WHEN I.IncludedCols IS NULL THEN I.[KeyCols] ELSE I.[KeyCols] + ',' + I.IncludedCols END AS [AllColsOrdered]
-			FROM #tblIxs1 I
+			FROM tempdb.dbo.tblIxs1 I
 			WHERE [fill_factor] BETWEEN 1 AND 79
 			ORDER BY I.[DatabaseName], I.schemaName, I.[objectName], I.[indexID]
 		END
@@ -13165,7 +13165,7 @@ BEGIN
 BEGIN
 		RAISERROR (N'  |-Starting Disabled indexes', 10, 1) WITH NOWAIT
 		IF (SELECT COUNT(*)
-		FROM #tblIxs1
+		FROM tempdb.dbo.tblIxs1
 		WHERE [is_disabled] = 1) > 0
 	BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Disabled_IXs' AS [Check], '[WARNING: Some indexes are disabled. Revise the need to maintain these]' AS [Deviation]
@@ -13175,7 +13175,7 @@ BEGIN
 			WHEN [indexType] = 3 THEN 'Clustered columnstore'
 			ELSE 'Non-clustered columnstore' END AS [Index_Type],
 				I.KeyCols, I.IncludedCols, CASE WHEN I.IncludedCols IS NULL THEN I.[KeyCols] ELSE I.[KeyCols] + ',' + I.IncludedCols END AS [AllColsOrdered]
-			FROM #tblIxs1 I
+			FROM tempdb.dbo.tblIxs1 I
 			WHERE [is_disabled] = 1
 			ORDER BY I.[DatabaseName], I.schemaName, I.[objectName], I.[indexID]
 		END
@@ -13192,12 +13192,12 @@ BEGIN
 BEGIN
 		RAISERROR (N'  |-Starting Non-unique clustered indexes', 10, 1) WITH NOWAIT
 		IF (SELECT COUNT(*)
-		FROM #tblIxs1
+		FROM tempdb.dbo.tblIxs1
 		WHERE [is_unique] = 0 AND indexID = 1) > 0
 	BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'NonUnique_CIXs' AS [Check], '[WARNING: Some clustered indexes are non-unique. Revise the need to have non-unique clustering keys to which a uniquefier is added]' AS [Deviation]
 			SELECT 'Index_and_Stats_checks' AS [Category], 'NonUnique_CIXs' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], I.[KeyCols]
-			FROM #tblIxs1 I
+			FROM tempdb.dbo.tblIxs1 I
 			WHERE [is_unique] = 0 AND indexID = 1
 			ORDER BY I.[DatabaseName], I.schemaName, I.[objectName]
 		END
@@ -15517,8 +15517,8 @@ DROP TABLE tempdb.dbo.tblPerfThresholds;
 DROP TABLE #tblHypObj;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs1')) 
-DROP TABLE #tblIxs1;
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tblIxs1')) 
+DROP TABLE tempdb.dbo.tblIxs1;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
 	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIxs2')) 
