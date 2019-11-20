@@ -11666,8 +11666,6 @@ BEGIN
 	SET isdone = 1
 	WHERE [role] = 2 AND secondary_role_allow_connections = 0;
 
-		DECLARE @dbcmptlevel int
-
 		IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
 		WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblStatsUpd'))
