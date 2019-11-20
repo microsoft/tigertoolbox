@@ -1,3 +1,6 @@
+## This scipt requires the ADSNotebook module greater version than 0.0.20191119.1 which can be installed with
+#  Install-Module ADSNotebook
+
 $RawSql = Get-Content .\BPCheck\Check_BP_Servers.sql -Raw
 
 $SplitSQL = $RawSql -split '--------------------------------------------------------------------------------------------------------------------------------'
