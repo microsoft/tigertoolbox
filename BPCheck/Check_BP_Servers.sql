@@ -10606,6 +10606,9 @@ WHERE (sm.[definition] LIKE ''%FORCE ORDER%''
 AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 
 					BEGIN TRY
+					DECLARE @Message varchar(120)
+					SET @Message = '    |-Checking Hints For ' + QUOTENAME(@dbname)
+					RAISERROR (@Message , 10, 1) WITH NOWAIT
 					INSERT INTO #tblHints
 					EXECUTE sp_executesql @sqlcmd
 				END TRY
