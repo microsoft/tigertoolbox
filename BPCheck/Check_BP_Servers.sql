@@ -133,7 +133,15 @@ BEGIN
 BEGIN
 		DECLARE @pid int, @pname sysname, @msdbpid int, @masterpid int
 		DECLARE @permstbl TABLE ([name] sysname);
-		DECLARE @permstbl_msdb TABLE ([id] tinyint IDENTITY(1,1),
+
+		IF EXISTS (SELECT [object_id]
+		FROM tempdb.sys.objects (NOLOCK)
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.permstbl_msdb'))
+		BEGIN
+			DROP TABLE tempdb.dbo.permstbl_msdb
+		END
+
+		CREATE TABLE tempdb.dbo.permstbl_msdb ([id] tinyint IDENTITY(1,1),
 			[perm] tinyint)
 
 		SET @params = '@msdbpid_in int'
@@ -184,14 +192,14 @@ BEGIN
 			AND b.grantee_principal_id <>2
 			AND b.grantee_principal_id = @masterpid;
 
-		INSERT INTO @permstbl_msdb
+		INSERT INTO tempdb.dbo.permstbl_msdb
 			([perm])
 		EXECUTE sp_executesql N'USE msdb; SELECT COUNT([name]) 
 FROM msdb.sys.sysusers (NOLOCK) WHERE [uid] IN (SELECT [groupuid] 
 	FROM msdb.sys.sysmembers (NOLOCK) WHERE [memberuid] = @msdbpid_in) 
 AND [name] = ''SQLAgentOperatorRole''', @params, @msdbpid_in = @msdbpid;
 
-		INSERT INTO @permstbl_msdb
+		INSERT INTO tempdb.dbo.permstbl_msdb
 			([perm])
 		EXECUTE sp_executesql N'USE msdb; SELECT COUNT(dp.grantee_principal_id)
 FROM msdb.sys.tables AS tbl (NOLOCK)
@@ -203,9 +211,9 @@ WHERE dp.state = ''G''
 	AND dp.type = ''SL''', @params, @msdbpid_in = @msdbpid;
 
 		IF (SELECT [perm]
-			FROM @permstbl_msdb
+			FROM tempdb.dbo.permstbl_msdb
 			WHERE [id] = 1) = 0 AND (SELECT [perm]
-			FROM @permstbl_msdb
+			FROM tempdb.dbo.permstbl_msdb
 			WHERE [id] = 2) = 0
 	BEGIN
 			RAISERROR('[WARNING: If not sysadmin, then you must be a member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB to run full scope of checks]', 16, 1, N'msdbperms')
@@ -454,7 +462,16 @@ END;
 IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
 BEGIN
 	DECLARE @pid int, @pname sysname, @msdbpid int
-	DECLARE @permstbl_msdb TABLE ([id] tinyint IDENTITY(1,1), [perm] tinyint)
+	DECLARE @permstbl TABLE ([name] sysname);
+
+	IF EXISTS (SELECT [object_id]
+		FROM tempdb.sys.objects (NOLOCK)
+		WHERE [object_id] = OBJECT_ID('tempdb.dbo.permstbl_msdb'))
+	BEGIN
+		DROP TABLE tempdb.dbo.permstbl_msdb
+	END
+
+	CREATE TABLE tempdb.dbo.permstbl_msdb ([id] tinyint IDENTITY(1,1),[perm] tinyint)
 	
 	SET @params = '@msdbpid_in int'
 
@@ -502,13 +519,13 @@ BEGIN
 	AND b.grantee_principal_id <> 2
 	AND b.grantee_principal_id = @masterpid;
 
-	INSERT INTO @permstbl_msdb ([perm])
+	INSERT INTO tempdb.dbo.permstbl_msdb ([perm])
 	EXECUTE sp_executesql N'USE msdb; SELECT COUNT([name]) 
 FROM msdb.sys.sysusers (NOLOCK) WHERE [uid] IN (SELECT [groupuid] 
 	FROM msdb.sys.sysmembers (NOLOCK) WHERE [memberuid] = @msdbpid_in) 
 AND [name] = ''SQLAgentOperatorRole''', @params, @msdbpid_in = @msdbpid;
 
-	INSERT INTO @permstbl_msdb ([perm])
+	INSERT INTO tempdb.dbo.permstbl_msdb ([perm])
 	EXECUTE sp_executesql N'USE msdb; SELECT COUNT(dp.grantee_principal_id)
 FROM msdb.sys.tables AS tbl (NOLOCK)
 INNER JOIN msdb.sys.database_permissions AS dp (NOLOCK) ON dp.major_id=tbl.object_id AND dp.class=1
@@ -518,7 +535,7 @@ WHERE dp.state = ''G''
 	AND dp.grantee_principal_id = @msdbpid_in
 	AND dp.type = ''SL''', @params, @msdbpid_in = @msdbpid;
 
-	IF (SELECT [perm] FROM @permstbl_msdb WHERE [id] = 1) = 0 AND (SELECT [perm] FROM @permstbl_msdb WHERE [id] = 2) = 0
+	IF (SELECT [perm] FROM tempdb.dbo.permstbl_msdb WHERE [id] = 1) = 0 AND (SELECT [perm] FROM tempdb.dbo.permstbl_msdb WHERE [id] = 2) = 0
 	BEGIN
 		RAISERROR('WARNING: If not sysadmin, then you must be a member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB to run full scope of checks', 16, 1, N'msdbperms')
 		--RETURN
@@ -14685,9 +14702,9 @@ BEGIN
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting SQL Agent alerts for severe errors', 10, 1) WITH NOWAIT
 	IF (SELECT [perm]
-		FROM @permstbl_msdb
+		FROM tempdb.dbo.permstbl_msdb
 		WHERE [id] = 1) = 0 AND (SELECT [perm]
-		FROM @permstbl_msdb
+		FROM tempdb.dbo.permstbl_msdb
 		WHERE [id] = 2) = 0
 BEGIN
 		RAISERROR('[WARNING: If not sysadmin, then you must be a member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB. Bypassing check]', 16, 1, N'msdbperms')
