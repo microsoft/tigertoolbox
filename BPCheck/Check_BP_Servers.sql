@@ -7168,7 +7168,7 @@ BEGIN
 	-- ### IFI subsection
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting IFI', 10, 1) WITH NOWAIT
-	DECLARE @ifi bit, @IFIStatus NVARCHAR(256)
+	DECLARE @IFIStatus NVARCHAR(256)
 	IF ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13)
 BEGIN
 		IF @allow_xpcmdshell = 1
