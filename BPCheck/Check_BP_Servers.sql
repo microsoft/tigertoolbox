@@ -121,17 +121,6 @@ Reference: SERVERPROPERTY for sql major, minor and build versions supported afte
 @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427)
 */
 
-	SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
-
-	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
-BEGIN
-		RAISERROR('[WARNING: Only a sysadmin can run ALL the checks]', 16, 1, N'sysadmin')
-	--RETURN
-	END;
-
-	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
-BEGIN
-		DECLARE @pid int, @pname sysname, @msdbpid int, @masterpid int
 
 		IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
@@ -150,6 +139,18 @@ BEGIN
 
 		CREATE TABLE tempdb.dbo.permstbl_msdb ([id] tinyint IDENTITY(1,1),
 			[perm] tinyint)
+
+	SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
+
+	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
+BEGIN
+		RAISERROR('[WARNING: Only a sysadmin can run ALL the checks]', 16, 1, N'sysadmin')
+	--RETURN
+	END;
+
+	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
+BEGIN
+		DECLARE @pid int, @pname sysname, @msdbpid int, @masterpid int
 
 		SET @params = '@msdbpid_in int'
 
@@ -457,19 +458,7 @@ BEGIN
 	DROP TABLE tempdb.dbo.dbvars
 END
 
-IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
-BEGIN
-	PRINT 'WARNING: Only a sysadmin can run ALL the checks'
-END
-ELSE
-BEGIN
-    PRINT 'No issues found while checking pre-requisites to run checks: user is sysadmin'
-END;
-
-IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
-BEGIN
-	DECLARE @pid int, @pname sysname, @msdbpid int
-	IF EXISTS (SELECT [object_id]
+IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
 		WHERE [object_id] = OBJECT_ID('tempdb.dbo.permstbl'))
 		BEGIN
@@ -485,6 +474,19 @@ BEGIN
 	END
 
 	CREATE TABLE tempdb.dbo.permstbl_msdb ([id] tinyint IDENTITY(1,1),[perm] tinyint)
+
+IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
+BEGIN
+	PRINT 'WARNING: Only a sysadmin can run ALL the checks'
+END
+ELSE
+BEGIN
+    PRINT 'No issues found while checking pre-requisites to run checks: user is sysadmin'
+END;
+
+IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
+BEGIN
+	DECLARE @pid int, @pname sysname, @msdbpid int
 	
 	SET @params = '@msdbpid_in int'
 
@@ -1299,7 +1301,7 @@ BEGIN
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
 	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs0'))
-DROP TABLE tmpdbs0;
+DROP TABLE tempdb.dbo.tmpdbs0;
 	IF NOT EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
 	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs0'))
@@ -2042,12 +2044,12 @@ ORDER BY database_name, backup_start_date DESC'
 
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
-DROP TABLE #tmpdbs1;
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs1'))
+DROP TABLE tempdb.dbo.tmpdbs1;
 	IF NOT EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1'))
-CREATE TABLE #tmpdbs1
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs1'))
+CREATE TABLE tempdb.dbo.tmpdbs1
 	(
 		id int IDENTITY(1,1),
 		[dbid] int,
@@ -2059,7 +2061,7 @@ CREATE TABLE #tmpdbs1
 
 	RAISERROR (N'|-Excluding MS shipped by standard names and databases belonging to non-readable AG secondary replicas (if available)', 10, 1) WITH NOWAIT
 	-- Ignore MS shipped databases and databases belonging to non-readable AG secondary replicas
-	INSERT INTO #tmpdbs1
+	INSERT INTO tempdb.dbo.tmpdbs1
 		([dbid], [dbname], [role], [secondary_role_allow_connections], [isdone])
 	SELECT [dbid], [dbname], [role], [secondary_role_allow_connections], 0
 	FROM tempdb.dbo.tmpdbs0 (NOLOCK)
@@ -2117,19 +2119,19 @@ CREATE TABLE #tmpdbs1
 	FROM msdb.sys.objects (NOLOCK)
 	WHERE name='MSdistributiondbs' AND is_ms_shipped = 1) 
 BEGIN
-		DELETE FROM #tmpdbs1 WHERE [dbid] IN (SELECT DB_ID(name)
+		DELETE FROM tempdb.dbo.tmpdbs1 WHERE [dbid] IN (SELECT DB_ID(name)
 		FROM msdb.dbo.MSdistributiondbs)
 	END;
 
 	RAISERROR (N'|-Excluding MS shipped by notable object names', 10, 1) WITH NOWAIT
 	-- Removing other noticeable MS shipped DBs
 	WHILE (SELECT COUNT(id)
-	FROM #tmpdbs1
+	FROM tempdb.dbo.tmpdbs1
 	WHERE isdone = 0) > 0
 BEGIN
 		SELECT TOP 1
 			@dbname = [dbname], @dbid = [dbid]
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0
 		SET @sqlcmd = N'USE ' + QUOTENAME(@dbname) + N';
 IF (OBJECT_ID(''dbo.AR_Class'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.AR_Entity'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.AR_System'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ar_CreateEntity'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ar_CreateMethod'',''P'') IS NOT NULL)
@@ -2232,18 +2234,18 @@ END'
 
 		IF @MSdb = @dbid
 	BEGIN
-			DELETE FROM #tmpdbs1 
+			DELETE FROM tempdb.dbo.tmpdbs1 
 		WHERE [dbid] = @dbid;
 		END
 	ELSE
 	BEGIN
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid
 		END
 	END;
 
-	UPDATE #tmpdbs1
+	UPDATE tempdb.dbo.tmpdbs1
 SET isdone = 0;
 
 	RAISERROR (N'|-Applying 2nd layer of specific database scope, if any', 10, 1) WITH NOWAIT
@@ -2273,7 +2275,7 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 			([dbid], [dbname])
 		EXEC sp_executesql @sqlcmd;
 
-		SELECT @sqlcmd = 'DELETE FROM #tmpdbs1 WHERE [dbid] NOT IN (' + REPLACE(@dbScope,' ','') + ')'
+		SELECT @sqlcmd = 'DELETE FROM tempdb.dbo.tmpdbs1 WHERE [dbid] NOT IN (' + REPLACE(@dbScope,' ','') + ')'
 		EXEC sp_executesql @sqlcmd;
 	END 
 ELSE 
@@ -11554,16 +11556,16 @@ BEGIN
 				CONSTRAINT PK_DRI PRIMARY KEY CLUSTERED(databaseID, [schema_id], [object_id], [constraint_name])
 		)
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 0
 
 		WHILE (SELECT COUNT(id)
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0) > 0
 	BEGIN
 			SELECT TOP 1
 				@dbname = [dbname], @dbid = [dbid]
-			FROM #tmpdbs1
+			FROM tempdb.dbo.tmpdbs1
 			WHERE isdone = 0
 			SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + '
@@ -11593,7 +11595,7 @@ ORDER BY mst.name, [constraint_name];'
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid
 		END;
@@ -12581,16 +12583,16 @@ BEGIN
 			type_desc NVARCHAR(60)
 		);
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 0;
 
 		WHILE (SELECT COUNT(id)
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0) > 0
 	BEGIN
 			SELECT TOP 1
 				@dbname = [dbname], @dbid = [dbid]
-			FROM #tmpdbs1
+			FROM tempdb.dbo.tmpdbs1
 			WHERE isdone = 0
 			SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + ';
@@ -12657,7 +12659,7 @@ OPTION (MAXDOP 2);'
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid;
 		END
@@ -12916,16 +12918,16 @@ BEGIN
 			CONSTRAINT PK_Ixs2 PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID])
 		)
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 0;
 
 		WHILE (SELECT COUNT(id)
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0) > 0
 	BEGIN
 			SELECT TOP 1
 				@dbname = [dbname], @dbid = [dbid]
-			FROM #tmpdbs1
+			FROM tempdb.dbo.tmpdbs1
 			WHERE isdone = 0
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name,
@@ -12967,21 +12969,21 @@ OPTION (MAXDOP 2);'
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid
 		END
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 0;
 
 		WHILE (SELECT COUNT(id)
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0) > 0
 	BEGIN
 			SELECT TOP 1
 				@dbname = [dbname], @dbid = [dbid]
-			FROM #tmpdbs1
+			FROM tempdb.dbo.tmpdbs1
 			WHERE isdone = 0
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT ' + CONVERT(VARCHAR(8), @dbid) + ' AS Database_ID, ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS Database_Name, 
@@ -13016,7 +13018,7 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid
 		END;
@@ -13271,16 +13273,16 @@ BEGIN
 			CONSTRAINT PK_Ixs3 PRIMARY KEY CLUSTERED(databaseID, [objectID], [indexID])
 		);
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 0;
 
 		WHILE (SELECT COUNT(id)
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0) > 0
 	BEGIN
 			SELECT TOP 1
 				@dbname = [dbname], @dbid = [dbid]
-			FROM #tmpdbs1
+			FROM tempdb.dbo.tmpdbs1
 			WHERE isdone = 0
 			SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + ';
@@ -13328,7 +13330,7 @@ OPTION (MAXDOP 2);'
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid
 		END;
@@ -13376,16 +13378,16 @@ BEGIN
 			CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name], [parent_schema_name])
 		)
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 0
 
 		WHILE (SELECT COUNT(id)
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0) > 0
 	BEGIN
 			SELECT TOP 1
 				@dbname = [dbname], @dbid = [dbid]
-			FROM #tmpdbs1
+			FROM tempdb.dbo.tmpdbs1
 			WHERE isdone = 0
 			SET @sqlcmd = 'SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 USE ' + QUOTENAME(@dbname) + '
@@ -13452,7 +13454,7 @@ WHERE NOT EXISTS (SELECT 1 FROM cteIndexCols ict
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid
 		END;
@@ -13554,16 +13556,16 @@ BEGIN
 			[indexLocation] NVARCHAR(200)
 		)
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 0
 
 		WHILE (SELECT COUNT(id)
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0) > 0
 	BEGIN
 			SELECT TOP 1
 				@dbname = [dbname], @dbid = [dbid]
-			FROM #tmpdbs1
+			FROM tempdb.dbo.tmpdbs1
 			WHERE isdone = 0
 			SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT 1 AS [Check], ' + CONVERT(VARCHAR(8), @dbid) + ', ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''',	
@@ -13641,7 +13643,7 @@ WHERE t.[type] = ''U''
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
 
-			UPDATE #tmpdbs1
+			UPDATE tempdb.dbo.tmpdbs1
 		SET isdone = 1
 		WHERE [dbid] = @dbid
 		END;
@@ -14051,16 +14053,16 @@ CREATE TABLE #tmpfinalobjectnames
 		[Comment] NVARCHAR(500) NULL
 	);
 
-	UPDATE #tmpdbs1
+	UPDATE tempdb.dbo.tmpdbs1
 SET isdone = 0
 
 	WHILE (SELECT COUNT(id)
-	FROM #tmpdbs1
+	FROM tempdb.dbo.tmpdbs1
 	WHERE isdone = 0) > 0
 BEGIN
 		SELECT TOP 1
 			@dbname = [dbname], @dbid = [dbid]
-		FROM #tmpdbs1
+		FROM tempdb.dbo.tmpdbs1
 		WHERE isdone = 0
 		SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
 SELECT ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [DBName], s.name, so.name, NULL, type, type_desc
@@ -14083,12 +14085,12 @@ WHERE so.is_ms_shipped = 0'
 		RAISERROR (@ErrorMessage, 16, 1);
 	END CATCH
 
-		UPDATE #tmpdbs1
+		UPDATE tempdb.dbo.tmpdbs1
 	SET isdone = 1
 	WHERE [dbid] = @dbid
 	END;
 
-	UPDATE #tmpdbs1
+	UPDATE tempdb.dbo.tmpdbs1
 SET isdone = 0
 
 	CREATE INDEX IX1 ON #tmpobjectnames([type],[Object]);
@@ -15527,8 +15529,8 @@ DROP TABLE #output_dbinfo;
 DROP TABLE #tblIOStall;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs1')) 
-DROP TABLE #tmpdbs1;
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs1')) 
+DROP TABLE tempdb.dbo.tmpdbs1;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
 	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs0')) 
