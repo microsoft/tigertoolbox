@@ -2,6 +2,18 @@ USE [msdb]
 GO
 
 /*
+
+This code will create both the usp_bpcheck stored procedure and when used with the Create Notebook powershell script will create a SQL Notebook for use with Azure Data Studio
+
+The PowerShell code requires that each block is seperated by 128 - (just copy paste or use SHIFT ALT Down Arrow in Azure Data Studio or Visual Studio code)
+
+The PowerShell code requires that each block of code that is only for the sp starts with '--- #sponly#'
+
+The PowerShell code requires that each block of text (Markdown) Starts with '--'
+The PowerShell code and the sp requires that each block of text for the Notebook starts with '--' The -- gets replaced, you can write Markdown but be aware of the replacements that are done to create a Notebook a backslash and a r can have crazy implications if you use it in a path in the Markdown!
+
+Notebooks require that some variables are passed between blocks which is achieved with tables in tempdb
+
 Replace CREATE PROCEDURE with ALTER PROCEDURE or CREATE OR ALTER PROCEDURE to allow new changes to the SP if the SP is already present.
 
 Usage examples:
@@ -47,7 +59,7 @@ Supports SQL Server (starting with SQL Server 2008) and Azure SQL Database Manag
 __Note__: Does not support Azure SQL Database single database or Elastic Pool. 
 
 --------------------------------------------------------------------------------------------------------------------------------
-#sponly#
+--- #sponly#
 Important parameters for executing BPCheck:
 Set @custompath below and set the custom desired path for .ps1 files. 
 	If not, default location for .ps1 files is the Log folder.
@@ -91,7 +103,18 @@ Furthermore, the author or Microsoft shall not be liable for any damages you may
  Otherwise some checks will be bypassed and warnings will be shown.  
 - Powershell must be installed to run checks that access disk configurations, as well as allow execution of remote signed or unsigned scripts.
 --------------------------------------------------------------------------------------------------------------------------------
-#sponly#
+-- ## Instructions
+--
+-- You can run any blocks individually **BUT**
+-- Ensure that you run the first two blocks first as they will set up some required variables.
+-- Some other blocks will require that other blocks have been run first. The Database Information subsection is required to run first for any of the database sections for example.
+-- **DO NOT** try to use the *Run Cells* Button to run all of the cells or schedule the Notebook to run as an Agent Job at present.
+--  
+-- Be Patient - The results in the blocks will sometimes take a moment to appear after the Total exectution time message has appeared.
+--  
+-- When you have finished, ensure that you run the last block to clear up the temporary tables that have been created.
+--------------------------------------------------------------------------------------------------------------------------------
+--- #sponly#
 */
 
 BEGIN
@@ -301,15 +324,15 @@ WHERE dp.state = ''G''
 	DECLARE @langid smallint
 	DECLARE @lpim bit, @lognumber int, @logcount int
 	DECLARE @query NVARCHAR(1000)
-	DECLARE @diskfrag bit
 	DECLARE @accntsqlservice NVARCHAR(128)
 	DECLARE @maxservermem bigint, @systemmem bigint
 	-- Does not include reserved memory in the memory manager
 	DECLARE @mwthreads_count int
 	DECLARE @ifi bit
-	DECLARE @duration tinyint
 	DECLARE @adhoc smallint
-	
+	DECLARE @affined_cpus int
+	DECLARE @dbcmptlevel int
+
 	SELECT @langid = lcid FROM sys.syslanguages WHERE name = @@LANGUAGE
 	SELECT @instancename = CONVERT(VARCHAR(128),SERVERPROPERTY('InstanceName'))
 	SELECT @server = RTRIM(CONVERT(VARCHAR(128), SERVERPROPERTY('MachineName')))
@@ -320,7 +343,7 @@ WHERE dp.state = ''G''
 
 	IF @sqlmajorver > 10
 BEGIN
-		DECLARE @IsHadrEnabled tinyint, @HadrManagerStatus tinyint
+		DECLARE @IsHadrEnabled tinyint
 		SELECT @IsHadrEnabled = CASE WHEN SERVERPROPERTY('EngineEdition') = 8 THEN 1 ELSE CONVERT(tinyint, SERVERPROPERTY('IsHadrEnabled')) END;
 	END
 
@@ -457,7 +480,7 @@ INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- ## Pre-requisites section
--- Check pre-requisites for all checks
+-- This section will check that all of the required pre-requisites have been met for running the checks and will also set up the variables and tables that are used throughout the Notebook
 --------------------------------------------------------------------------------------------------------------------------------
 IF EXISTS (SELECT [object_id]
 FROM tempdb.sys.objects (NOLOCK)
@@ -700,14 +723,14 @@ INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- ## Information section
+-- This section contains information about the instance
 */
-	--------------------------------------------------------------------------------------------------------------------------------
-
-	RAISERROR (N'Starting Information section', 10, 1) WITH NOWAIT
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Uptime subsection
+	-- The time since the instance last started
 	--------------------------------------------------------------------------------------------------------------------------------
+	RAISERROR (N'Starting Information section', 10, 1) WITH NOWAIT
 	RAISERROR (N'|-Starting Uptime', 10, 1) WITH NOWAIT
 	IF @sqlmajorver < 10
 BEGIN
@@ -854,6 +877,7 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### HA Information subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting HA Information', 10, 1) WITH NOWAIT
 	IF @clustered = 1
@@ -1302,6 +1326,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Database Information subsection
+	-- - This block is *required* to be run before later blocks which gather information about the databases on the instance
+	-- - You can set the @DbScope variable below to the appropriate list of database IDs if there's a need to have a specific scope for database specific checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Database Information', 10, 1) WITH NOWAIT
 	RAISERROR (N'  |-Building DB list', 10, 1) WITH NOWAIT
@@ -1760,6 +1786,7 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- Database triggers subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -2046,7 +2073,9 @@ ORDER BY database_name, backup_start_date DESC'
 	(RECOMPILE);
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- ## Pre-checks section
+	-- ## Database Pre-checks section
+	-- This block is required to be run before later blocks which gather information about the databases on the instance
+	-- - You can set the @DbScope variable below to the appropriate list of database IDs if there's a need to have a specific scope for database specific checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'Starting Pre-Checks - Building DB list excluding MS shipped', 10, 1) WITH NOWAIT
 	DECLARE @MSdb int
@@ -2451,6 +2480,7 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Additional Processor information subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Additional Processor information', 10, 1) WITH NOWAIT
 
@@ -2578,6 +2608,9 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Server Memory subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+	-- - You can set @bpool_consumer to OFF if you want to list what are the Buffer Pool Consumers from Buffer Descriptors. 
+	-- - Mind that it may take some time in servers with large caches.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Server Memory', 10, 1) WITH NOWAIT
 	DECLARE  @minservermem bigint,  @systemfreemem bigint, @numa_nodes_afinned tinyint, @LowMemoryThreshold int
@@ -3205,19 +3238,19 @@ BEGIN
 		CASE WHEN @paged > 0 THEN '[WARNING: Part of SQL Server process memory has been paged out. Please revise LPIM settings]'
 		ELSE '[OK]' END AS [Deviation],
 		@paged AS paged_out_MB;
-
-	IF @ptochecks = 1
-RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ## I/O Checks section
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Starting I/O Stall subsection (wait for 5s)  
-	-- I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection  
-	-- io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.  
-	-- Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).   
+	-- - I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection  
+	-- - io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.  
+	-- - Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).   
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
+		IF @ptochecks = 1
+		RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
 	IF @ptochecks = 1
-BEGIN
+	BEGIN
 		RAISERROR (N'  |-Starting I/O Stall subsection (wait for 5s)', 10, 1) WITH NOWAIT
 
 		DECLARE @mincol DATETIME, @maxcol DATETIME
@@ -3405,7 +3438,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Pending disk I/O Requests subsection  
-	-- Indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).   
+	-- - Indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.   
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -3585,6 +3619,10 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Disk Partition alignment offset < 64KB subsection
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+	-- - Set @custompath below and set the custom desired path for .ps1 files. 
+	-- - If not, default location for .ps1 files is the Log folder.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Disk Partition alignment offset < 64KB', 10, 1) WITH NOWAIT
 	IF @ostype <> 'Windows'
@@ -3859,6 +3897,10 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### NTFS block size in volumes that hold database files <> 64KB subsection
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+	-- - Set @custompath below and set the custom desired path for .ps1 files. 
+	-- - If not, default location for .ps1 files is the Log folder.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting NTFS block size in volumes that hold database files <> 64KB', 10, 1) WITH NOWAIT
 	IF @ostype <> 'Windows'
@@ -4131,7 +4173,12 @@ BEGIN
 	END;
 
 	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Disk Fragmentation Analysis subsection
+	-- ### Disk Fragmentation Analysis subsection  
+	-- You can set @diskfrag to ON if you want to check for disk physical fragmentation. 
+	--	- Can take some time in large disks. Requires elevated privileges.  
+	--	- See https://support.microsoft.com/help/3195161/defragmenting-sql-server-database-disk-drives  
+	-- - Set @custompath below and set the custom desired path for .ps1 files. 
+	-- - If not, default location for .ps1 files is the Log folder.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @diskfrag = 1
 BEGIN
@@ -4454,6 +4501,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Cluster Quorum Model subsection
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @clustered = 1 AND @osver <> '5.2'
 BEGIN
@@ -4638,6 +4687,10 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Cluster NIC Binding order subsection
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+	-- - Set @custompath below and set the custom desired path for .ps1 files. 
+	-- - If not, default location for .ps1 files is the Log folder.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @allow_xpcmdshell = 1 and @clustered = 1
 BEGIN
@@ -4903,6 +4956,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Cluster QFE node equality subsection
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @clustered = 1
 BEGIN
@@ -5569,6 +5624,9 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Service Accounts and SPN registration subsection
+	-- - You can set @spn_check to OFF if you want to skip SPN checks. (Or not run this Block!)
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Service Accounts and SPN registration', 10, 1) WITH NOWAIT
 	IF @accntsqlservice IS NOT NULL AND @accntsqlservice NOT IN ('NT AUTHORITY\LOCALSERVICE','NT AUTHORITY\SYSTEM','LocalSystem','NT AUTHORITY\NETWORKSERVICE') AND @allow_xpcmdshell = 1 AND @spn_check = 1
@@ -7166,6 +7224,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### IFI subsection
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting IFI', 10, 1) WITH NOWAIT
 	DECLARE @IFIStatus NVARCHAR(256)
@@ -8788,6 +8848,10 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Data files and Logs / tempDB and user Databases / Backups and Database files in same volume (Mountpoint aware) subsection
+	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+	-- - Set @custompath below and set the custom desired path for .ps1 files. 
+	-- - If not, default location for .ps1 files is the Log folder.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Data files and Logs / tempDB and user Databases / Backups and Database files in same volume (Mountpoint aware)', 10, 1) WITH NOWAIT
 	IF @allow_xpcmdshell = 1
@@ -9323,12 +9387,14 @@ BEGIN
 		SELECT 'tempDB_checks' AS [Category], 'tempDB_files_Autogrow' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	IF @ptochecks = 1
-RAISERROR (N'|-Starting Performance Checks', 10, 1) WITH NOWAIT
-
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Perf counters, Waits, Latches and Spinlocks subsection
+	-- You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+	-- You can set @duration to the number of seconds between data collection points regarding perf counters, waits and latches. 
+	-- - Duration must be between 10s and 255s (4m 15s), with a default of 90s.
 	--------------------------------------------------------------------------------------------------------------------------------
+	IF @ptochecks = 1
+RAISERROR (N'|-Starting Performance Checks', 10, 1) WITH NOWAIT
 	IF @ptochecks = 1
 BEGIN
 		SELECT @ErrorMessage = '  |-Starting Perf counters, Waits and Latches (wait for ' + CONVERT(VARCHAR(3), @duration) + 's)'
@@ -10279,6 +10345,7 @@ END'')
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Worker thread exhaustion subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -10305,7 +10372,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Blocking Chains subsection
-	-- Checks for blocking chains taking over 5s.
+	-- - Checks for blocking chains taking over 5s.
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -10500,7 +10568,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Plan use ratio subsection
-	-- Refer to BOL for more information (https://docs.microsoft.com/sql/database-engine/configure-windows/optimize-for-ad-hoc-workloads-server-configuration-option)
+	-- - Refer to BOL for more information (https://docs.microsoft.com/sql/database-engine/configure-windows/optimize-for-ad-hoc-workloads-server-configuration-option)
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -10537,7 +10606,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Hints usage subsection
-	-- Refer to "Hints" BOL entry for more information (https://docs.microsoft.com/sql/t-sql/queries/hints-transact-sql)
+	-- - Refer to "Hints" BOL entry for more information (https://docs.microsoft.com/sql/t-sql/queries/hints-transact-sql)
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -10653,6 +10723,7 @@ AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Cached Query Plans issues subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -11363,6 +11434,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Tuning recommendations info subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @sqlmajorver > 13 AND @ptochecks = 1
 BEGIN
@@ -11534,6 +11606,9 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Declarative Referential Integrity - Untrusted Constraints subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexes.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -11650,6 +11725,7 @@ RAISERROR (N'|-Starting Indexes and Statistics Checks', 10, 1) WITH NOWAIT
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Statistics update subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -11805,6 +11881,7 @@ HAVING SUM(p.[rows]) > 0
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Statistics sampling subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -11919,6 +11996,9 @@ WHERE sp.[rows] > 0
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Hypothetical objects subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -12038,6 +12118,11 @@ AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Index Health Analysis subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+	-- - You can set @ixfrag to ON if you want to check for index fragmentation. 
+	-- - Can take some time to collect data depending on number of databases and indexes, as well as the scan mode chosen in @ixfragscanmode.
+	-- - You can set @ixfragscanmode to the scanning mode you prefer. (Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
+	-- 	- More detail on scanning modes available at https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-db-index-physical-stats-transact-sql  
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ixfrag = 1 AND @ptochecks = 1
 BEGIN
@@ -12534,6 +12619,7 @@ BEGIN
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Duplicate or Redundant indexes subsection 
 	-- (clustered, non-clustered, clustered and non-clustered columnstore indexes only)
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -12887,6 +12973,9 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Unused and rarely used indexes subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13146,6 +13235,7 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Indexes with large keys (> 900 bytes for clustered index; 1700 bytes for nonclustered index) subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13174,6 +13264,7 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Indexes with fill factor < 80 pct subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13197,6 +13288,7 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Disabled indexes subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13224,6 +13316,7 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Non-unique clustered indexes subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13246,6 +13339,7 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Clustered Indexes with GUIDs in key subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13358,6 +13452,7 @@ OPTION (MAXDOP 2);'
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Foreign Keys with no Index subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13505,6 +13600,7 @@ WHERE NOT EXISTS (SELECT 1 FROM cteIndexCols ict
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Indexing per Table subsection
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -13710,7 +13806,10 @@ WHERE t.[type] = ''U''
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Missing Indexes subsection
-	-- Outputs only potentially most relevant, based in scoring method - use at you own discretion)
+	-- - Outputs only potentially most relevant, based in scoring method - use at you own discretion)
+	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
 	--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
@@ -15131,7 +15230,8 @@ BEGIN
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Errorlog based checks subsection
-	-- Because it is a string based search, add other search conditions as deemed fit.
+	-- - Because it is a string based search, add other search conditions as deemed fit. 
+	-- - You can set @logdetail to OFF if you want to get just the summary info on issues in the Errorlog, rather than the full detail.
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Errorlog based checks', 10, 1) WITH NOWAIT
 	--DECLARE @lognumber int, @logcount int
@@ -15845,6 +15945,6 @@ IF EXISTS (SELECT [object_id]
 	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_includecols'')) DROP FUNCTION dbo.fn_createindex_includecols')
 	RAISERROR (N'All done!', 10, 1) WITH NOWAIT
 --------------------------------------------------------------------------------------------------------------------------------
--- #sponly#
+--- #sponly#
 END
 GO
