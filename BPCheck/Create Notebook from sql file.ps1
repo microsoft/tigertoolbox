@@ -22,7 +22,6 @@ DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(600)
 DECLARE @sqlmajorver int, @sqlminorver int, @sqlbuild int, @masterpid int, @clustered bit
 DECLARE @ptochecks int
 DECLARE @permstbl TABLE ([name] sysname)
-DECLARE @permstbl_msdb TABLE ([id] tinyint IDENTITY(1,1), [perm] tinyint)
 DECLARE @dbScope VARCHAR(256) 	
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
