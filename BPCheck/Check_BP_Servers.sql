@@ -6999,7 +6999,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 	-- affinity mask and affinity I/O mask (must not overlap)
 
 	DECLARE @awe tinyint, @ssp bit, @bckcomp bit, @clr bit, @costparallel smallint, @chain bit, @lpooling bit
-	DECLARE @adhoc smallint, @pboost bit, @qtimeout int, @cmdshell bit, @deftrace bit, @remote bit, @autoNUMA bit
+	DECLARE @pboost bit, @qtimeout int, @cmdshell bit, @deftrace bit, @remote bit, @autoNUMA bit
 	DECLARE @minmemqry int, @allowupd bit, @mwthreads int, @recinterval int, @netsize smallint
 	DECLARE @ixmem smallint, @adhocqry bit, @locks int, @qrywait int--, @mwthreads_count int
 	DECLARE @affin int, @affinIO int, @affin64 int, @affin64IO int, @block_threshold int, @oleauto int
