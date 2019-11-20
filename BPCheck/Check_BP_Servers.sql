@@ -9,8 +9,8 @@ The PowerShell code requires that each block is seperated by 128 - (just copy pa
 
 The PowerShell code requires that each block of code that is only for the sp starts with '--- #sponly#'
 
-The PowerShell code requires that each block of text (Markdown) Starts with '--'
-The PowerShell code and the sp requires that each block of text for the Notebook starts with '--' The -- gets replaced, you can write Markdown but be aware of the replacements that are done to create a Notebook a backslash and a r can have crazy implications if you use it in a path in the Markdown!
+The PowerShell code requires that each block of text (Markdown) Starts with '---' (Two lines of these create the lines)
+The PowerShell code and the sp requires that each block of text for the Notebook starts with '-- ' (The space is important) The -- gets replaced, you can write Markdown but be aware of the replacements that are done to create a Notebook a backslash and a r can have crazy implications if you use it in a path in the Markdown!
 
 Notebooks require that some variables are passed between blocks which is achieved with tables in tempdb
 
@@ -22,33 +22,24 @@ EXEC usp_bpcheck @allow_xpcmdshell = 0, @ptochecks = 1, @duration = 60
 */
 
 CREATE PROCEDURE usp_bpcheck
-	@custompath NVARCHAR(500) = NULL,
-	-- = 'C:\<temp_location>',
-	@dbScope VARCHAR(256) = NULL,
-	-- (NULL = All DBs; '<database_name>')	
-	@allow_xpcmdshell bit = 1,
-	--(1 = ON; 0 = OFF)
-	@ptochecks bit = 1,
-	--(1 = ON; 0 = OFF)
+	@custompath NVARCHAR(500) = NULL, -- = 'C:\<temp_location>',
+	@dbScope VARCHAR(256) = NULL, -- (NULL = All DBs; '<database_name>')	
+	@allow_xpcmdshell bit = 1, --(1 = ON; 0 = OFF)
+	@ptochecks bit = 1, --(1 = ON; 0 = OFF)
 	@duration tinyint = 90,
-	@logdetail bit = 0,
-	--(1 = ON; 0 = OFF) 
-	@diskfrag bit = 1,
-	--(1 = ON; 0 = OFF)
-	@ixfrag bit = 1,
-	--(1 = ON; 0 = OFF)
-	@ixfragscanmode VARCHAR(8) = 'LIMITED',
-	--(Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
-	@bpool_consumer bit = 1,
-	--(1 = ON; 0 = OFF)
-	@spn_check bit = 0,
-	--(1 = ON; 0 = OFF)
-	@gen_scripts bit = 0
---(1 = ON; 0 = OFF)
+	@logdetail bit = 0, --(1 = ON; 0 = OFF) 
+	@diskfrag bit = 1, --(1 = ON; 0 = OFF)
+	@ixfrag bit = 1, --(1 = ON; 0 = OFF)
+	@ixfragscanmode VARCHAR(8) = 'LIMITED', --(Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
+	@bpool_consumer bit = 1, --(1 = ON; 0 = OFF)
+	@spn_check bit = 0, --(1 = ON; 0 = OFF)
+	@gen_scripts bit = 0 --(1 = ON; 0 = OFF)
 AS
 
 /*
 --------------------------------------------------------------------------------------------------------------------------------
+---
+---
 -- # BPCheck - SQL Best Practices and Performance checks  
 
 BP Check READ ME - http://aka.ms/BPCheck    
@@ -57,7 +48,6 @@ Checks SQL Server in scope for Performance issues and some of most common skewed
 
 Supports SQL Server (starting with SQL Server 2008) and Azure SQL Database Managed Instance.   
 __Note__: Does not support Azure SQL Database single database or Elastic Pool. 
-
 --------------------------------------------------------------------------------------------------------------------------------
 --- #sponly#
 Important parameters for executing BPCheck:
@@ -85,10 +75,14 @@ Set @spn_check to OFF if you want to skip SPN checks.
 Set @gen_scripts to ON if you want to generate index related scripts.
 	These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexes.
 --------------------------------------------------------------------------------------------------------------------------------
+---
+---
 -- ## DISCLAIMER:
 This code and information are provided "AS IS" without warranty of any kind, either expressed or implied.
 Furthermore, the author or Microsoft shall not be liable for any damages you may sustain by using this information, whether direct, indirect, special, incidental or consequential, even if it has been advised of the possibility of such damages.
---------------------------------------------------------------------------------------------------------------------------------		
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---		
 -- ## IMPORTANT pre-requisites:
 - Only a sysadmin/local host admin will be able to perform all checks.
 - If you want to perform all checks under non-sysadmin credentials, then that login must be:
@@ -103,14 +97,16 @@ Furthermore, the author or Microsoft shall not be liable for any damages you may
  Otherwise some checks will be bypassed and warnings will be shown.  
 - Powershell must be installed to run checks that access disk configurations, as well as allow execution of remote signed or unsigned scripts.
 --------------------------------------------------------------------------------------------------------------------------------
+---
+---
 -- ## Instructions
 --
--- You can run any blocks individually **BUT**
--- Ensure that you run the first two blocks first as they will set up some required variables.
--- Some other blocks will require that other blocks have been run first. The Database Information subsection is required to run first for any of the database sections for example.
--- **DO NOT** try to use the *Run Cells* Button to run all of the cells or schedule the Notebook to run as an Agent Job at present.
+-- You can run any blocks individually **BUT**  
+-- Ensure that you run the first two blocks first as they will set up some required variables.  
+-- Some other blocks will require that other blocks have been run first. The Database Information subsection is required to run first for any of the database sections for example.  
+-- **DO NOT** try to use the *Run Cells* Button to run all of the cells or schedule the Notebook to run as an Agent Job at present.  
 --  
--- Be Patient - The results in the blocks will sometimes take a moment to appear after the Total exectution time message has appeared.
+-- Be Patient - The results in the blocks will sometimes take a moment to appear after the Total exectution time message has appeared.  
 --  
 -- When you have finished, ensure that you run the last block to clear up the temporary tables that have been created.
 --------------------------------------------------------------------------------------------------------------------------------
@@ -135,7 +131,7 @@ BEGIN
 	CREATE TABLE tempdb.dbo.dbvars(VarName VarChar(256),VarValue VarChar(256))
 
 
-	-- ## Pre-requisites section
+-- ## Pre-requisites section
 
 	DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(600), @sqlmajorver int
 
@@ -168,7 +164,7 @@ Reference: SERVERPROPERTY for sql major, minor and build versions supported afte
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
 BEGIN
 		RAISERROR('[WARNING: Only a sysadmin can run ALL the checks]', 16, 1, N'sysadmin')
-	--RETURN
+--RETURN
 	END;
 
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 0)
@@ -189,7 +185,7 @@ BEGIN
 		FROM msdb.sys.database_principals (NOLOCK)
 		WHERE sid = SUSER_SID()
 
-		-- Perms 1
+	-- Perms 1
 		IF (ISNULL(IS_SRVROLEMEMBER(N'serveradmin'), 0) <> 1) AND ((SELECT COUNT(l.name)
 			FROM master.sys.server_permissions p (NOLOCK) INNER JOIN master.sys.server_principals l (NOLOCK)
 				ON p.grantee_principal_id = l.principal_id
@@ -215,7 +211,7 @@ BEGIN
 			RETURN
 		END
 
-		-- Perms 2
+	-- Perms 2
 		INSERT INTO tempdb.dbo.permstbl
 		SELECT a.name
 		FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[object_id] = b.major_id
@@ -248,7 +244,7 @@ WHERE dp.state = ''G''
 			WHERE [id] = 2) = 0
 	BEGIN
 			RAISERROR('[WARNING: If not sysadmin, then you must be a member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB to run full scope of checks]', 16, 1, N'msdbperms')
-		--RETURN
+	--RETURN
 		END
 	ELSE IF (ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) <> 1) AND ((SELECT COUNT([name])
 			FROM tempdb.dbo.permstbl
@@ -259,7 +255,7 @@ WHERE dp.state = ''G''
 			WHERE [name] = 'xp_readerrorlog') = 0)
 	BEGIN
 			RAISERROR('[WARNING: If not sysadmin, then you must be a member of the securityadmin server role, or have EXECUTE permission on the following extended sprocs to run full scope of checks: xp_enumerrorlogs, xp_readerrorlog, sp_readerrorlog]', 16, 1, N'secperms')
-		--RETURN
+	--RETURN
 		END
 	ELSE IF (SELECT COUNT([name])
 			FROM tempdb.dbo.permstbl
@@ -268,7 +264,7 @@ WHERE dp.state = ''G''
 			WHERE name = '##xp_cmdshell_proxy_account##') = 0
 	BEGIN
 			RAISERROR('[WARNING: If not sysadmin, then you must be granted EXECUTE permissions on xp_cmdshell and a xp_cmdshell proxy account should exist to run full scope of checks]', 16, 1, N'xp_cmdshellproxy')
-		--RETURN
+	--RETURN
 		END
 	ELSE IF (SELECT COUNT([name])
 			FROM tempdb.dbo.permstbl
@@ -296,18 +292,18 @@ WHERE dp.state = ''G''
 			WHERE [name] = 'xp_servicecontrol') = 0 
 	BEGIN
 			RAISERROR('[WARNING: Must be a granted EXECUTE permissions on the following extended sprocs to run full scope of checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_fileexist, xp_regread, xp_instance_regread, xp_servicecontrol and xp_regenumvalues]', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 		END
 	ELSE IF (SELECT COUNT([name])
 			FROM tempdb.dbo.permstbl
 			WHERE [name] = 'xp_msver') = 0 AND @sqlmajorver < 11
 	BEGIN
 			RAISERROR('[WARNING: Must be granted EXECUTE permissions on xp_msver to run full scope of checks]', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 		END
 	END;
 
-	-- Declare Global Variables
+-- Declare Global Variables
 	DECLARE @UpTime VARCHAR(12),@StartDate DATETIME
 	DECLARE @agt smallint, @ole smallint, @sao smallint, @xcmd smallint
 	DECLARE @ErrorSeverity int, @ErrorState int, @ErrorMessage NVARCHAR(4000)
@@ -326,7 +322,7 @@ WHERE dp.state = ''G''
 	DECLARE @query NVARCHAR(1000)
 	DECLARE @accntsqlservice NVARCHAR(128)
 	DECLARE @maxservermem bigint, @systemmem bigint
-	-- Does not include reserved memory in the memory manager
+-- Does not include reserved memory in the memory manager
 	DECLARE @mwthreads_count int
 	DECLARE @ifi bit
 	DECLARE @adhoc smallint
@@ -336,7 +332,7 @@ WHERE dp.state = ''G''
 	SELECT @langid = lcid FROM sys.syslanguages WHERE name = @@LANGUAGE
 	SELECT @instancename = CONVERT(VARCHAR(128),SERVERPROPERTY('InstanceName'))
 	SELECT @server = RTRIM(CONVERT(VARCHAR(128), SERVERPROPERTY('MachineName')))
-	--SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
+--SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
 	SELECT @sqlminorver = CONVERT(int, (@@microsoftversion / 0x10000) & 0xff);
 	SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
 	SELECT @clustered = CONVERT(bit,ISNULL(SERVERPROPERTY('IsClustered'),0));
@@ -348,7 +344,7 @@ BEGIN
 	END
 
 
-	-- Test Powershell policy
+-- Test Powershell policy
 	IF @allow_xpcmdshell = 1
 BEGIN
 		IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
@@ -444,7 +440,7 @@ The Set-ExecutionPolicy cmdlet enables you to determine which Windows PowerShell
 				INSERT INTO @psver_output
 				EXEC master.dbo.xp_cmdshell N'%WINDIR%\System32\WindowsPowerShell\v1.0\powershell.exe -Command "Get-Host | Format-Table -Property Version"'
 
-				-- Gets PS version, as commands issued to PS v1 do not support -File
+			-- Gets PS version, as commands issued to PS v1 do not support -File
 				SELECT @psver = ISNULL(LEFT([PS_OUTPUT],1),2)
 				FROM @psver_output
 				WHERE [PS_OUTPUT] IS NOT NULL AND ISNUMERIC(LEFT([PS_OUTPUT],1)) = 1;
@@ -472,13 +468,15 @@ The Set-ExecutionPolicy cmdlet enables you to determine which Windows PowerShell
 	ELSE
 	BEGIN
 			RAISERROR('   [WARNING: Missing permissions for Powershell enablement verification]', 16, 1, N'sysadmin')
-		--RETURN
+	--RETURN
 		END
 	END;
 INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 	/*
 
 --------------------------------------------------------------------------------------------------------------------------------
+---
+---
 -- ## Pre-requisites section
 -- This section will check that all of the required pre-requisites have been met for running the checks and will also set up the variables and tables that are used throughout the Notebook
 --------------------------------------------------------------------------------------------------------------------------------
@@ -527,7 +525,7 @@ BEGIN
 
 	SELECT @msdbpid = principal_id FROM msdb.sys.database_principals (NOLOCK) WHERE sid = SUSER_SID();
 
-	-- Perms 1
+-- Perms 1
 	IF (ISNULL(IS_SRVROLEMEMBER(N'serveradmin'), 0) <> 1) AND ((SELECT COUNT(l.name)
 		FROM master.sys.server_permissions p (NOLOCK) INNER JOIN master.sys.server_principals l (NOLOCK)
 		ON p.grantee_principal_id = l.principal_id
@@ -557,7 +555,7 @@ BEGIN
         RAISERROR('INFORMATION: No issues found while checking for sysadmin pre-requisites to run checks', 10, 1, N'serveradmin')
     END;
 
-	-- Perms 2
+-- Perms 2
 	INSERT INTO tempdb.dbo.permstbl
 	SELECT a.name
 	FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[OBJECT_ID] = b.major_id
@@ -584,17 +582,17 @@ WHERE dp.state = ''G''
 	IF (SELECT [perm] FROM tempdb.dbo.permstbl_msdb WHERE [id] = 1) = 0 AND (SELECT [perm] FROM tempdb.dbo.permstbl_msdb WHERE [id] = 2) = 0
 	BEGIN
 		RAISERROR('WARNING: If not sysadmin, then you must be a member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB to run full scope of checks', 16, 1, N'msdbperms')
-		--RETURN
+	--RETURN
     END
 	ELSE IF (ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) <> 1) AND ((SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_enumerrorlogs') = 0 OR (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'sp_readerrorlog') = 0 OR (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_readerrorlog') = 0)
 	BEGIN
 		RAISERROR('WARNING: If not sysadmin, then you must be a member of the securityadmin server role, or have EXECUTE permission on the following extended sprocs to run full scope of checks: xp_enumerrorlogs, xp_readerrorlog, sp_readerrorlog', 16, 1, N'secperms')
-		--RETURN
+	--RETURN
 	END
 	ELSE IF (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_cmdshell') = 0 OR (SELECT COUNT(credential_id) FROM master.sys.credentials WHERE name = '##xp_cmdshell_proxy_account##') = 0
 	BEGIN
 		RAISERROR('WARNING: If not sysadmin, then you must be granted EXECUTE permissions on xp_cmdshell and a xp_cmdshell proxy account should exist to run full scope of checks', 16, 1, N'xp_cmdshellproxy')
-		--RETURN
+	--RETURN
 	END
 	ELSE IF (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_fileexist') = 0 OR
 		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'sp_OAGetErrorInfo') = 0 OR
@@ -606,17 +604,17 @@ WHERE dp.state = ''G''
 		(SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_servicecontrol') = 0 
 	BEGIN
 		RAISERROR('WARNING: Must be a granted EXECUTE permissions on the following extended sprocs to run full scope of checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_fileexist, xp_regread, xp_instance_regread, xp_servicecontrol and xp_regenumvalues', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 	END
 	ELSE IF (SELECT COUNT([name]) FROM tempdb.dbo.permstbl WHERE [name] = 'xp_msver') = 0 AND @sqlmajorver < 11
 	BEGIN
 		RAISERROR('WARNING: Must be granted EXECUTE permissions on xp_msver to run full scope of checks', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 	END
     ELSE
     BEGIN
         RAISERROR('INFORMATION: No issues found while checking for granular pre-requisites to run checks', 10, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
     END
 END;
 --------------------------------------------------------------------------------------------------------------------------------
@@ -722,14 +720,18 @@ END;
 INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 
 --------------------------------------------------------------------------------------------------------------------------------
+---
+---
 -- ## Information section
 -- This section contains information about the instance
 */
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Uptime subsection
-	-- The time since the instance last started
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Uptime subsection
+-- The time since the instance last started
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'Starting Information section', 10, 1) WITH NOWAIT
 	RAISERROR (N'|-Starting Uptime', 10, 1) WITH NOWAIT
 	IF @sqlmajorver < 10
@@ -747,9 +749,11 @@ BEGIN
 
 	SELECT 'Information' AS [Category], 'Uptime' AS [Information], GETDATE() AS [Current_Time], @StartDate AS Last_Startup, CONVERT(VARCHAR(4),@UpTime/60/24) + 'd ' + CONVERT(VARCHAR(4),@UpTime/60%24) + 'hr ' + CONVERT(VARCHAR(4),@UpTime%60) + 'min' AS Uptime
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### OS Version and Architecture subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### OS Version and Architecture subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Windows Version and Architecture', 10, 1) WITH NOWAIT
 	IF (@sqlmajorver >= 11 AND @sqlmajorver < 14) OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
@@ -776,7 +780,7 @@ BEGIN
 		EXEC xp_msver;
 		
 		SELECT @osver = LEFT(Character_Value, CHARINDEX(' ', Character_Value)-1)
-		-- 5.2 is WS2003; 6.0 is WS2008; 6.1 is WS2008R2; 6.2 is WS2012, 6.3 is WS2012R2, 6.3 (14396) is WS2016
+	-- 5.2 is WS2003; 6.0 is WS2008; 6.1 is WS2008R2; 6.2 is WS2012, 6.3 is WS2012R2, 6.3 (14396) is WS2016
 		FROM @sysinfo
 		WHERE [Name] LIKE 'WindowsVersion%';
 		
@@ -861,9 +865,11 @@ BEGIN
 		WHERE [Value] = 'BIOSReleaseDate') AS [BIOS_Release_Date],
 		@Processor_Name AS [Processor_Name];
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Disk space subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Disk space subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @sqlmajorver > 10 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
 		RAISERROR (N'|-Starting Disk space', 10, 1) WITH NOWAIT
@@ -875,10 +881,12 @@ BEGIN
 		ORDER BY FreeSpace_MB ASC
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### HA Information subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### HA Information subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting HA Information', 10, 1) WITH NOWAIT
 	IF @clustered = 1
 BEGIN
@@ -933,7 +941,7 @@ BEGIN
 
 		IF @ptochecks = 1 AND @IsHadrEnabled = 1
 	BEGIN
-			-- Note: If low_water_mark_for_ghosts number is not increasing over time, it implies that ghost cleanup might not happen.
+		-- Note: If low_water_mark_for_ghosts number is not increasing over time, it implies that ghost cleanup might not happen.
 			SET @sqlcmd = 'SELECT ''Information'' AS [Category], ''AlwaysOn_Replicas'' AS [Information], database_id, group_id, replica_id, group_database_id, is_local, synchronization_state_desc, 
 	is_commit_participant, synchronization_health_desc, database_state_desc, is_suspended, suspend_reason_desc, last_sent_time, last_received_time, last_hardened_time, 
 	last_redone_time, log_send_queue_size, log_send_rate, redo_queue_size, redo_rate, filestream_send_rate, last_commit_time, 
@@ -947,9 +955,11 @@ FROM sys.dm_hadr_database_replica_states'
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Linked servers info subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Linked servers info subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Linked servers info', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(*)
 	FROM sys.servers AS s INNER JOIN sys.linked_logins AS l (NOLOCK) ON s.server_id = l.server_id LEFT OUTER JOIN sys.server_principals AS p (NOLOCK) ON p.principal_id = l.local_principal_id
@@ -975,9 +985,11 @@ BEGIN
 		SELECT 'Information' AS [Category], 'Linked_servers' AS [Information], '[None]' AS [Status]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Instance info subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Instance info subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
 
 	IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
@@ -1000,7 +1012,7 @@ BEGIN
 	ELSE
 	BEGIN
 			RAISERROR('[WARNING: Missing permissions for full "Instance info" checks. Bypassing TCP port check]', 16, 1, N'sysadmin')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
@@ -1050,7 +1062,7 @@ BEGIN
 ELSE
 BEGIN
 		RAISERROR('[WARNING: Missing permissions for full "Instance info" checks. Bypassing replication check]', 16, 1, N'sysadmin')
-	--RETURN
+--RETURN
 	END
 
 	SELECT @cpucount = COUNT(cpu_id)
@@ -1101,7 +1113,7 @@ BEGIN
 			UNION ALL
 				SELECT 9
 		)
-	-- CPU Affinity is shown highest to lowest CPU ID
+-- CPU Affinity is shown highest to lowest CPU ID
 	SELECT @affinitymask = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
 	ELSE RIGHT((SELECT ((CONVERT(tinyint, SUBSTRING(CONVERT(binary(9), [value]), M, 1)) & E) / E) AS [text()]
 		FROM bits CROSS JOIN bytes
@@ -1153,7 +1165,7 @@ BEGIN
 				UNION ALL
 					SELECT 9
 			)
-		-- CPU Affinity is shown highest to lowest CPU ID
+	-- CPU Affinity is shown highest to lowest CPU ID
 		SELECT @affinity64mask = CASE WHEN [value] = 0 THEN REPLICATE('1', @cpucount)
 		ELSE RIGHT((SELECT ((CONVERT(tinyint, SUBSTRING(CONVERT(binary(9), [value]), M, 1)) & E) / E) AS [text()]
 			FROM bits CROSS JOIN bytes
@@ -1176,7 +1188,7 @@ SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity6
 
 	IF @numa > 1
 BEGIN
-		-- format binary mask by node for better reading
+	-- format binary mask by node for better reading
 		SET @i = CEILING(@cpucount*1.00/@numa) + 1
 		WHILE @i < @cpucount + @numa
 	BEGIN
@@ -1260,9 +1272,11 @@ BEGIN
 		SERVERPROPERTY('IsAdvancedAnalyticsInstalled')
 	ELSE 'Not compatible' END AS R_Services_Installed;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Buffer Pool Extension info subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Buffer Pool Extension info subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Buffer Pool Extension info', 10, 1) WITH NOWAIT
 
 	IF @sqlmajorver > 11
@@ -1281,9 +1295,11 @@ BEGIN
 		SELECT 'Information' AS [Category], 'BP_Extension' AS [Information], '[NA]' AS state
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Resource Governor info subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Resource Governor info subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Resource Governor info', 10, 1) WITH NOWAIT
 
 	IF @sqlmajorver > 9
@@ -1306,9 +1322,11 @@ FROM sys.dm_resource_governor_workload_groups'
 		EXECUTE sp_executesql @sqlcmd
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Logon triggers subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Logon triggers subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Logon triggers', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT([name])
 	FROM sys.server_triggers
@@ -1324,11 +1342,13 @@ BEGIN
 		SELECT 'Information' AS [Category], 'Logon_Triggers' AS [Information], '[NA]' AS [Comment]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Database Information subsection
-	-- - This block is *required* to be run before later blocks which gather information about the databases on the instance
-	-- - You can set the @DbScope variable below to the appropriate list of database IDs if there's a need to have a specific scope for database specific checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Database Information subsection
+-- - This block is *required* to be run before later blocks which gather information about the databases on the instance
+-- - You can set the @DbScope variable below to the appropriate list of database IDs if there's a need to have a specific scope for database specific checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Database Information', 10, 1) WITH NOWAIT
 	RAISERROR (N'  |-Building DB list', 10, 1) WITH NOWAIT
 	DECLARE @curdbname NVARCHAR(1000), @curdbid int, @currole tinyint, @cursecondary_role_allow_connections tinyint, @state tinyint
@@ -1728,7 +1748,7 @@ ISNULL((SELECT CONVERT(DECIMAL(18,2),(SUM(tms.memory_used_by_table_kb) + SUM(tms
 		END
 	END;
 
-	-- http://support.microsoft.com/kb/2857849
+-- http://support.microsoft.com/kb/2857849
 	IF @sqlmajorver > 10 AND @IsHadrEnabled = 1
 BEGIN
 		SELECT 'Information' AS [Category], 'AlwaysOn_AG_Databases' AS [Information], dc.database_name AS [Database_Name],
@@ -1738,9 +1758,11 @@ BEGIN
 		WHERE d.is_local=1
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Database file autogrows last 72h subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Database file autogrows last 72h subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting database file autogrows last 72h', 10, 1) WITH NOWAIT
 	IF EXISTS (SELECT TOP 1
 		id
@@ -1765,7 +1787,7 @@ BEGIN
 				SELECT databaseid, [filename], SUM(IntegerData*8) AS Growth, Duration, StartTime, EndTime--, CASE WHEN EventClass =
 				FROM sys.fn_trace_gettable(@tracefilename, default)
 				WHERE EventClass >= 92 AND EventClass <= 95 AND DATEDIFF(hh,StartTime,GETDATE()) < 72
-				-- Last 24h
+			-- Last 24h
 				GROUP BY databaseid, [filename], IntegerData, Duration, StartTime, EndTime
 			)
 		SELECT 'Information' AS [Category], 'Recorded_Autogrows_Lst72H' AS [Information], DB_NAME(database_id) AS Database_Name,
@@ -1775,7 +1797,7 @@ BEGIN
 		FROM sys.master_files mf
 			LEFT OUTER JOIN AutoGrow_CTE ag ON mf.database_id=ag.databaseid AND mf.name=ag.[filename]
 		WHERE ag.Growth > 0
-		--Only where growth occurred
+	--Only where growth occurred
 		GROUP BY database_id, mf.name, mf.size, ag.Growth, ag.Duration, ag.StartTime, ag.EndTime, is_percent_growth, mf.growth, mf.type_desc
 		ORDER BY Database_Name, logical_file_name, ag.StartTime;
 	END
@@ -1784,10 +1806,12 @@ BEGIN
 		SELECT 'Information' AS [Category], 'Recorded_Autogrows_Lst72H' AS [Information], '[WARNING: Could not gather information on autogrow times]' AS [Comment]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- Database triggers subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--Database triggers subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting database triggers', 10, 1) WITH NOWAIT
@@ -1882,9 +1906,11 @@ ORDER BY stb.name, st.name;'
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Feature usage subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Feature usage subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @sqlmajorver > 9
 BEGIN
 		RAISERROR (N'|-Starting Feature usage', 10, 1) WITH NOWAIT
@@ -2002,9 +2028,11 @@ SELECT TOP 1 ''' + REPLACE(@dbname, CHAR(39), CHAR(95)) + ''' AS [dbname], ''Dyn
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Backups since last Full Information subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Backups since last Full Information subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Backups', 10, 1) WITH NOWAIT
 	IF @sqlmajorver > 10
 BEGIN
@@ -2053,9 +2081,11 @@ ORDER BY database_name, backup_start_date DESC'
 
 	EXECUTE sp_executesql @sqlcmd;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### System Configuration subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### System Configuration subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting System Configuration', 10, 1) WITH NOWAIT
 	SELECT 'Information' AS [Category], 'All_System_Configurations' AS [Information],
 		name AS [Name],
@@ -2072,11 +2102,13 @@ ORDER BY database_name, backup_start_date DESC'
 	OPTION
 	(RECOMPILE);
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ## Database Pre-checks section
-	-- This block is required to be run before later blocks which gather information about the databases on the instance
-	-- - You can set the @DbScope variable below to the appropriate list of database IDs if there's a need to have a specific scope for database specific checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--## Database Pre-checks section
+-- This block is required to be run before later blocks which gather information about the databases on the instance
+-- - You can set the @DbScope variable below to the appropriate list of database IDs if there's a need to have a specific scope for database specific checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'Starting Pre-Checks - Building DB list excluding MS shipped', 10, 1) WITH NOWAIT
 	DECLARE @MSdb int
 
@@ -2098,7 +2130,7 @@ CREATE TABLE tempdb.dbo.tmpdbs1
 	)
 
 	RAISERROR (N'|-Excluding MS shipped by standard names and databases belonging to non-readable AG secondary replicas (if available)', 10, 1) WITH NOWAIT
-	-- Ignore MS shipped databases and databases belonging to non-readable AG secondary replicas
+-- Ignore MS shipped databases and databases belonging to non-readable AG secondary replicas
 	INSERT INTO tempdb.dbo.tmpdbs1
 		([dbid], [dbname], [role], [secondary_role_allow_connections], [isdone])
 	SELECT [dbid], [dbname], [role], [secondary_role_allow_connections], 0
@@ -2116,7 +2148,7 @@ CREATE TABLE tempdb.dbo.tmpdbs1
 		'activitylog','branchdb','clienttracelog','eventlog','listingssettings','servicegroupdb','tservercontroller','vodbackend', --MediaRoom
 		'operationsmanager','operationsmanagerdw','operationsmanagerac', --SCOM
 		'orchestrator', --Orchestrator
-		'sso','wss_search','wss_search_config','sharedservices_db','sharedservices_search_db','wss_content','profiledb', 'social db','sync db',	--Sharepoint
+		'sso','wss_search','wss_search_config','sharedservices_db','sharedservices_search_db','wss_content','profiledb', 'social db','sync db',--Sharepoint
 		'susdb', --WSUS
 		'projectserver_archive','projectserver_draft','projectserver_published','projectserver_reporting', --Project Server
 		'reportserver','reportservertempdb','rsdb','rstempdb', --SSRS
@@ -2141,7 +2173,7 @@ CREATE TABLE tempdb.dbo.tmpdbs1
 		AND [dbname] NOT LIKE 'projectwebapp%' --Project Server
 		AND [dbname] NOT LIKE 'sms[_]%' AND [dbname] NOT LIKE 'cm[_]%' --SCCM
 		AND [dbname] NOT LIKE 'fepdw%' AND [dbname] NOT LIKE 'FEPDB[_]%' --Forefront Endpoint Protection
-		--Sharepoint
+	--Sharepoint
 		AND [dbname] NOT LIKE 'sharepoint[_]admincontent%' AND [dbname] NOT LIKE 'sharepoint[_]config%' AND [dbname] NOT LIKE 'wss[_]content%' AND [dbname] NOT LIKE 'wss[_]search%'
 		AND [dbname] NOT LIKE 'sharedservices[_]db%' AND [dbname] NOT LIKE 'sharedservices[_]search[_]db%' AND [dbname] NOT LIKE 'sharedservices[_][_]db%' AND [dbname] NOT LIKE 'sharedservices[_][_]search[_]db%'
 		AND [dbname] NOT LIKE 'sharedservicescontent%' AND [dbname] NOT LIKE 'application[_]registry[_]service[_]db%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]propertystoredb[_]%'
@@ -2162,7 +2194,7 @@ BEGIN
 	END;
 
 	RAISERROR (N'|-Excluding MS shipped by notable object names', 10, 1) WITH NOWAIT
-	-- Removing other noticeable MS shipped DBs
+-- Removing other noticeable MS shipped DBs
 	WHILE (SELECT COUNT(id)
 	FROM tempdb.dbo.tmpdbs1
 	WHERE isdone = 0) > 0
@@ -2328,17 +2360,21 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 		EXEC sp_executesql @sqlcmd;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ## Checks section
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--## Checks section
+--------------------------------------------------------------------------------------------------------------------------------
 
 	RAISERROR (N'Starting Checks section', 10, 1) WITH NOWAIT
 
 	RAISERROR (N'|-Starting Processor Checks', 10, 1) WITH NOWAIT
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Number of available Processors for this instance vs. MaxDOP setting subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Number of available Processors for this instance vs. MaxDOP setting subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Number of available Processors for this instance vs. MaxDOP setting', 10, 1) WITH NOWAIT
 
 	/*c
@@ -2360,12 +2396,12 @@ BEGIN
 END;
 */
 
-	-- MaxDOP should be between 8 and 15. This is handled specifically on NUMA scenarios below.
+-- MaxDOP should be between 8 and 15. This is handled specifically on NUMA scenarios below.
 	SELECT @affined_cpus = COUNT(cpu_id)
 	FROM sys.dm_os_schedulers
 	WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64;
 	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('affined_cpus', @affined_cpus  )
-	--SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
+--SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
 	SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
 		CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)'
 		WHEN @numa = 1 AND @affined_cpus <= 8 AND [value] > 0 AND [value] <> @affined_cpus THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
@@ -2381,30 +2417,32 @@ END;
 
 	SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information],
 		CASE 
-		-- If not NUMA, and up to 8 @affined_cpus then MaxDOP up to 8
+	-- If not NUMA, and up to 8 @affined_cpus then MaxDOP up to 8
 		WHEN @numa = 1 AND @affined_cpus <= 8 THEN @affined_cpus
-		-- If not NUMA, and more than 8 @affined_cpus then MaxDOP 8 
+	-- If not NUMA, and more than 8 @affined_cpus then MaxDOP 8 
 		WHEN @numa = 1 AND @affined_cpus > 8 THEN 8
-		-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA up to 15, then MaxDOP is set as # logical CPUs per NUMA, up to 15 
+	-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA up to 15, then MaxDOP is set as # logical CPUs per NUMA, up to 15 
 		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) <= 15 THEN CEILING((@cpucount*1.00)/@numa)
-		-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA > 15, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
+	-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA > 15, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
 		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) > 15 THEN 
 			CASE WHEN CEILING(@cpucount*1.00/@numa/2) > 16 THEN 16 ELSE CEILING(@cpucount*1.00/@numa/2) END
-		-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA up to 8, then MaxDOP is set as # logical CPUs per NUMA 
+	-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA up to 8, then MaxDOP is set as # logical CPUs per NUMA 
 		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) < 8 THEN CEILING(@cpucount*1.00/@numa)
-		-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA > 8, then MaxDOP 8
+	-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA > 8, then MaxDOP 8
 		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) >= 8 THEN 8
 		ELSE 0
 	END AS [Recommended_MaxDOP],
 		[value] AS [Current_MaxDOP], @cpucount AS [Available_Processors], @affined_cpus AS [Affined_Processors],
-		-- Processor Affinity is shown highest to lowest CPU ID
+	-- Processor Affinity is shown highest to lowest CPU ID
 		@cpuaffin_fixed AS Affinity_Mask_Bitmask
 	FROM sys.configurations (NOLOCK)
 	WHERE name = 'max degree of parallelism';
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Processor Affinity in NUMA architecture subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Processor Affinity in NUMA architecture subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Processor Affinity in NUMA architecture', 10, 1) WITH NOWAIT
 	IF @numa > 1
 BEGIN
@@ -2443,7 +2481,7 @@ BEGIN
 			(SELECT COUNT(DISTINCT parent_node_id)
 			FROM sys.dm_os_schedulers
 			WHERE scheduler_id < 255 AND parent_node_id < 64) AS [NUMA_Nodes],
-			-- Processor Affinity is shown highest to lowest CPU ID
+		-- Processor Affinity is shown highest to lowest CPU ID
 			@cpuaffin_fixed AS Affinity_Mask_Bitmask
 		FROM sys.dm_os_sys_info (NOLOCK)
 		OPTION
@@ -2457,9 +2495,11 @@ BEGIN
 		(RECOMPILE);
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594) subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594) subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Check for HP Logical Processor issue', 10, 1) WITH NOWAIT
 
 	IF LOWER(@SystemManufacturer) <> 'microsoft' AND LOWER(@SystemManufacturer) <> 'vmware' AND LOWER(@ostype) = 'windows'
@@ -2478,20 +2518,22 @@ BEGIN
 		SELECT 'Processor_checks' AS [Category], 'HP_Logical_Processor_Issue' AS [Check], '[Not a Physical Machine]' AS [Deviation];
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Additional Processor information subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Additional Processor information subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Additional Processor information', 10, 1) WITH NOWAIT
 
-	-- Processor Info
+-- Processor Info
 	SELECT 'Processor_checks' AS [Category], 'Processor_Summary' AS [Information], cpu_count AS [Logical_CPU_Count], hyperthread_ratio AS [Cores2Socket_Ratio],
 		cpu_count/hyperthread_ratio AS [CPU_Sockets],
 		CASE WHEN @numa > 1 THEN (SELECT COUNT(DISTINCT parent_node_id)
 		FROM sys.dm_os_schedulers
 		WHERE scheduler_id < 255 AND parent_node_id < 64) ELSE 0 END AS [NUMA_Nodes],
 		@affined_cpus AS [Affined_Processors],
-		-- Processor Affinity is shown highest to lowest Processor ID
+	-- Processor Affinity is shown highest to lowest Processor ID
 		@cpuaffin_fixed AS Affinity_Mask_Bitmask
 	FROM sys.dm_os_sys_info (NOLOCK)
 	OPTION
@@ -2500,7 +2542,7 @@ BEGIN
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Processor utilization rate in the last 2 hours', 10, 1) WITH NOWAIT
-		-- Processor utilization rate in the last 2 hours
+	-- Processor utilization rate in the last 2 hours
 		DECLARE @ts_now bigint
 		DECLARE @tblAggCPU TABLE (SQLProc tinyint,
 			SysIdle tinyint,
@@ -2606,18 +2648,20 @@ BEGIN
 
 	RAISERROR (N'|-Starting Memory Checks', 10, 1) WITH NOWAIT
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Server Memory subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	-- - You can set @bpool_consumer to OFF if you want to list what are the Buffer Pool Consumers from Buffer Descriptors. 
-	-- - Mind that it may take some time in servers with large caches.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Server Memory subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+-- - You can set @bpool_consumer to OFF if you want to list what are the Buffer Pool Consumers from Buffer Descriptors. 
+-- - Mind that it may take some time in servers with large caches.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Server Memory', 10, 1) WITH NOWAIT
 	DECLARE  @minservermem bigint,  @systemfreemem bigint, @numa_nodes_afinned tinyint, @LowMemoryThreshold int
 	DECLARE @commit_target bigint
-	-- Includes stolen and reserved memory in the memory manager
+-- Includes stolen and reserved memory in the memory manager
 	DECLARE @committed bigint
-	-- Does not include reserved memory in the memory manager
+-- Does not include reserved memory in the memory manager
 	DECLARE @xtp int
 
 	IF @sqlmajorver = 9
@@ -2694,7 +2738,7 @@ BEGIN
 ELSE
 BEGIN
 		RAISERROR('[WARNING: Missing permissions for full "Instance info" checks. Bypassing LowMemoryThreshold check]', 16, 1, N'sysadmin')
-	--RETURN
+--RETURN
 	END;
 
 	SELECT 'Memory_checks' AS [Category], 'Memory_issues_MaxServerMem' AS [Check],
@@ -2834,8 +2878,8 @@ BEGIN
 			FROM sys.dm_os_ring_buffers (NOLOCK)
 			WHERE ring_buffer_type = N'RING_BUFFER_RESOURCE_MONITOR') AS x
 	CROSS JOIN sys.dm_os_sys_info si (NOLOCK)
-		--WHERE CASE WHEN x.[timestamp] BETWEEN -2147483648 AND 2147483648 THEN DATEADD(ms, x.[timestamp] - si.ms_ticks, GETDATE()) 
-		--	ELSE DATEADD(s, (x.[timestamp]/1000) - (si.ms_ticks/1000), GETDATE()) END >= DATEADD(hh, -12, GETDATE())
+	--WHERE CASE WHEN x.[timestamp] BETWEEN -2147483648 AND 2147483648 THEN DATEADD(ms, x.[timestamp] - si.ms_ticks, GETDATE()) 
+	--	ELSE DATEADD(s, (x.[timestamp]/1000) - (si.ms_ticks/1000), GETDATE()) END >= DATEADD(hh, -12, GETDATE())
 		ORDER BY 2 DESC;
 
 		RAISERROR (N'  |-Starting Hand Movements from Cache Clock Hands', 10, 1) WITH NOWAIT
@@ -2899,7 +2943,7 @@ ORDER BY SUM(mcch.removed_all_rounds_count) DESC, mcch.[type];'
 	BEGIN
 			RAISERROR (N'  |-Starting Buffer Pool Consumers from Buffer Descriptors', 10, 1) WITH NOWAIT
 
-			-- Note: in case of NUMA architecture, more than one entry per database is expected
+		-- Note: in case of NUMA architecture, more than one entry per database is expected
 
 			SET @sqlcmd = 'SELECT ''Memory_checks'' AS [Category], ''Buffer_Pool_Consumers'' AS [Information], 
 	numa_node, COUNT_BIG(DISTINCT page_id)*8/1024 AS total_pages_MB, 
@@ -2955,7 +2999,7 @@ ORDER BY Alloc_Mem_KB DESC'
 FROM sys.dm_db_xtp_memory_consumers
 WHERE [object_id] > 0
 ORDER BY Allocated_MB DESC'
-				-- Only user objects; system objects are negative numbers
+			-- Only user objects; system objects are negative numbers
 				EXECUTE sp_executesql @sqlcmd;
 
 				RAISERROR (N'  |-Starting Memory Allocations from In-Memory OLTP Engine', 10, 1) WITH NOWAIT
@@ -2993,8 +3037,8 @@ BEGIN
 			WHERE ring_buffer_type = N'RING_BUFFER_OOM') AS x
 	CROSS JOIN sys.dm_os_sys_info si (NOLOCK)
 			LEFT JOIN sys.resource_governor_resource_pools rgrp (NOLOCK) ON rgrp.pool_id = record.value('(./Record/OOM/Pool)[1]', 'int')
-		--WHERE CASE WHEN x.[timestamp] BETWEEN -2147483648 AND 2147483648 THEN DATEADD(ms, x.[timestamp] - si.ms_ticks, GETDATE()) 
-		--	ELSE DATEADD(s, (x.[timestamp]/1000) - (si.ms_ticks/1000), GETDATE()) END >= DATEADD(hh, -12, GETDATE())
+	--WHERE CASE WHEN x.[timestamp] BETWEEN -2147483648 AND 2147483648 THEN DATEADD(ms, x.[timestamp] - si.ms_ticks, GETDATE()) 
+	--	ELSE DATEADD(s, (x.[timestamp]/1000) - (si.ms_ticks/1000), GETDATE()) END >= DATEADD(hh, -12, GETDATE())
 		ORDER BY 2 DESC;
 	END
 ELSE
@@ -3002,9 +3046,11 @@ BEGIN
 		SELECT 'Memory_checks' AS [Category], 'OOM_Notifications' AS [Information], '[OK]' AS Comment
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### LPIM subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### LPIM subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting LPIM', 10, 1) WITH NOWAIT
 
 	IF ((@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13)
@@ -3063,7 +3109,7 @@ BEGIN
 				logsize int
 			)
 
-			-- Get the number of available logs 
+		-- Get the number of available logs 
 			INSERT INTO #lpimavail_logs
 			EXEC xp_enumerrorlogs
 
@@ -3083,7 +3129,7 @@ BEGIN
 		ELSE
 		WHILE @lognumber < @logcount 
 		BEGIN
-				-- Cycle through sql error logs (Cannot use Large Page Extensions:  lock memory privilege was not granted)
+			-- Cycle through sql error logs (Cannot use Large Page Extensions:  lock memory privilege was not granted)
 				SELECT @sqlcmd = 'EXEC master..sp_readerrorlog ' + CONVERT(VARCHAR(3),@lognumber) + ', 1, ''Using locked pages for buffer pool'''
 				BEGIN TRY
 				INSERT INTO #lpimdbcc
@@ -3095,8 +3141,8 @@ BEGIN
 				SELECT @ErrorMessage = 'Errorlog based subsection - Error raised in TRY block 1. ' + ERROR_MESSAGE()
 				RAISERROR (@ErrorMessage, 16, 1);
 			END CATCH
-				-- Next log 
-				--SET @lognumber = @lognumber + 1 
+			-- Next log 
+			--SET @lognumber = @lognumber + 1 
 				SELECT @lognumber = MIN(lognum)
 				FROM #lpimavail_logs
 				WHERE lognum > @lognumber
@@ -3120,7 +3166,7 @@ BEGIN
 	BEGIN
 			RAISERROR('[WARNING: Only a sysadmin or securityadmin can run the "Locked_pages" check. Bypassing check]', 16, 1, N'permissions')
 			RAISERROR('[WARNING: If not sysadmin or securityadmin, then user must be a granted EXECUTE permissions on the following sprocs to run checks: xp_enumerrorlogs and sp_readerrorlog. Bypassing check]', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 		END;
 	END
 
@@ -3145,9 +3191,11 @@ BEGIN
 		SELECT 'Memory_checks' AS [Category], 'Locked_pages' AS [Check], '[Not_used]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Pagefile subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Pagefile subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Pagefile Checks', 10, 1) WITH NOWAIT
 	DECLARE @pf_value tinyint--, @RegKey NVARCHAR(255)
 	DECLARE @pagefile bigint, @freepagefile bigint, @paged bigint
@@ -3195,7 +3243,7 @@ BEGIN
 ELSE
 BEGIN
 		RAISERROR('[WARNING: Missing permissions for full "Pagefile" checks. Bypassing System managed pagefile check]', 16, 1, N'sysadmin')
-	--RETURN
+--RETURN
 	END;
 
 	IF (SELECT COUNT(*)
@@ -3238,15 +3286,19 @@ BEGIN
 		CASE WHEN @paged > 0 THEN '[WARNING: Part of SQL Server process memory has been paged out. Please revise LPIM settings]'
 		ELSE '[OK]' END AS [Deviation],
 		@paged AS paged_out_MB;
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ## I/O Checks section
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Starting I/O Stall subsection (wait for 5s)  
-	-- - I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection  
-	-- - io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.  
-	-- - Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).   
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--## I/O Checks section
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Starting I/O Stall subsection (wait for 5s)  
+-- - I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection  
+-- - io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.  
+-- - Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).   
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 		IF @ptochecks = 1
 		RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
 	IF @ptochecks = 1
@@ -3322,10 +3374,10 @@ BEGIN
 		INSERT INTO #tmp_dm_io_virtual_file_stats
 		SELECT @mincol, f.database_id, f.[file_id], DB_NAME(f.database_id), f.name AS logical_file_name, f.type_desc,
 			CAST (CASE 
-			-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
+		-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
 			WHEN LEFT (LTRIM (f.physical_name), 2) = '\\' 
 				THEN LEFT (LTRIM (f.physical_name),CHARINDEX('\',LTRIM(f.physical_name),CHARINDEX('\',LTRIM(f.physical_name), 3) + 1) - 1)
-				-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
+			-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
 				WHEN CHARINDEX('\', LTRIM(f.physical_name), 3) > 0 
 				THEN UPPER(LEFT(LTRIM(f.physical_name), CHARINDEX ('\', LTRIM(f.physical_name), 3) - 1))
 			ELSE f.physical_name
@@ -3336,17 +3388,17 @@ BEGIN
 			INNER JOIN sys.master_files AS f ON fs.database_id = f.database_id AND fs.[file_id] = f.[file_id]
 
 		WAITFOR DELAY '00:00:05'
-		-- wait 5s between pooling
+	-- wait 5s between pooling
 
 		SELECT @maxcol = GETDATE()
 
 		INSERT INTO #tmp_dm_io_virtual_file_stats
 		SELECT @maxcol, f.database_id, f.[file_id], DB_NAME(f.database_id), f.name AS logical_file_name, f.type_desc,
 			CAST (CASE 
-			-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
+		-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
 			WHEN LEFT (LTRIM (f.physical_name), 2) = '\\' 
 				THEN LEFT (LTRIM (f.physical_name),CHARINDEX('\',LTRIM(f.physical_name),CHARINDEX('\',LTRIM(f.physical_name), 3) + 1) - 1)
-				-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
+			-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
 				WHEN CHARINDEX('\', LTRIM(f.physical_name), 3) > 0 
 				THEN UPPER(LEFT(LTRIM(f.physical_name), CHARINDEX ('\', LTRIM(f.physical_name), 3) - 1))
 			ELSE f.physical_name
@@ -3436,11 +3488,13 @@ BEGIN
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Pending disk I/O Requests subsection  
-	-- - Indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.   
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Pending disk I/O Requests subsection  
+-- - Indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc).
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.   
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Pending disk I/O Requests subsection (wait for a max of 5s)', 10, 1) WITH NOWAIT
@@ -3510,7 +3564,7 @@ BEGIN
 		BREAK
 
 			WAITFOR DELAY '00:00:01'
-			-- wait 1s between pooling
+		-- wait 1s between pooling
 
 			SET @IOCnt = @IOCnt + 1
 		END;
@@ -3522,10 +3576,10 @@ BEGIN
 			INSERT INTO #tblPendingIO
 			SELECT DISTINCT f.database_id, f.[file_id], DB_NAME(f.database_id) AS database_name, f.name AS logical_file_name, f.type_desc,
 				CAST (CASE 
-				-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
+			-- Handle UNC paths (e.g. '\\fileserver\1readonlydbs\dept_dw.ndf')
 				WHEN LEFT (LTRIM (f.physical_name), 2) = '\\' 
 					THEN LEFT (LTRIM (f.physical_name),CHARINDEX('\',LTRIM(f.physical_name),CHARINDEX('\',LTRIM(f.physical_name), 3) + 1) - 1)
-					-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
+				-- Handle local paths (e.g. 'C:\Program Files\...\master.mdf') 
 					WHEN CHARINDEX('\', LTRIM(f.physical_name), 3) > 0 
 					THEN UPPER(LEFT(LTRIM(f.physical_name), CHARINDEX ('\', LTRIM(f.physical_name), 3) - 1))
 				ELSE f.physical_name
@@ -3567,23 +3621,27 @@ BEGIN
 
 	RAISERROR (N'|-Starting Server Checks', 10, 1) WITH NOWAIT
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ## Server Checks section
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Power plan subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--## Server Checks section
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Power plan subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Power plan', 10, 1) WITH NOWAIT
 
 	DECLARE @planguid NVARCHAR(64), @powerkey1 NVARCHAR(255), @powerkey2 NVARCHAR(255)
-	--SELECT @powerkey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{025A5937-A6BE-4686-A844-36FE4BEC8B6D}'
-	--SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
+--SELECT @powerkey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{025A5937-A6BE-4686-A844-36FE4BEC8B6D}'
+--SELECT @powerkey = 'SYSTEM\CurrentControlSet\Control\Power\User\Default\PowerSchemes'
 	SELECT @powerkey1 = 'SOFTWARE\Policies\Microsoft\Power\PowerSettings'
 	SELECT @powerkey2 = 'SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
 
 	IF CONVERT(DECIMAL(3,1), @osver) >= 6.0
 BEGIN
 		BEGIN TRY
-		-- Check if was set by GPO, if not, look in user settings 
+	-- Check if was set by GPO, if not, look in user settings 
 		EXEC master.sys.xp_regread N'HKEY_LOCAL_MACHINE', @powerkey1, 'ActivePowerScheme', @planguid OUTPUT, NO_OUTPUT
 
 		IF @planguid IS NULL 
@@ -3598,7 +3656,7 @@ BEGIN
 	END CATCH
 	END
 
-	-- http://support.microsoft.com/kb/935799/en-us
+-- http://support.microsoft.com/kb/935799/en-us
 
 	IF @osver IS NULL 
 BEGIN
@@ -3617,18 +3675,20 @@ BEGIN
 		SELECT 'Server_checks' AS [Category], 'Current_Power_Plan' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Disk Partition alignment offset < 64KB subsection
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	-- - Set @custompath below and set the custom desired path for .ps1 files. 
-	-- - If not, default location for .ps1 files is the Log folder.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Disk Partition alignment offset < 64KB subsection
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+-- - Set @custompath below and set the custom desired path for .ps1 files. 
+-- - If not, default location for .ps1 files is the Log folder.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Disk Partition alignment offset < 64KB', 10, 1) WITH NOWAIT
 	IF @ostype <> 'Windows'
 BEGIN
 		RAISERROR('    |- [INFORMATION: "partition alignment offset" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
-	--RETURN
+--RETURN
 	END
 ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 BEGIN
@@ -3719,7 +3779,7 @@ BEGIN
 					EXECUTE sp_executesql @sqlcmd, @params, @pathOUT=@path OUTPUT;
 				END
 
-				-- Create COM object with FSO
+			-- Create COM object with FSO
 				EXEC @OLEResult = master.dbo.sp_OACreate 'Scripting.FileSystemObject', @FSO OUT
 				IF @OLEResult <> 0
 			BEGIN
@@ -3757,7 +3817,7 @@ BEGIN
 			EXEC master.dbo.xp_fileexist @FileName, @existout out
 			IF @existout = 0
 		BEGIN
-				-- Scan for local disks
+			-- Scan for local disks
 				SET @Text1 = '[string] $serverName = ''localhost''
 $partitions = Get-WmiObject -computername $serverName -query "SELECT * FROM Win32_DiskPartition"
 foreach ($partition in $partitions)
@@ -3774,7 +3834,7 @@ Write-Output $diskpart
 					RAISERROR (@ErrorMessage, 16, 1, @OLEResult, @src, @desc);
 				END
 
-				--Open file
+			--Open file
 				EXEC @OLEResult = master.dbo.sp_OAMethod @FS, 'OpenTextFile', @FileID OUT, @FileName, 2, 1
 				IF @OLEResult <> 0
 			BEGIN
@@ -3788,7 +3848,7 @@ Write-Output $diskpart
 					RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT
 				END
 
-				--Write Text1
+			--Write Text1
 				EXEC @OLEResult = master.dbo.sp_OAMethod @FileID, 'WriteLine', NULL, @Text1
 				IF @OLEResult <> 0
 			BEGIN
@@ -3886,27 +3946,29 @@ Write-Output $diskpart
 	BEGIN
 			RAISERROR('[WARNING: Only a sysadmin can run the "partition alignment offset" checks. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 			RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_cmdshell, xp_instance_regread, xp_regread, xp_fileexist and xp_regenumvalues. Bypassing check]', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
 BEGIN
 		RAISERROR('    |- [INFORMATION: "partition alignment offset" check was skipped: either xp_cmdshell or execution of PS scripts was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### NTFS block size in volumes that hold database files <> 64KB subsection
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	-- - Set @custompath below and set the custom desired path for .ps1 files. 
-	-- - If not, default location for .ps1 files is the Log folder.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### NTFS block size in volumes that hold database files <> 64KB subsection
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+-- - Set @custompath below and set the custom desired path for .ps1 files. 
+-- - If not, default location for .ps1 files is the Log folder.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting NTFS block size in volumes that hold database files <> 64KB', 10, 1) WITH NOWAIT
 	IF @ostype <> 'Windows'
 BEGIN
 		RAISERROR('    |- [INFORMATION: "NTFS block size" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
-	--RETURN
+--RETURN
 	END
 ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 BEGIN
@@ -3997,7 +4059,7 @@ BEGIN
 					EXECUTE sp_executesql @sqlcmd, @params, @pathOUT=@path OUTPUT;
 				END
 
-				-- Create COM object with FSO
+			-- Create COM object with FSO
 				EXEC @OLEResult = master.dbo.sp_OACreate 'Scripting.FileSystemObject', @FSO OUT
 				IF @OLEResult <> 0
 			BEGIN
@@ -4035,7 +4097,7 @@ BEGIN
 			EXEC master.dbo.xp_fileexist @FileName, @existout out
 			IF @existout = 0
 		BEGIN
-				-- Scan for local disks
+			-- Scan for local disks
 				SET @Text1 = '[string] $serverName = ''localhost''
 $vols = Get-WmiObject -computername $serverName -query "select name, blocksize from Win32_Volume where Capacity <> NULL and DriveType = 3"
 foreach($vol in $vols)
@@ -4051,7 +4113,7 @@ Write-Output $drive
 					RAISERROR (@ErrorMessage, 16, 1, @OLEResult, @src, @desc);
 				END
 
-				--Open file
+			--Open file
 				EXEC @OLEResult = master.dbo.sp_OAMethod @FS, 'OpenTextFile', @FileID OUT, @FileName, 2, 1
 				IF @OLEResult <> 0
 			BEGIN
@@ -4065,7 +4127,7 @@ Write-Output $drive
 					RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT
 				END
 
-				--Write Text1
+			--Write Text1
 				EXEC @OLEResult = master.dbo.sp_OAMethod @FileID, 'WriteLine', NULL, @Text1
 				IF @OLEResult <> 0
 			BEGIN
@@ -4163,30 +4225,32 @@ Write-Output $drive
 	BEGIN
 			RAISERROR('[WARNING: Only a sysadmin can run the "NTFS block size" checks. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 			RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_cmdshell, xp_instance_regread, xp_regread, xp_fileexist and xp_regenumvalues. Bypassing check]', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
 BEGIN
 		RAISERROR('    |- [INFORMATION: "NTFS block size" check was skipped: either xp_cmdshell or execution of PS scripts was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Disk Fragmentation Analysis subsection  
-	-- You can set @diskfrag to ON if you want to check for disk physical fragmentation. 
-	--	- Can take some time in large disks. Requires elevated privileges.  
-	--	- See https://support.microsoft.com/help/3195161/defragmenting-sql-server-database-disk-drives  
-	-- - Set @custompath below and set the custom desired path for .ps1 files. 
-	-- - If not, default location for .ps1 files is the Log folder.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Disk Fragmentation Analysis subsection  
+-- You can set @diskfrag to ON if you want to check for disk physical fragmentation. 
+--	- Can take some time in large disks. Requires elevated privileges.  
+--	- See https://support.microsoft.com/help/3195161/defragmenting-sql-server-database-disk-drives  
+-- - Set @custompath below and set the custom desired path for .ps1 files. 
+-- - If not, default location for .ps1 files is the Log folder.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @diskfrag = 1
 BEGIN
 		RAISERROR (N'  |-Starting Disk Fragmentation Analysis', 10, 1) WITH NOWAIT
 		IF @ostype <> 'Windows'
 	BEGIN
 			RAISERROR('    |- [INFORMATION: "Disk Fragmentation Analysis" check was skipped: not Windows OS.]', 10, 1, N'not_windows')
-		--RETURN
+	--RETURN
 		END
 	ELSE IF @ostype = 'Windows' AND @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted'))
 	BEGIN
@@ -4278,7 +4342,7 @@ BEGIN
 						EXECUTE sp_executesql @sqlcmd, @params, @pathOUT=@path OUTPUT;
 					END
 
-					-- Create COM object with FSO
+				-- Create COM object with FSO
 					EXEC @OLEResult = master.dbo.sp_OACreate 'Scripting.FileSystemObject', @FSO OUT
 					IF @OLEResult <> 0
 				BEGIN
@@ -4316,7 +4380,7 @@ BEGIN
 				EXEC master.dbo.xp_fileexist @FileName, @existout out
 				IF @existout = 0
 			BEGIN
-					-- Scan for frag
+				-- Scan for frag
 					SET @Text1 = '$myWindowsID=[System.Security.Principal.WindowsIdentity]::GetCurrent()
 $myWindowsPrincipal=new-object System.Security.Principal.WindowsPrincipal($myWindowsID)
 $adminRole=[System.Security.Principal.WindowsBuiltInRole]::Administrator
@@ -4352,7 +4416,7 @@ else
 						RAISERROR (@ErrorMessage, 16, 1, @OLEResult, @src, @desc);
 					END
 
-					--Open file
+				--Open file
 					EXEC @OLEResult = master.dbo.sp_OAMethod @FS, 'OpenTextFile', @FileID OUT, @FileName, 2, 1
 					IF @OLEResult <> 0
 				BEGIN
@@ -4366,7 +4430,7 @@ else
 						RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT
 					END
 
-					--Write Text1
+				--Write Text1
 					EXEC @OLEResult = master.dbo.sp_OAMethod @FileID, 'WriteLine', NULL, @Text1
 					IF @OLEResult <> 0
 				BEGIN
@@ -4484,26 +4548,28 @@ else
 		BEGIN
 				RAISERROR('[WARNING: Only a sysadmin can run the "Disk Fragmentation Analysis" checks. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 				RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_cmdshell, xp_instance_regread, xp_regread, xp_fileexist and xp_regenumvalues. Bypassing check]', 16, 1, N'extended_sprocs')
-			--RETURN
+		--RETURN
 			END
 		END
 	ELSE
 	BEGIN
 			RAISERROR('    |- [INFORMATION: "Disk Fragmentation Analysis" check was skipped: either xp_cmdshell or execution of PS scripts was not allowed]', 10, 1, N'disallow_xp_cmdshell')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
 BEGIN
 		RAISERROR('  |- [INFORMATION: "Disk Fragmentation Analysis" check is disabled]', 10, 1, N'disallow_diskfrag')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Cluster Quorum Model subsection
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Cluster Quorum Model subsection
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @clustered = 1 AND @osver <> '5.2'
 BEGIN
 		RAISERROR (N'  |-Starting Cluster Quorum Model', 10, 1) WITH NOWAIT
@@ -4594,7 +4660,7 @@ BEGIN
 						ELSE '[OK]' END AS [Deviation],
 						QUOTENAME(REPLACE([Output], CHAR(9), '')) AS QuorumModel,
 						'[WARNING: No count of votes available, using count of nodes instead. Check if KB2494036 applies and is installed]' AS [Comment]
-					-- http://support.microsoft.com/kb/2494036
+				-- http://support.microsoft.com/kb/2494036
 					FROM #xp_cmdshell_CluOutput
 					WHERE [Output] IS NOT NULL
 				END
@@ -4638,18 +4704,18 @@ BEGIN
 		BEGIN
 				RAISERROR('[WARNING: Only a sysadmin can run the "Cluster Quorum Model" check. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 				RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: xp_cmdshell. Bypassing check]', 16, 1, N'extended_sprocs')
-			--RETURN
+		--RETURN
 			END
 		END
 	ELSE IF @allow_xpcmdshell = 1 AND (@psavail IS NOT NULL AND @psavail IN ('RemoteSigned','Unrestricted')) AND @psver = 1
 	BEGIN
 			RAISERROR('    |- [INFORMATION: "Cluster Quorum Model" check was skipped: cannot execute with PS v1]', 10, 1, N'disallow_ps')
-		--RETURN
+	--RETURN
 		END
 	ELSE
 	BEGIN
 			RAISERROR('    |- [INFORMATION: "Cluster Quorum Model" check was skipped: either xp_cmdshell or execution of PS scripts was not allowed]', 10, 1, N'disallow_xp_cmdshell')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
@@ -4685,13 +4751,15 @@ BEGIN
 		EXECUTE sp_executesql @sqlcmd
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Cluster NIC Binding order subsection
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	-- - Set @custompath below and set the custom desired path for .ps1 files. 
-	-- - If not, default location for .ps1 files is the Log folder.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Cluster NIC Binding order subsection
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+-- - Set @custompath below and set the custom desired path for .ps1 files. 
+-- - If not, default location for .ps1 files is the Log folder.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @allow_xpcmdshell = 1 and @clustered = 1
 BEGIN
 		RAISERROR (N'  |-Starting Cluster NIC Binding order', 10, 1) WITH NOWAIT
@@ -4783,7 +4851,7 @@ BEGIN
 						EXECUTE sp_executesql @sqlcmd, @params, @pathOUT=@path OUTPUT;
 					END
 
-					-- Create COM object with FSO
+				-- Create COM object with FSO
 					EXEC @OLEResult = master.dbo.sp_OACreate 'Scripting.FileSystemObject', @FSO OUT
 					IF @OLEResult <> 0
 				BEGIN
@@ -4821,7 +4889,7 @@ BEGIN
 				EXEC master.dbo.xp_fileexist @FileName, @existout out
 				IF @existout = 0
 			BEGIN
-					-- Scan for nics
+				-- Scan for nics
 					SET @Text1 = '[string] $serverName = ''localhost''
 $nics = Get-WmiObject -Computername $serverName -query "SELECT Description, Index FROM Win32_NetworkAdapterConfiguration"
 foreach ($nic in $nics)
@@ -4838,7 +4906,7 @@ Write-Output $allnics
 						RAISERROR (@ErrorMessage, 16, 1, @OLEResult, @src, @desc);
 					END
 
-					--Open file
+				--Open file
 					EXEC @OLEResult = master.dbo.sp_OAMethod @FS, 'OpenTextFile', @FileID OUT, @FileName, 2, 1
 					IF @OLEResult <> 0
 				BEGIN
@@ -4852,7 +4920,7 @@ Write-Output $allnics
 						RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT
 					END
 
-					--Write Text1
+				--Write Text1
 					EXEC @OLEResult = master.dbo.sp_OAMethod @FileID, 'WriteLine', NULL, @Text1
 					IF @OLEResult <> 0
 				BEGIN
@@ -4940,13 +5008,13 @@ Write-Output $allnics
 		BEGIN
 				RAISERROR('[WARNING: Only a sysadmin can run the "Cluster NIC Binding Order" checks. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 				RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_cmdshell, xp_instance_regread, xp_regread, xp_fileexist and xp_regenumvalues. Bypassing check]', 16, 1, N'extended_sprocs')
-			--RETURN
+		--RETURN
 			END
 		END
 	ELSE
 	BEGIN
 			RAISERROR('    |- [INFORMATION: "Cluster NIC Binding Order" check was skipped: either xp_cmdshell or execution of PS scripts was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
@@ -4954,11 +5022,13 @@ BEGIN
 		SELECT 'Server_checks' AS [Category], 'Cluster_NIC_Binding' AS [Check], 'NOT_CLUSTERED' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Cluster QFE node equality subsection
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Cluster QFE node equality subsection
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @clustered = 1
 BEGIN
 		RAISERROR (N'  |-Starting QFE node equality', 10, 1) WITH NOWAIT
@@ -5118,13 +5188,13 @@ BEGIN
 		BEGIN
 				RAISERROR('[WARNING: Only a sysadmin can run the "QFE node equality" check. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 				RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: xp_cmdshell. Bypassing check]', 16, 1, N'extended_sprocs')
-			--RETURN
+		--RETURN
 			END
 		END
 	ELSE
 	BEGIN
 			RAISERROR('  |- [INFORMATION: "QFE node equality" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
@@ -5133,9 +5203,11 @@ BEGIN
 	END;
 
 	RAISERROR (N'|-Starting Service Accounts Checks', 10, 1) WITH NOWAIT
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Service Accounts Status subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Service Accounts Status subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Service Accounts Status', 10, 1) WITH NOWAIT
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1)
 		OR ((SELECT COUNT([name])
@@ -5155,7 +5227,7 @@ BEGIN
 		DECLARE @accntsqlagentservice NVARCHAR(128), @accntdtsservice NVARCHAR(128), @accntftservice NVARCHAR(128)
 		DECLARE @accntbrowservice NVARCHAR(128), @accntolapservice NVARCHAR(128), @accntrsservice NVARCHAR(128)
 
-		-- Get service names
+	-- Get service names
 		IF (@instancename IS NULL) 
 	BEGIN
 			IF @sqlmajorver < 11
@@ -5222,7 +5294,7 @@ BEGIN
 		SELECT @regkeydtsservice = N'SYSTEM\CurrentControlSet\Services\' + @dtsservice
 		SELECT @regkeybrowservice = N'SYSTEM\CurrentControlSet\Services\' + @browservice
 
-		-- Service status
+	-- Service status
 		IF NOT EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
 		WHERE [object_id] = OBJECT_ID('tempdb.dbo.#RegResult'))
@@ -5471,7 +5543,7 @@ BEGIN
 		DROP TABLE #RegResult;
 		DROP TABLE #ServiceStatus;
 
-		-- Accounts
+	-- Accounts
 		IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 	BEGIN
 			BEGIN TRY
@@ -5530,7 +5602,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running SQL Server under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlservice = 'LocalSystem' THEN '[WARNING: Running SQL Server under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server under this account is not recommended]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
+		-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlservice <> 'NT SERVICE\MSSQLSERVER' AND @accntsqlservice NOT LIKE 'NT SERVICE\MSSQL$%' THEN '[INFORMATION: SQL Server is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -5546,7 +5618,7 @@ BEGIN
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\SYSTEM' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
 			WHEN @clustered = 0 AND @accntsqlagentservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running SQL Server Agent under this account is not recommended]' 
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
+		-- MSA for WS2008R2 or higher, SQL Server 2012 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntsqlagentservice <> 'NT SERVICE\SQLSERVERAGENT' AND @accntsqlagentservice NOT LIKE 'NT SERVICE\SQLAGENT$%' THEN '[INFORMATION: SQL Server Agent is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -5559,7 +5631,7 @@ BEGIN
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntolapservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
-			-- MSA for WS2008R2 or higher, SQL Server 2005 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
+		-- MSA for WS2008R2 or higher, SQL Server 2005 or higher, non-clustered (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @clustered = 0 AND @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntolapservice <> 'NT SERVICE\MSSQLServerOLAPService' AND @accntolapservice NOT LIKE 'NT SERVICE\MSOLAP$%' THEN '[INFORMATION: SQL Server Analysis Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -5571,7 +5643,7 @@ BEGIN
 			WHEN @accntdtsservice = @accntsqlservice THEN '[WARNING: Running SQL Server Integration Services under the same account as SQL Server is not recommended]' 
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			WHEN CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntdtsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
+		-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntdtsservice NOT IN ('NT SERVICE\MSDTSSERVER100', 'NT SERVICE\MSDTSSERVER110') THEN '[INFORMATION: SQL Server Integration Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -5584,7 +5656,7 @@ BEGIN
 			WHEN @clustered = 0 AND @sqlmajorver <= 10 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' AND @accntdtsservice <> 'NT AUTHORITY\LOCALSYSTEM' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			WHEN @osver IS NULL THEN '[WARNING: Could not determine Windows version for check]'
 			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntrsservice <> 'NT AUTHORITY\NETWORKSERVICE' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
-			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
+		-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 			WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntrsservice <> 'NT SERVICE\ReportServer' AND @accntrsservice NOT LIKE 'NT SERVICE\ReportServer$%' THEN '[INFORMATION: SQL Server Reporting Services is not running with the default account]'
 			ELSE '[OK]' 
 		END AS [Deviation]
@@ -5600,7 +5672,7 @@ BEGIN
 				WHEN @sqlmajorver <= 10 AND @accntftservice = 'NT AUTHORITY\NETWORKSERVICE' THEN '[WARNING: Running Full-Text Service under this account is not recommended]' 
 				WHEN @sqlmajorver <= 10 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) <= 6.0 AND @accntftservice <> 'NT AUTHORITY\LOCALSERVICE' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
-				-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
+			-- MSA for WS2008R2 or higher, SQL Server 2012 or higher (https://docs.microsoft.com/previous-versions/sql/sql-server-2012/ms143504(v=sql.110)#Default_Accts))
 				WHEN @sqlmajorver >= 11 AND CONVERT(DECIMAL(3,1), @osver) >= 6.1 AND @accntftservice <> 'NT SERVICE\MSSQLFDLauncher' AND @accntftservice NOT LIKE 'NT SERVICE\MSSQLFDLauncher$%' THEN '[WARNING: Full-Text Daemon is not running with the default account]'
 			ELSE '[OK]' END 
 		ELSE '[INFORMATION: Service is not installed]' 
@@ -5619,15 +5691,17 @@ BEGIN
 ELSE
 BEGIN
 		RAISERROR('[WARNING: Only a sysadmin can run the "Service Accounts Status" checks. Otherwise, you must be a granted EXECUTE permissions on xp_regread and xp_servicecontrol. Bypassing check]', 16, 1, N'sysadmin')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Service Accounts and SPN registration subsection
-	-- - You can set @spn_check to OFF if you want to skip SPN checks. (Or not run this Block!)
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Service Accounts and SPN registration subsection
+-- - You can set @spn_check to OFF if you want to skip SPN checks. (Or not run this Block!)
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Service Accounts and SPN registration', 10, 1) WITH NOWAIT
 	IF @accntsqlservice IS NOT NULL AND @accntsqlservice NOT IN ('NT AUTHORITY\LOCALSERVICE','NT AUTHORITY\SYSTEM','LocalSystem','NT AUTHORITY\NETWORKSERVICE') AND @allow_xpcmdshell = 1 AND @spn_check = 1
 BEGIN
@@ -5837,19 +5911,21 @@ BEGIN
 	BEGIN
 			RAISERROR('[WARNING: Only a sysadmin can run the "Service Accounts and SPN registration" check. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 			RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: xp_cmdshell. Bypassing check]', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
 BEGIN
 		RAISERROR('    |- [INFORMATION: "Service Accounts and SPN registration" check was skipped: either spn checks were not allowed, xp_cmdshell was not allowed or the service account is not a domain account.]', 10, 1, N'disallow_xp_cmdshell')
-	--RETURN
+--RETURN
 	END;
 
 	RAISERROR (N'|-Starting Instance Checks', 10, 1) WITH NOWAIT
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Recommended build check subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Recommended build check subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	/*
 RAISERROR (N'  |-Starting Recommended build check', 10, 1) WITH NOWAIT
 SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
@@ -5877,13 +5953,15 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateReference')) ELSE 'NA' END AS Product_Update_Ref_KB;
 */
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Backup checks subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Backup checks subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Backup checks', 10, 1) WITH NOWAIT
 	DECLARE @nolog int, @nobck int, @nolog24h int, @neverlog int, @neverbck int
 
-	-- No Full backups
+-- No Full backups
 	SELECT @neverbck = COUNT(DISTINCT d.name)
 	FROM master.sys.databases d (NOLOCK)
 		INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
@@ -5892,9 +5970,9 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		AND d.name NOT IN (SELECT b.database_name
 		FROM msdb.dbo.backupset b
 		WHERE b.type = 'D' AND b.is_copy_only = 0)
-	-- Full backup and no COPY_ONLY backups
+-- Full backup and no COPY_ONLY backups
 
-	-- No Full backups in last 7 days
+-- No Full backups in last 7 days
 	;WITH
 		cteFullBcks (cnt)
 		AS
@@ -5908,14 +5986,14 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 				FROM master.sys.databases (NOLOCK)
 				WHERE database_id NOT IN (2,3)
 					AND source_database_id IS NULL)
-			-- no snapshots
+		-- no snapshots
 			GROUP BY database_name
 			HAVING MAX(backup_finish_date) <= DATEADD(dd, -7, DATEADD(dd, DATEDIFF(dd, 0, GETDATE()) + 1, 0))
 		)
 	SELECT @nobck = COUNT(cnt)
 	FROM cteFullBcks;
 
-	-- Last Log backup precedes last full or diff backup, and DB in Full or Bulk-logged RM
+-- Last Log backup precedes last full or diff backup, and DB in Full or Bulk-logged RM
 	;WITH
 		cteLogBcks (cnt)
 		AS
@@ -5929,7 +6007,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 				WHERE database_id NOT IN (2,3)
 					AND source_database_id IS NULL -- no snapshots
 					AND recovery_model < 3)
-			-- not SIMPLE recovery model
+		-- not SIMPLE recovery model
 			GROUP BY [database_name]
 			HAVING MAX(backup_finish_date) < (SELECT MAX(backup_finish_date)
 			FROM msdb.dbo.backupset c (NOLOCK)
@@ -5940,7 +6018,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	SELECT @nolog = COUNT(cnt)
 	FROM cteLogBcks;
 
-	-- No Log backup since last full or diff backup, and DB in Full or Bulk-logged RM
+-- No Log backup since last full or diff backup, and DB in Full or Bulk-logged RM
 	SELECT @neverlog = COUNT(DISTINCT database_name)
 	FROM msdb.dbo.backupset b (NOLOCK)
 		INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
@@ -5959,7 +6037,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 		WHERE c.type = 'L' -- Log Backup
 			AND c.database_name = b.database_name);
 
-	-- Log backup since last full or diff backup is older than 24h, and DB in Full ar Bulk-logged RM
+-- Log backup since last full or diff backup is older than 24h, and DB in Full ar Bulk-logged RM
 	;WITH
 		cteLogBcks2 (cnt)
 		AS
@@ -5973,7 +6051,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 				WHERE database_id NOT IN (2,3)
 					AND source_database_id IS NULL -- no snapshots
 					AND recovery_model < 3)
-			-- not SIMPLE recovery model
+		-- not SIMPLE recovery model
 			GROUP BY database_name
 			HAVING MAX(backup_finish_date) > (SELECT MAX(backup_finish_date)
 				FROM msdb.dbo.backupset c (NOLOCK)
@@ -5988,7 +6066,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	IF @nobck > 0 OR @neverbck > 0
 BEGIN
 		SELECT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Check], '[WARNING: Some databases do not have any Full backups, or the last Full backup is over 7 days]' AS [Deviation]
-		-- No full backups in last 7 days
+	-- No full backups in last 7 days
 					SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Full_Backup
 			FROM msdb.dbo.backupset b (NOLOCK)
 				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
@@ -5998,11 +6076,11 @@ BEGIN
 				FROM master.sys.databases (NOLOCK)
 				WHERE database_id NOT IN (2,3)
 					AND source_database_id IS NULL)
-			-- no snapshots
+		-- no snapshots
 			GROUP BY database_name
 			HAVING MAX(backup_finish_date) <= DATEADD(dd, -7, DATEADD(dd, DATEDIFF(dd, 0, GETDATE()) + 1, 0))
 		UNION ALL
-			-- No full backups in history
+		-- No full backups in history
 			SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Full_Backups' AS [Information], d.name AS [Database_Name], NULL AS Lst_Full_Backup
 			FROM master.sys.databases d (NOLOCK)
 				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON d.database_id = tuc.[dbid]
@@ -6015,7 +6093,7 @@ BEGIN
 				AND d.name NOT IN (SELECT b.database_name
 				FROM msdb.dbo.backupset b
 				WHERE b.type = 'L')
-		-- Log backup
+	-- Log backup
 		ORDER BY [Database_Name]
 	END
 ELSE
@@ -6034,10 +6112,10 @@ BEGIN
 				FROM msdb.dbo.backupset (NOLOCK) b
 					INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
 				WHERE [type] IN ('D','I')
-				-- Full or Differential backup
+			-- Full or Differential backup
 				GROUP BY database_name
 			)
-		-- Log backups since last full or diff is older than 24h
+	-- Log backups since last full or diff is older than 24h
 					SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Information], database_name AS [Database_Name], MAX(backup_finish_date) AS Lst_Log_Backup,
 				(SELECT backup_finish_date
 				FROM Bck c
@@ -6050,13 +6128,13 @@ BEGIN
 				WHERE database_id NOT IN (2,3)
 					AND source_database_id IS NULL -- no snapshots
 					AND recovery_model < 3)
-			-- not SIMPLE recovery model
+		-- not SIMPLE recovery model
 			GROUP BY [database_name]
 			HAVING MAX(backup_finish_date) < (SELECT backup_finish_date
 			FROM Bck c
 			WHERE c.database_name = b.database_name)
 		UNION ALL
-			-- No log backup in history but full backup exists
+		-- No log backup in history but full backup exists
 			SELECT DISTINCT 'Instance_checks' AS [Category], 'No_Log_Bcks_since_LstFullorDiff' AS [Information], database_name AS [Database_Name], NULL AS Lst_Log_Backup, MAX(backup_finish_date) AS Lst_FullDiff_Backup
 			FROM msdb.dbo.backupset b (NOLOCK)
 				INNER JOIN tempdb.dbo.tmpdbs_userchoice tuc ON b.database_name = tuc.[dbname]
@@ -6093,7 +6171,7 @@ BEGIN
 			FROM master.sys.databases (NOLOCK)
 			WHERE database_id NOT IN (2,3)
 				AND recovery_model < 3)
-		-- not SIMPLE recovery model
+	-- not SIMPLE recovery model
 		GROUP BY database_name
 		HAVING MAX(backup_finish_date) > (SELECT MAX(backup_finish_date)
 			FROM msdb.dbo.backupset c (NOLOCK)
@@ -6108,9 +6186,11 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Log_Bcks_since_LstFullorDiff_are_older_than_24H' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Global trace flags subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Global trace flags subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Global trace flags', 10, 1) WITH NOWAIT
 	DECLARE @tracestatus TABLE (TraceFlag NVARCHAR(40),
 		[Status] tinyint,
@@ -6170,7 +6250,7 @@ INNER JOIN sys.objects AS o (NOLOCK) ON o.[object_id] = i.[object_id]
 INNER JOIN sys.tables AS mst (NOLOCK) ON mst.[object_id] = i.[object_id]
 INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 WHERE i.[type] IN (5,6,7)'
-				-- 5 = Clustered columnstore; 6 = Nonclustered columnstore; 7 = Nonclustered hash
+			-- 5 = Clustered columnstore; 6 = Nonclustered columnstore; 7 = Nonclustered hash
 
 				BEGIN TRY
 				INSERT INTO #tblColStoreIXs
@@ -6203,8 +6283,8 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], '[There are no Global Trace Flags active]' AS [Deviation]
 	END;
 
-	-- Plan affecting TFs: http://support.microsoft.com/kb/2801413 and https://support.microsoft.com/kb/2964518
-	-- All supported TFs: http://aka.ms/traceflags
+-- Plan affecting TFs: http://support.microsoft.com/kb/2801413 and https://support.microsoft.com/kb/2964518
+-- All supported TFs: http://aka.ms/traceflags
 	IF EXISTS (SELECT TraceFlag
 	FROM @tracestatus
 	WHERE [Global] = 1)
@@ -6525,7 +6605,7 @@ BEGIN
 				CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12 OR (@sqlmajorver >= 13 AND @min_compat_level < 130)
 				THEN '[INFORMATION: TF2371 changes the fixed rate of the 20pct threshold for update statistics into a dynamic percentage rate]'
 			WHEN @sqlmajorver >= 13 AND @min_compat_level >= 130
-				--TF2371 has no effect if all databases are at least at compatibility level 130.
+			--TF2371 has no effect if all databases are at least at compatibility level 130.
 				THEN '[WARNING: TF2371 is not needed in SQL 2016 and above when all databases are at compatibility level 130 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
@@ -6864,7 +6944,7 @@ BEGIN
 				'[INFORMATION: Consider enabling TF8048 to convert NUMA partitioned memory objects into CPU partitioned. Look in dm_os_wait_stats and dm_os_spin_stats for wait types (CMEMTHREAD and SOS_SUSPEND_QUEUE). Microsoft CSS usually sees the spins jump into the trillions and the waits become a hot spot]' --https://techcommunity.microsoft.com/t5/SQL-Server-Support/Running-SQL-Server-on-Machines-with-More-Than-8-CPUs-per-NUMA/ba-p/318513
 			AS [Deviation];
 
-			-- If the top consumers are partitioned by Node, then use startup trace flag 8048 to further partition by CPU.
+		-- If the top consumers are partitioned by Node, then use startup trace flag 8048 to further partition by CPU.
 			IF @sqlmajorver < 11
 		BEGIN
 				SELECT 'Instance_checks' AS [Category], 'Is_TF8048_Applicable' AS [Check], [type],
@@ -7037,24 +7117,26 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### System configurations subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### System configurations subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting System configurations', 10, 1) WITH NOWAIT
-	-- Focus on:
-	-- backup compression default
-	-- clr enabled (only enable if needed)
-	-- lightweight pooling (should be zero)
-	-- max degree of parallelism
-	-- cost threshold for parallelism 
-	-- max server memory (MB) (set to an appropriate value)
-	-- priority boost (should be zero)
-	-- remote admin connections (should be enabled in a cluster configuration, to allow remote DAC)
-	-- scan for startup procs (should be disabled unless business requirement, like replication)
-	-- min memory per query (default is 1024KB)
-	-- allow updates (no effect in 2005 or above, but should be off)
-	-- max worker threads (should be zero in 2005 or above)
-	-- affinity mask and affinity I/O mask (must not overlap)
+-- Focus on:
+-- backup compression default
+-- clr enabled (only enable if needed)
+-- lightweight pooling (should be zero)
+-- max degree of parallelism
+-- cost threshold for parallelism 
+-- max server memory (MB) (set to an appropriate value)
+-- priority boost (should be zero)
+-- remote admin connections (should be enabled in a cluster configuration, to allow remote DAC)
+-- scan for startup procs (should be disabled unless business requirement, like replication)
+-- min memory per query (default is 1024KB)
+-- allow updates (no effect in 2005 or above, but should be off)
+-- max worker threads (should be zero in 2005 or above)
+-- affinity mask and affinity I/O mask (must not overlap)
 
 	DECLARE @awe tinyint, @ssp bit, @bckcomp bit, @clr bit, @costparallel smallint, @chain bit, @lpooling bit
 	DECLARE @pboost bit, @qtimeout int, @cmdshell bit, @deftrace bit, @remote bit, @autoNUMA bit
@@ -7062,7 +7144,7 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 	DECLARE @ixmem smallint, @adhocqry bit, @locks int, @qrywait int--, @mwthreads_count int
 	DECLARE @affin int, @affinIO int, @affin64 int, @affin64IO int, @block_threshold int, @oleauto int
 
-	--SELECT @mwthreads_count = max_workers_count FROM sys.dm_os_sys_info;
+--SELECT @mwthreads_count = max_workers_count FROM sys.dm_os_sys_info;
 
 	SELECT @adhocqry = CONVERT(bit, [value])
 	FROM sys.configurations
@@ -7222,11 +7304,13 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### IFI subsection
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### IFI subsection
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting IFI', 10, 1) WITH NOWAIT
 	DECLARE @IFIStatus NVARCHAR(256)
 	IF ((@sqlmajorver = 13 AND @sqlbuild < 4000) OR @sqlmajorver < 13)
@@ -7301,13 +7385,13 @@ BEGIN
 		BEGIN
 				RAISERROR('[WARNING: Only a sysadmin can run the "Instant Initialization" check. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 				RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: xp_cmdshell. Bypassing check]', 16, 1, N'extended_sprocs')
-			--RETURN
+		--RETURN
 			END
 		END
 	ELSE
 	BEGIN
 			RAISERROR('    |- [INFORMATION: "Instant Initialization" check was skipped because xp_cmdshell was not allowed.]', 10, 1, N'disallow_xp_cmdshell')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE IF ((@sqlmajorver = 13 AND @sqlbuild >= 4000) OR @sqlmajorver > 13)
@@ -7327,9 +7411,11 @@ BEGIN
 		END
 	END;
 	INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('ifi', @ifi )
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Full Text Configurations subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Full Text Configurations subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Full Text Configurations', 10, 1) WITH NOWAIT
 	DECLARE @FullTextDefaultPath NVARCHAR(512), @fterr tinyint
 	DECLARE @fttbl TABLE ([KeyExist] int)
@@ -7367,7 +7453,7 @@ BEGIN
 	ELSE
 	BEGIN
 			RAISERROR('[WARNING: Missing permissions for full "Full Text Configurations" checks. Bypassing Full Text path check]', 16, 1, N'sysadmin')
-		--RETURN
+	--RETURN
 		END
 
 		INSERT INTO @FullTextDetails
@@ -7420,9 +7506,11 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Full_Text' AS [Check], NULL AS [Deviation], '[FullText search is not installed]' AS [Comment];
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Deprecated features subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Deprecated features subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Deprecated or Discontinued features', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(instance_name)
 	FROM sys.dm_os_performance_counters
@@ -7483,7 +7571,7 @@ BEGIN
 		(
 			KeywordID int IDENTITY(1,1) PRIMARY KEY,
 			Keyword VARCHAR(64),
-			-- the keyword itself
+		-- the keyword itself
 			DeprecatedIn tinyint,
 			DiscontinuedIn tinyint
 		);
@@ -7495,7 +7583,7 @@ BEGIN
 
 		INSERT INTO ##tblKeywords
 			(Keyword, DeprecatedIn, DiscontinuedIn)
-		-- discontinued on sql 2005
+	-- discontinued on sql 2005
 																																																																																																																																																																																																																																																																																																																																																																																																																									SELECT 'disk init', NULL, 9
 		UNION ALL
 			SELECT 'disk resize', NULL, 9
@@ -7520,7 +7608,7 @@ BEGIN
 		UNION ALL
 			SELECT '=*', NULL, 9
 		UNION ALL
-			-- deprecated on sql 2005 and not yet discontinued
+		-- deprecated on sql 2005 and not yet discontinued
 			SELECT 'setuser', 9, NULL
 		UNION ALL
 			SELECT 'sp_helpdevice', 9, NULL
@@ -7653,7 +7741,7 @@ BEGIN
 		UNION ALL
 			SELECT 'textvalid', 9, NULL
 		UNION ALL
-			-- discontinued on sql 2008
+		-- discontinued on sql 2008
 			SELECT 'sp_addalias', 9, 10
 		UNION ALL
 			SELECT 'no_log', 9, 10
@@ -7684,7 +7772,7 @@ BEGIN
 		UNION ALL
 			SELECT 'load', 9, 10
 		UNION ALL
-			-- undocumented system stored procedures are removed from sql server:
+		-- undocumented system stored procedures are removed from sql server:
 			SELECT 'sp_articlesynctranprocs', NULL, 10
 		UNION ALL
 			SELECT 'sp_diskdefault', NULL, 10
@@ -7729,7 +7817,7 @@ BEGIN
 		UNION ALL
 			SELECT 'xp_varbintohexstr', NULL, 10
 		UNION ALL
-			-- undocumented system tables are removed from sql server:
+		-- undocumented system tables are removed from sql server:
 			SELECT 'spt_datatype_info', NULL, 10
 		UNION ALL
 			SELECT 'spt_datatype_info_ext', NULL, 10
@@ -7778,7 +7866,7 @@ BEGIN
 		UNION ALL
 			SELECT 'sysxlogins', NULL, 10
 		UNION ALL
-			-- deprecated on sql 2008 and not yet discontinued
+		-- deprecated on sql 2008 and not yet discontinued
 			SELECT 'sp_droptype', 10, NULL
 		UNION ALL
 			SELECT '@@remserver', 10, NULL
@@ -7811,19 +7899,19 @@ BEGIN
 		UNION ALL
 			SELECT 'set rowcount', 10, NULL
 		UNION ALL
-			-- discontinued on sql 2012
+		-- discontinued on sql 2012
 			SELECT 'dbo_only', 9, 11
 		UNION ALL
-			-- on restore statements
+		-- on restore statements
 			SELECT 'mediapassword', 9, 11
 		UNION ALL
-			-- on backup statements
+		-- on backup statements
 			SELECT 'password', 9, 11
 		UNION ALL
-			-- on backup statements except for media
+		-- on backup statements except for media
 			SELECT 'with append', 10, 11
 		UNION ALL
-			-- on triggers
+		-- on triggers
 			SELECT 'sp_dboption', 9, 11
 		UNION ALL
 			SELECT 'databaseproperty', 9, 11
@@ -7832,7 +7920,7 @@ BEGIN
 		UNION ALL
 			SELECT 'sp_addserver', 10, 11
 		UNION ALL
-			-- for linked servers
+		-- for linked servers
 			SELECT 'sp_dropalias', 9, 11
 		UNION ALL
 			SELECT 'disable_def_cnst_chk', 10, 11
@@ -7849,7 +7937,7 @@ BEGIN
 		UNION ALL
 			SELECT 'compute by', 10, 11
 		UNION ALL
-			-- deprecated on sql 2012 and not yet discontinued
+		-- deprecated on sql 2012 and not yet discontinued
 			SELECT 'sp_change_users_login', 11, NULL
 		UNION ALL
 			SELECT 'sp_depends', 11, NULL
@@ -7876,7 +7964,7 @@ BEGIN
 		UNION ALL
 			SELECT 'set offsets', 11, NULL
 		UNION ALL
-			-- deprecated on sql 2014 and not yet discontinued
+		-- deprecated on sql 2014 and not yet discontinued
 			SELECT 'sys.numbered_procedures', 12, NULL
 		UNION ALL
 			SELECT 'sys.numbered_procedure_parameters', 12, NULL
@@ -7911,15 +7999,15 @@ BEGIN
 		UNION ALL
 			SELECT 'sys.trace_subclass_values', 12, NULL
 		UNION ALL
-			-- discontinued on sql 2019
+		-- discontinued on sql 2019
 			SELECT 'disable_interleaved_execution_tvf', 10, 15
 		UNION ALL
-			-- as DB Scoped config
+		-- as DB Scoped config
 			SELECT 'disable_batch_mode_memory_grant_feedback', 10, 15
 		UNION ALL
-			-- as DB Scoped config
-			SELECT 'disable_batch_mode_adaptive_joins', 10, 15
 		-- as DB Scoped config
+			SELECT 'disable_batch_mode_adaptive_joins', 10, 15
+	-- as DB Scoped config
 
 		UPDATE tempdb.dbo.tmpdbs0
 	SET isdone = 0;
@@ -8027,9 +8115,11 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Deprecated_Discontinued_features' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Default data collections subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Default data collections subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting default data collections', 10, 1) WITH NOWAIT
 	IF EXISTS (SELECT TOP 1
 		id
@@ -8106,9 +8196,11 @@ BEGIN
 
 	RAISERROR (N'|-Starting Database and tempDB Checks', 10, 1) WITH NOWAIT
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### User objects in master DB
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### User objects in master DB
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting User Objects in master DB', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(name)
 	FROM master.sys.all_objects
@@ -8127,9 +8219,11 @@ BEGIN
 		SELECT 'Database_checks' AS [Category], 'User_Objects_in_master' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### DBs with collation <> master subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### DBs with collation <> master subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting DBs with collation <> master', 10, 1) WITH NOWAIT
 	DECLARE @master_collate NVARCHAR(128), @dif_collate int
 	SELECT @master_collate = collation_name
@@ -8151,9 +8245,11 @@ BEGIN
 		SELECT 'Database_checks' AS [Category], 'Collations' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### DBs with skewed compatibility level subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### DBs with skewed compatibility level subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting DBs with skewed compatibility level', 10, 1) WITH NOWAIT
 	DECLARE @dif_compat int
 	SELECT @dif_compat = COUNT([compatibility_level])
@@ -8172,9 +8268,11 @@ BEGIN
 		SELECT 'Database_checks' AS [Category], 'Compatibility_Level' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### User DBs with non-default options subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### User DBs with non-default options subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting User DBs with non-default options', 10, 1) WITH NOWAIT
 	DECLARE @cnt int, @cnt_i int
 	DECLARE @is_auto_close_on bit, @is_auto_shrink_on bit, @page_verify_option bit
@@ -8191,7 +8289,7 @@ BEGIN
 		is_auto_create_stats_on bit,
 		is_auto_update_stats_on bit,
 		is_db_chaining_on bit,
-		--is_indirect_checkpoint_on bit,
+	--is_indirect_checkpoint_on bit,
 		is_auto_create_stats_incremental_on bit NULL,
 		is_trustworthy_on bit,
 		is_parameterization_forced bit)
@@ -8201,7 +8299,7 @@ BEGIN
 		SET @sqlcmd = 'SELECT ROW_NUMBER() OVER(ORDER BY name), name, is_auto_close_on, 
 	is_auto_shrink_on, page_verify_option, page_verify_option_desc,	
 	is_auto_create_stats_on, is_auto_update_stats_on, is_db_chaining_on,
-	--0 AS is_indirect_checkpoint_on, 
+--0 AS is_indirect_checkpoint_on, 
 	NULL AS is_auto_create_stats_incremental_on, 
 	is_trustworthy_on, is_parameterization_forced
 FROM master.sys.databases (NOLOCK)
@@ -8213,7 +8311,7 @@ BEGIN
 	is_auto_shrink_on, page_verify_option, page_verify_option_desc,	
 	is_auto_create_stats_on, is_auto_update_stats_on, 
 	is_db_chaining_on, 
-	--CASE WHEN target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on, 
+--CASE WHEN target_recovery_time_in_seconds > 0 THEN 1 ELSE 0 END AS is_indirect_checkpoint_on, 
 	is_auto_create_stats_incremental_on, 
 	is_trustworthy_on, is_parameterization_forced
 FROM master.sys.databases (NOLOCK)
@@ -8237,7 +8335,7 @@ BEGIN
 			@is_auto_create_stats_on = CASE WHEN is_auto_create_stats_on = 0 AND @is_auto_create_stats_on = 0 THEN 1 ELSE @is_auto_create_stats_on END,
 			@is_auto_update_stats_on = CASE WHEN is_auto_update_stats_on = 0 AND @is_auto_update_stats_on = 0 THEN 1 ELSE @is_auto_update_stats_on END,
 			@is_db_chaining_on = CASE WHEN is_db_chaining_on = 1 AND @is_db_chaining_on = 0 THEN 1 ELSE @is_db_chaining_on END,
-			--@is_indirect_checkpoint_on = CASE WHEN is_indirect_checkpoint_on = 1 AND @is_indirect_checkpoint_on = 0 THEN 1 ELSE @is_indirect_checkpoint_on END,
+		--@is_indirect_checkpoint_on = CASE WHEN is_indirect_checkpoint_on = 1 AND @is_indirect_checkpoint_on = 0 THEN 1 ELSE @is_indirect_checkpoint_on END,
 			@is_auto_create_stats_incremental_on = CASE WHEN is_auto_create_stats_incremental_on = 1 AND @is_auto_create_stats_incremental_on IS NULL THEN 1 ELSE @is_auto_create_stats_incremental_on END,
 			@is_trustworthy_on = CASE WHEN is_trustworthy_on = 1 AND @is_trustworthy_on = 0 THEN 1 ELSE @is_trustworthy_on END,
 			@is_parameterization_forced = CASE WHEN is_parameterization_forced = 1 AND @is_parameterization_forced = 0 THEN 1 ELSE @is_parameterization_forced END
@@ -8258,7 +8356,7 @@ BEGIN
 			CASE WHEN is_auto_create_stats_on = 0 THEN 'Auto_Create_Stats;' ELSE '' END +
 			CASE WHEN is_auto_update_stats_on = 0 THEN 'Auto_Update_Stats;' ELSE '' END +
 			CASE WHEN is_db_chaining_on = 1 THEN 'DB_Chaining;' ELSE '' END +
-			--CASE WHEN is_indirect_checkpoint_on = 1 THEN 'Indirect_Checkpoint;' ELSE '' END +
+		--CASE WHEN is_indirect_checkpoint_on = 1 THEN 'Indirect_Checkpoint;' ELSE '' END +
 			CASE WHEN is_auto_create_stats_incremental_on = 0 THEN 'Incremental_Stats;' ELSE '' END +
 			CASE WHEN is_trustworthy_on = 1 THEN 'Trustworthy_bit;' ELSE '' END +
 			CASE WHEN is_parameterization_forced = 1 THEN 'Forced_Parameterization;' ELSE '' END
@@ -8269,7 +8367,7 @@ BEGIN
 			CASE WHEN is_auto_create_stats_on = 1 THEN 'ON' ELSE 'OFF' END AS [Auto_Create_Stats],
 			CASE WHEN is_auto_update_stats_on = 1 THEN 'ON' ELSE 'OFF' END AS [Auto_Update_Stats],
 			CASE WHEN is_db_chaining_on = 1 THEN 'ON' ELSE 'OFF' END AS [DB_Chaining],
-			--CASE WHEN is_indirect_checkpoint_on = 1 THEN 'ON' ELSE 'OFF' END AS [Indirect_Checkpoint], -- Meant just as a warning that Indirect_Checkpoint is ON. Should be OFF in OLTP systems. Check for high Background Writer Pages/sec counter.
+		--CASE WHEN is_indirect_checkpoint_on = 1 THEN 'ON' ELSE 'OFF' END AS [Indirect_Checkpoint], -- Meant just as a warning that Indirect_Checkpoint is ON. Should be OFF in OLTP systems. Check for high Background Writer Pages/sec counter.
 			CASE WHEN is_auto_create_stats_incremental_on = 1 THEN 'ON' WHEN is_auto_create_stats_incremental_on = 1 THEN 'NA' ELSE 'OFF' END AS [Incremental_Stats],
 			CASE WHEN is_trustworthy_on = 1 THEN 'ON' ELSE 'OFF' END AS [Trustworthy_bit],
 			CASE WHEN is_parameterization_forced = 1 THEN 'ON' ELSE 'OFF' END AS [Forced_Parameterization]
@@ -8296,9 +8394,11 @@ BEGIN
 		SELECT 'Database_checks' AS [Category], 'Database_Options_Disabled_Async_AutoUpdate' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Query Store info subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Query Store info subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @sqlmajorver > 12
 BEGIN
 		RAISERROR (N'  |-Starting Query Store info', 10, 1) WITH NOWAIT
@@ -8383,9 +8483,11 @@ ELSE
 		SELECT 'Information' AS [Category], 'Query_Store' AS [Information] , '[INFORMATION: No databases have Query Store enabled]' AS [Comment];
 	END
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Automatic Tuning info subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Automatic Tuning info subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Automatic Tuning info', 10, 1) WITH NOWAIT
 IF @sqlmajorver > 13
 BEGIN
@@ -8459,11 +8561,13 @@ ELSE
 BEGIN  
 	SELECT 'Information' AS [Category], 'Automatic_Tuning' AS [Information] , '[INFORMATION: No databases have Automatic Tuning enabled]' AS [Comment];
 END
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### DBs with Sparse files subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### DBs with Sparse files subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting DBs with Sparse files', 10, 1) WITH NOWAIT
-	-- https://techcommunity.microsoft.com/t5/SQL-Server-Support/Did-your-backup-program-utility-leave-your-SQL-Server-running-in/ba-p/315840
+-- https://techcommunity.microsoft.com/t5/SQL-Server-Support/Did-your-backup-program-utility-leave-your-SQL-Server-running-in/ba-p/315840
 	IF (SELECT COUNT(sd.database_id)
 	FROM sys.databases sd INNER JOIN sys.master_files smf ON sd.database_id = smf.database_id
 	WHERE sd.source_database_id IS NULL AND smf.is_sparse = 1) > 0
@@ -8479,9 +8583,11 @@ BEGIN
 		SELECT 'Database_checks' AS [Category], 'DB_nonSnap_Sparse' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### DBs Autogrow in percentage subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### DBs Autogrow in percentage subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting DBs Autogrow in percentage', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(is_percent_growth)
 	FROM sys.master_files
@@ -8513,9 +8619,11 @@ BEGIN
 		SELECT 'Database_checks' AS [Category], 'Percent_Autogrows' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled) subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled) subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting DBs Autogrowth > 1GB in Logs or Data (when IFI is disabled)', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(growth)
 	FROM sys.master_files (NOLOCK)
@@ -8553,9 +8661,11 @@ BEGIN
 		SELECT 'Database_checks' AS [Category], 'Large_Autogrows' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### VLF subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### VLF subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting VLF', 10, 1) WITH NOWAIT
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1
 BEGIN
@@ -8685,10 +8795,10 @@ BEGIN
 
 					DROP TABLE #log_info3;
 
-					-- Grow logs in MB instead of GB because of known issue prior to SQL 2012.
-					-- More detail here: http://www.sqlskills.com/BLOGS/PAUL/post/Bug-log-file-growth-broken-for-multiples-of-4GB.aspx
-					-- and http://connect.microsoft.com/SQLServer/feedback/details/481594/log-growth-not-working-properly-with-specific-growth-sizes-vlfs-also-not-created-appropriately
-					-- or https://connect.microsoft.com/SQLServer/feedback/details/357502/transaction-log-file-size-will-not-grow-exactly-4gb-when-filegrowth-4gb
+				-- Grow logs in MB instead of GB because of known issue prior to SQL 2012.
+				-- More detail here: http://www.sqlskills.com/BLOGS/PAUL/post/Bug-log-file-growth-broken-for-multiples-of-4GB.aspx
+				-- and http://connect.microsoft.com/SQLServer/feedback/details/481594/log-growth-not-working-properly-with-specific-growth-sizes-vlfs-also-not-created-appropriately
+				-- or https://connect.microsoft.com/SQLServer/feedback/details/357502/transaction-log-file-size-will-not-grow-exactly-4gb-when-filegrowth-4gb
 					IF @sqlmajorver >= 11
 				BEGIN
 						SET @n_iter = (SELECT CASE WHEN @logsize <= 64 THEN 1
@@ -8728,15 +8838,15 @@ BEGIN
 						END)
 					END
 
-					-- If the proposed log size is smaller than current log, and also smaller than 4GB,
-					-- and there is less than 512MB of diff between the current size and proposed size, add 1 grow.
+				-- If the proposed log size is smaller than current log, and also smaller than 4GB,
+				-- and there is less than 512MB of diff between the current size and proposed size, add 1 grow.
 					SET @n_iter_final = @n_iter
 					IF @logsize > @potsize AND @potsize <= 4096 AND ABS(@logsize - @potsize) < 512
 				BEGIN
 						SET @n_iter_final = @n_iter + 1
 					END
-				-- If the proposed log size is larger than current log, and also larger than 50GB, 
-				-- and there is less than 1GB of diff between the current size and proposed size, take 1 grow.
+			-- If the proposed log size is larger than current log, and also larger than 50GB, 
+			-- and there is less than 1GB of diff between the current size and proposed size, take 1 grow.
 				ELSE IF @logsize < @potsize AND @potsize <= 51200 AND ABS(@logsize - @potsize) > 1024
 				BEGIN
 						SET @n_iter_final = @n_iter - 1
@@ -8802,21 +8912,21 @@ BEGIN
 				Potential_log_size_MB, Current_VLFs, Used_VLFs, Potential_VLFs, Growth_iterations, Log_Initial_size_MB, File_autogrow_MB
 			FROM #log_info1
 			WHERE Current_VLFs >= 50
-			-- My rule of thumb is 50 VLFs. Your mileage may vary.
+		-- My rule of thumb is 50 VLFs. Your mileage may vary.
 			ORDER BY dbname;
 
 			SELECT 'Database_checks' AS [Category], 'Virtual_Log_Files_per_growth' AS [Information], #log_info2.dbname AS [Database_Name], #log_info2.Current_VLFs AS VLFs_remain_per_spawn, VLF_size_KB, growth_iteration
 			FROM #log_info2
 				INNER JOIN #log_info1 ON #log_info2.dbname = #log_info1.dbname
 			WHERE #log_info1.Current_VLFs >= 50
-			-- My rule of thumb is 50 VLFs. Your mileage may vary.
+		-- My rule of thumb is 50 VLFs. Your mileage may vary.
 			ORDER BY #log_info2.dbname, growth_iteration
 
 			SELECT 'Database_checks' AS [Category], 'Virtual_Log_Files_agg_per_size' AS [Information], #log_info2.dbname AS [Database_Name], SUM(#log_info2.Current_VLFs) AS VLFs_per_size, VLF_size_KB
 			FROM #log_info2
 				INNER JOIN #log_info1 ON #log_info2.dbname = #log_info1.dbname
 			WHERE #log_info1.Current_VLFs >= 50
-			-- My rule of thumb is 50 VLFs. Your mileage may vary.
+		-- My rule of thumb is 50 VLFs. Your mileage may vary.
 			GROUP BY #log_info2.dbname, VLF_size_KB
 			ORDER BY #log_info2.dbname, VLF_size_KB DESC
 		END
@@ -8843,16 +8953,18 @@ BEGIN
 ELSE
 BEGIN
 		RAISERROR('[WARNING: Only a sysadmin can run the "VLF" check. Bypassing check]', 16, 1, N'sysadmin')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Data files and Logs / tempDB and user Databases / Backups and Database files in same volume (Mountpoint aware) subsection
-	-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
-	-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
-	-- - Set @custompath below and set the custom desired path for .ps1 files. 
-	-- - If not, default location for .ps1 files is the Log folder.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Data files and Logs / tempDB and user Databases / Backups and Database files in same volume (Mountpoint aware) subsection
+-- - You can set @allow_xpcmdshell to OFF if you want to skip checks that are dependant on xp_cmdshell. 
+-- - Note that original server setting for xp_cmdshell would be left unchanged if tests were allowed.
+-- - Set @custompath below and set the custom desired path for .ps1 files. 
+-- - If not, default location for .ps1 files is the Log folder.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Data files and Logs / tempDB and user Databases / Backups and Database files in same volume (Mountpoint aware)', 10, 1) WITH NOWAIT
 	IF @allow_xpcmdshell = 1
 BEGIN
@@ -8959,7 +9071,7 @@ BEGIN
 							EXECUTE sp_executesql @sqlcmd, @params, @pathOUT=@path OUTPUT;
 						END
 
-						-- Create COM object with FSO
+					-- Create COM object with FSO
 						EXEC @OLEResult = master.dbo.sp_OACreate 'Scripting.FileSystemObject', @FSO OUT
 						IF @OLEResult <> 0
 					BEGIN
@@ -8997,7 +9109,7 @@ BEGIN
 					EXEC master.dbo.xp_fileexist @FileName, @existout out
 					IF @existout = 0
 				BEGIN
-						-- Scan for local disks
+					-- Scan for local disks
 						SET @Text1 = '[string] $serverName = ''localhost''
 $vols = Get-WmiObject -computername $serverName -query "select Name from Win32_Volume where Capacity <> NULL and DriveType = 3"
 foreach($vol in $vols)
@@ -9005,7 +9117,7 @@ foreach($vol in $vols)
 	[string] $drive = "{0}" -f $vol.name
 	Write-Output $drive
 }'
-						-- Create COM object with FSO
+					-- Create COM object with FSO
 						EXEC @OLEResult = master.dbo.sp_OACreate 'Scripting.FileSystemObject', @FS OUT
 						IF @OLEResult <> 0
 					BEGIN
@@ -9014,7 +9126,7 @@ foreach($vol in $vols)
 							RAISERROR (@ErrorMessage, 16, 1, @OLEResult, @src, @desc);
 						END
 
-						--Open file
+					--Open file
 						EXEC @OLEResult = master.dbo.sp_OAMethod @FS, 'OpenTextFile', @FileID OUT, @FileName, 2, 1
 						IF @OLEResult <> 0
 					BEGIN
@@ -9028,7 +9140,7 @@ foreach($vol in $vols)
 							RAISERROR (@ErrorMessage, 10, 1) WITH NOWAIT
 						END
 
-						--Write Text1
+					--Write Text1
 						EXEC @OLEResult = master.dbo.sp_OAMethod @FileID, 'WriteLine', NULL, @Text1
 						IF @OLEResult <> 0
 					BEGIN
@@ -9122,7 +9234,7 @@ Windows PowerShell has four different execution policies:
 
 			IF @pserr = 0
 		BEGIN
-				-- select mountpoints only
+			-- select mountpoints only
 				DECLARE @intertbl TABLE (physical_name nvarchar(260))
 				INSERT INTO @intertbl
 				SELECT physical_name
@@ -9131,7 +9243,7 @@ Windows PowerShell has four different execution policies:
 				WHERE ([database_id] > 4 OR [database_id] = 2)
 					AND [database_id] <> 32767 AND LEN(t2.HD_Volume) > 3
 
-				-- select database files in mountpoints		
+			-- select database files in mountpoints		
 				DECLARE @filetbl TABLE (database_id int,
 					type tinyint,
 					file_id int,
@@ -9143,7 +9255,7 @@ Windows PowerShell has four different execution policies:
 						INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 					WHERE ([database_id] > 4 OR [database_id] = 2) AND [database_id] <> 32767 AND LEN(t2.HD_Volume) > 3
 				UNION ALL
-					-- select database files not in mountpoints
+				-- select database files not in mountpoints
 					SELECT database_id, type, file_id, physical_name, volid
 					FROM sys.master_files t1 (NOLOCK)
 						INNER JOIN @output_hw_format t2 ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
@@ -9175,7 +9287,7 @@ Windows PowerShell has four different execution policies:
 					SELECT 'Database_checks' AS [Category], 'Data_and_Log_locations' AS [Check], '[OK]' AS [Deviation]
 				END;
 
-				-- select backup mountpoints only
+			-- select backup mountpoints only
 				DECLARE @interbcktbl TABLE (physical_device_name nvarchar(260))
 				INSERT INTO @interbcktbl
 				SELECT physical_device_name
@@ -9183,7 +9295,7 @@ Windows PowerShell has four different execution policies:
 					INNER JOIN @output_hw_format t2 ON LEFT(physical_device_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 				WHERE LEN(t2.HD_Volume) > 3
 
-				-- select backups in mountpoints only
+			-- select backups in mountpoints only
 				DECLARE @bcktbl TABLE (physical_device_name nvarchar(260),
 					HD_Volume nvarchar(260))
 				INSERT INTO @bcktbl
@@ -9191,7 +9303,7 @@ Windows PowerShell has four different execution policies:
 					FROM msdb.dbo.backupmediafamily t1 (NOLOCK)
 						INNER JOIN @output_hw_format t2 ON LEFT(physical_device_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 					WHERE LEN(t2.HD_Volume) > 3
-					-- select backups not in mountpoints
+				-- select backups not in mountpoints
 				UNION ALL
 					SELECT physical_device_name, RTRIM(t2.HD_Volume)
 					FROM msdb.dbo.backupmediafamily t1 (NOLOCK)
@@ -9215,7 +9327,7 @@ Windows PowerShell has four different execution policies:
 					SELECT 'Database_checks' AS [Category], 'Backup_and_Database_locations' AS [Check], '[OK]' AS [Deviation]
 				END;
 
-				-- select tempDB mountpoints only
+			-- select tempDB mountpoints only
 				DECLARE @intertbl2 TABLE (physical_name nvarchar(260))
 				INSERT INTO @intertbl2
 				SELECT physical_name
@@ -9223,7 +9335,7 @@ Windows PowerShell has four different execution policies:
 					ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 				WHERE [database_id] = 2 AND LEN(t2.HD_Volume) > 3 AND [type] = 0
 
-				-- select user DBs mountpoints only
+			-- select user DBs mountpoints only
 				DECLARE @intertbl3 TABLE (physical_name nvarchar(260))
 				INSERT INTO @intertbl3
 				SELECT physical_name
@@ -9231,7 +9343,7 @@ Windows PowerShell has four different execution policies:
 					ON LEFT(physical_name, LEN(t2.HD_Volume)) = RTRIM(t2.HD_Volume)
 				WHERE [database_id] > 4 AND [database_id] <> 32767 AND LEN(t2.HD_Volume) > 3 AND [type] = 0
 
-				-- select tempDB files in mountpoints		
+			-- select tempDB files in mountpoints		
 				DECLARE @tempDBtbl TABLE (database_id int,
 					type tinyint,
 					file_id int,
@@ -9247,7 +9359,7 @@ Windows PowerShell has four different execution policies:
 					WHERE [database_id] = 2 AND [type] = 0 AND physical_name NOT IN (SELECT physical_name
 						FROM @intertbl2)
 
-				-- select user DBs files in mountpoints		
+			-- select user DBs files in mountpoints		
 				DECLARE @otherstbl TABLE (database_id int,
 					type tinyint,
 					file_id int,
@@ -9306,18 +9418,20 @@ Windows PowerShell has four different execution policies:
 	BEGIN
 			RAISERROR('[WARNING: Only a sysadmin can run the "Data files and Logs / tempDB and user Databases in same volume" checks. A regular user can also run this check if a xp_cmdshell proxy account exists. Bypassing check]', 16, 1, N'xp_cmdshellproxy')
 			RAISERROR('[WARNING: If not sysadmin, then must be a granted EXECUTE permissions on the following extended sprocs to run checks: sp_OACreate, sp_OADestroy, sp_OAGetErrorInfo, xp_cmdshell, xp_instance_regread, xp_regread, xp_fileexist and xp_regenumvalues. Bypassing check]', 16, 1, N'extended_sprocs')
-		--RETURN
+	--RETURN
 		END
 	END
 ELSE
 BEGIN
 		RAISERROR('    |- [INFORMATION: "Data files and Logs / tempDB and user Databases in same volume" check was skipped because xp_cmdshell was not allowed]', 10, 1, N'disallow_xp_cmdshell')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### tempDB data file configurations subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### tempDB data file configurations subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting tempDB data file configurations', 10, 1) WITH NOWAIT
 	DECLARE @tdb_files int, @online_count int, @filesizes smallint
 	SELECT @tdb_files = COUNT(physical_name)
@@ -9352,9 +9466,11 @@ BEGIN
 		WHERE type = 0;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### tempDB data files autogrow of equal size subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### tempDB data files autogrow of equal size subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting tempDB Files autogrow of equal size', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(DISTINCT growth)
 		FROM sys.master_files
@@ -9387,12 +9503,14 @@ BEGIN
 		SELECT 'tempDB_checks' AS [Category], 'tempDB_files_Autogrow' AS [Check], '[OK]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Perf counters, Waits, Latches and Spinlocks subsection
-	-- You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	-- You can set @duration to the number of seconds between data collection points regarding perf counters, waits and latches. 
-	-- - Duration must be between 10s and 255s (4m 15s), with a default of 90s.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Perf counters, Waits, Latches and Spinlocks subsection
+-- You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+-- You can set @duration to the number of seconds between data collection points regarding perf counters, waits and latches. 
+-- - Duration must be between 10s and 255s (4m 15s), with a default of 90s.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 RAISERROR (N'|-Starting Performance Checks', 10, 1) WITH NOWAIT
 	IF @ptochecks = 1
@@ -9433,7 +9551,7 @@ BEGIN
 			[counter_value] float NULL
 		);
 
-		-- Create the helper function
+	-- Create the helper function
 		EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 		EXEC ('USE tempdb; EXEC(''
 CREATE FUNCTION dbo.fn_perfctr (@ctr1Fam NVARCHAR(128), @ctr1 NVARCHAR(128))
@@ -9442,8 +9560,8 @@ AS
 BEGIN
 	DECLARE @ReturnVals float, @ctr1Val float, @ctr2Val float, @ctr2Fam NVARCHAR(128), @ctr2 NVARCHAR(128), @type tinyint
 	
-	-- ctr1Fam = source counter object; ctr1 = source counter; ctr2Fam = counter object to compare with; ctr2 = counter to compare with
-	-- Type 1 = ratio between source and compare (Ex. 1 per each 10); 2 = pct ratio between source and compare (Ex. 10 pct of compare counter); 3 = ratio between compare and source; 4 = pct ratio between compare and source
+-- ctr1Fam = source counter object; ctr1 = source counter; ctr2Fam = counter object to compare with; ctr2 = counter to compare with
+-- Type 1 = ratio between source and compare (Ex. 1 per each 10); 2 = pct ratio between source and compare (Ex. 10 pct of compare counter); 3 = ratio between compare and source; 4 = pct ratio between compare and source
 
 	IF @ctr1 IN (''''Forwarded Records/sec'''',''''FreeSpace Scans/sec'''',''''Page Splits/sec'''',''''Workfiles Created/sec'''',''''Page lookups/sec'''',''''SQL Compilations/sec'''') 
 		SELECT @ctr2Fam = ''''SQLServer:SQL Statistics'''', @ctr2 = ''''Batch Requests/sec'''', @type = 1 
@@ -9468,7 +9586,7 @@ BEGIN
 	IF @ctr1 = ''''Target Server Memory (KB)''''
 	SELECT @ctr1Val = @ctr1Val / 1024, @ctr2Val = @ctr2Val / 1024
 	
-	--Find ratio between counter 1 and 2
+--Find ratio between counter 1 and 2
 	IF @ctr1Val IS NULL OR @ctr2Val IS NULL
 	BEGIN
 		SELECT @ReturnVals = NULL
@@ -9614,11 +9732,11 @@ END'')
 
 		SELECT @minctr = GETDATE()
 
-		-- When counter type = 272696576 (find delta from two collection points)
-		-- When counter type = 65792 (face value)
-		-- When counter type = 1073939712 (base value, check next counter types)
-		-- When counter type = 1073874176 (find delta from current value and base value between two collection points). Base value is counter with type 1073939712.
-		-- When counter type = 537003264 (find delta from current value and base value). Base value is counter with type 1073939712.
+	-- When counter type = 272696576 (find delta from two collection points)
+	-- When counter type = 65792 (face value)
+	-- When counter type = 1073939712 (base value, check next counter types)
+	-- When counter type = 1073874176 (find delta from current value and base value between two collection points). Base value is counter with type 1073939712.
+	-- When counter type = 537003264 (find delta from current value and base value). Base value is counter with type 1073939712.
 
 		INSERT INTO #tblPerfCount
 		SELECT @minctr, [object_name], counter_name, instance_name, cntr_type AS counter_name_type, cntr_value
@@ -10017,31 +10135,31 @@ END'')
 		HAVING (t2.wait_time_ms-t1.wait_time_ms) > 0
 		ORDER BY wait_time_s DESC;
 
-		-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/library/cc917684.aspx
-		-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
-		-- LATCH = indicates contention for access to some non-page structures. ACCESS_METHODS_DATASET_PARENT, ACCESS_METHODS_SCAN_RANGE_GENERATOR or NESTING_TRANSACTION_FULL latches indicate parallelism issues;
-		-- PAGELATCH = indicates contention for access to in-memory copies of pages, like PFS, SGAM and GAM; 
-		-- PAGELATCH_UP = Does the filegroup have enough files? Contention in PFS?
-		-- PAGELATCH_EX = Contention while doing many UPDATE statements against small tables? 
-		-- PAGELATCH_EX = Many concurrent INSERT statements into a table that has an index on an IDENTITY or NEWSEQUENTIALID column? -> https://techcommunity.microsoft.com/t5/SQL-Server/PAGELATCH-EX-waits-and-heavy-inserts/ba-p/384289
-		-- PAGEIOLATCH = indicates IO problems, or BP pressure.
-		-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
-		-- IO_COMPLETION = usually TempDB spilling; 
-		-- ASYNC_IO_COMPLETION = usually when not using IFI, or waiting on backups.
-		-- DISKIO_SUSPEND = High wait times here indicate the SNAPSHOT BACKUP may be taking longer than expected. Typically the delay is within the VDI application perform the snapshot backup;
-		-- BACKUPIO = check for slow backup media slow, like Tapes or Disks;
-		-- BACKUPBUFFER = usually when backing up to Tape;
-		-- Check sys.dm_os_waiting_tasks for Exchange wait types in https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-os-waiting-tasks-transact-sql
-		-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
-		-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
-		-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
-		-- HT* = batch mode syncpoint waits, probably large parallel table scans;   
-		-- WRITELOG = log management system waiting for a log flush to disk. Examine the I/O latency for the log file
-		-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> https://techcommunity.microsoft.com/t5/SQL-Server-Support/How-It-Works-CMemThread-and-Debugging-Them/ba-p/317488
-		-- SOS_RESERVEDMEMBLOCKLIST = look for procedures with a large number of parameters, or queries with a long list of expression values specified in an IN clause, which would require multi-page allocations
-		-- RESOURCE_SEMAPHORE_SMALL_QUERY or RESOURCE_SEMAPHORE = queries are waiting for execution memory. Look for plans with excessive hashing or sorts.
-		-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS. -> http://technet.microsoft.com/library/cc293620.aspx
-		-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
+	-- SOS_SCHEDULER_YIELD = Might indicate CPU pressure if very high overall percentage. Check yielding conditions in http://technet.microsoft.com/library/cc917684.aspx
+	-- THREADPOOL = Look for high blocking or contention problems with workers. This will not show up in sys.dm_exec_requests;
+	-- LATCH = indicates contention for access to some non-page structures. ACCESS_METHODS_DATASET_PARENT, ACCESS_METHODS_SCAN_RANGE_GENERATOR or NESTING_TRANSACTION_FULL latches indicate parallelism issues;
+	-- PAGELATCH = indicates contention for access to in-memory copies of pages, like PFS, SGAM and GAM; 
+	-- PAGELATCH_UP = Does the filegroup have enough files? Contention in PFS?
+	-- PAGELATCH_EX = Contention while doing many UPDATE statements against small tables? 
+	-- PAGELATCH_EX = Many concurrent INSERT statements into a table that has an index on an IDENTITY or NEWSEQUENTIALID column? -> https://techcommunity.microsoft.com/t5/SQL-Server/PAGELATCH-EX-waits-and-heavy-inserts/ba-p/384289
+	-- PAGEIOLATCH = indicates IO problems, or BP pressure.
+	-- PREEMPTIVE_OS_WRITEFILEGATHERER (2008+) = usually autogrow scenarios, usually together with WRITELOG;
+	-- IO_COMPLETION = usually TempDB spilling; 
+	-- ASYNC_IO_COMPLETION = usually when not using IFI, or waiting on backups.
+	-- DISKIO_SUSPEND = High wait times here indicate the SNAPSHOT BACKUP may be taking longer than expected. Typically the delay is within the VDI application perform the snapshot backup;
+	-- BACKUPIO = check for slow backup media slow, like Tapes or Disks;
+	-- BACKUPBUFFER = usually when backing up to Tape;
+	-- Check sys.dm_os_waiting_tasks for Exchange wait types in https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-os-waiting-tasks-transact-sql
+	-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
+	-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
+	-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
+	-- HT* = batch mode syncpoint waits, probably large parallel table scans;   
+	-- WRITELOG = log management system waiting for a log flush to disk. Examine the I/O latency for the log file
+	-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> https://techcommunity.microsoft.com/t5/SQL-Server-Support/How-It-Works-CMemThread-and-Debugging-Them/ba-p/317488
+	-- SOS_RESERVEDMEMBLOCKLIST = look for procedures with a large number of parameters, or queries with a long list of expression values specified in an IN clause, which would require multi-page allocations
+	-- RESOURCE_SEMAPHORE_SMALL_QUERY or RESOURCE_SEMAPHORE = queries are waiting for execution memory. Look for plans with excessive hashing or sorts.
+	-- RESOURCE_SEMAPHORE_QUERY_COMPILE = usually high compilation or recompilation scenario (higher ratio of prepared plans vs. compiled plans). On x64 usually memory hungry queries and compiles. On x86 perhaps short on VAS. -> http://technet.microsoft.com/library/cc293620.aspx
+	-- DBMIRROR_DBM_MUTEX = indicates contention for the send buffer that database mirroring shares between all the mirroring sessions. 
 
 		SELECT 'Performance_checks' AS [Category], 'Waits_Last_' + CONVERT(VARCHAR(3), @duration) + 's' AS [Information], W1.wait_type,
 			CAST(W1.wait_time_s AS DECIMAL(14, 2)) AS wait_time_s,
@@ -10087,7 +10205,7 @@ END'')
 		FROM #tblFinalWaits AS W1 INNER JOIN #tblFinalWaits AS W2 ON W2.rn <= W1.rn
 		GROUP BY W1.rn, W1.wait_type, CAST(W1.wait_time_s AS DECIMAL(14, 2)), CAST(W1.pct AS DECIMAL(14, 2)), CAST(W1.signal_wait_time_s AS DECIMAL(14, 2)), CAST(W1.resource_wait_time_s AS DECIMAL(14, 2)), CAST(W1.signal_wait_pct AS DECIMAL(14, 2)), CAST(W1.resource_wait_pct AS DECIMAL(14, 2))
 		HAVING CAST(W1.wait_time_s as DECIMAL(14, 2)) >= 0.01 AND (SUM(W2.pct)-CAST(W1.pct AS DECIMAL(14, 2))) < 100
-		-- percentage threshold
+	-- percentage threshold
 		ORDER BY W1.rn;
 
 		;WITH
@@ -10168,17 +10286,17 @@ END'')
 		FROM Waits AS W1 INNER JOIN Waits AS W2 ON W2.rn <= W1.rn
 		GROUP BY W1.rn, W1.wait_type, CAST(W1.wait_time_s AS DECIMAL(14, 2)), CAST(W1.pct AS DECIMAL(14, 2)), CAST(W1.signal_wait_time_s AS DECIMAL(14, 2)), CAST(W1.resource_wait_time_s AS DECIMAL(14, 2)), CAST(W1.signal_wait_pct AS DECIMAL(14, 2)), CAST(W1.resource_wait_pct AS DECIMAL(14, 2))
 		HAVING CAST(W1.wait_time_s as DECIMAL(14, 2)) >= 0.01 AND (SUM(W2.pct)-CAST(W1.pct AS DECIMAL(14, 2))) < 100
-		-- percentage threshold
+	-- percentage threshold
 		ORDER BY W1.rn;
 
-		-- ACCESS_METHODS_HOBT_VIRTUAL_ROOT = This latch is used to access the metadata for an index that contains the page ID of the index's root page. Contention on this latch can occur when a B-tree root page split occurs (requiring the latch in EX mode) and threads wanting to navigate down the B-tree (requiring the latch in SH mode) have to wait. This could be from very fast population of a small index using many concurrent connections, with or without page splits from random key values causing cascading page splits (from leaf to root).
-		-- ACCESS_METHODS_HOBT_COUNT = This latch is used to flush out page and row count deltas for a HoBt (Heap-or-B-tree) to the Storage Engine metadata tables. Contention would indicate *lots* of small, concurrent DML operations on a single table. 
-		-- ACCESS_METHODS_DATASET_PARENT and ACCESS_METHODS_SCAN_RANGE_GENERATOR = These two latches are used during parallel scans to give each thread a range of page IDs to scan. The LATCH_XX waits for these latches will typically appear with CXPACKET waits and PAGEIOLATCH_XX waits (if the data being scanned is not memory-resident). Use normal parallelism troubleshooting methods to investigate further (e.g. is the parallelism warranted? maybe increase 'cost threshold for parallelism', lower MAXDOP, use a MAXDOP hint, use Resource Governor to limit DOP using a workload group with a MAX_DOP limit. Did a plan change from index seeks to parallel table scans because a tipping point was reached or a plan recompiled with an atypical SP parameter or poor statistics? Do NOT knee-jerk and set server MAXDOP to 1 – that's some of the worst advice I see on the Internet.);
-		-- NESTING_TRANSACTION_FULL  = This latch, along with NESTING_TRANSACTION_READONLY, is used to control access to transaction description structures (called an XDES) for parallel nested transactions. The _FULL is for a transaction that's 'active', i.e. it's changed the database (usually for an index build/rebuild), and that makes the _READONLY description obvious. A query that involves a parallel operator must start a sub-transaction for each parallel thread that is used – these transactions are sub-transactions of the parallel nested transaction. For contention on these, I'd investigate unwanted parallelism but I don't have a definite "it's usually this problem". Also check out the comments for some info about these also sometimes being a problem when RCSI is used.
-		-- LOG_MANAGER = you see this latch it is almost certainly because a transaction log is growing because it could not clear/truncate for some reason. Find the database where the log is growing and then figure out what's preventing log clearing using sys.databases.
-		-- DBCC_MULTIOBJECT_SCANNER  = This latch appears on Enterprise Edition when DBCC CHECK_ commands are allowed to run in parallel. It is used by threads to request the next data file page to process. Late last year this was identified as a major contention point inside DBCC CHECK* and there was work done to reduce the contention and make DBCC CHECK* run faster.
-		-- https://techcommunity.microsoft.com/t5/SQL-Server-Support/A-faster-CHECKDB-8211-Part-II/ba-p/316882
-		-- FGCB_ADD_REMOVE = FGCB stands for File Group Control Block. This latch is required whenever a file is added or dropped from the filegroup, whenever a file is grown (manually or automatically), when recalculating proportional-fill weightings, and when cycling through the files in the filegroup as part of round-robin allocation. If you're seeing this, the most common cause is that there's a lot of file auto-growth happening. It could also be from a filegroup with lots of file (e.g. the primary filegroup in tempdb) where there are thousands of concurrent connections doing allocations. The proportional-fill weightings are recalculated every 8192 allocations, so there's the possibility of a slowdown with frequent recalculations over many files.
+	-- ACCESS_METHODS_HOBT_VIRTUAL_ROOT = This latch is used to access the metadata for an index that contains the page ID of the index's root page. Contention on this latch can occur when a B-tree root page split occurs (requiring the latch in EX mode) and threads wanting to navigate down the B-tree (requiring the latch in SH mode) have to wait. This could be from very fast population of a small index using many concurrent connections, with or without page splits from random key values causing cascading page splits (from leaf to root).
+	-- ACCESS_METHODS_HOBT_COUNT = This latch is used to flush out page and row count deltas for a HoBt (Heap-or-B-tree) to the Storage Engine metadata tables. Contention would indicate *lots* of small, concurrent DML operations on a single table. 
+	-- ACCESS_METHODS_DATASET_PARENT and ACCESS_METHODS_SCAN_RANGE_GENERATOR = These two latches are used during parallel scans to give each thread a range of page IDs to scan. The LATCH_XX waits for these latches will typically appear with CXPACKET waits and PAGEIOLATCH_XX waits (if the data being scanned is not memory-resident). Use normal parallelism troubleshooting methods to investigate further (e.g. is the parallelism warranted? maybe increase 'cost threshold for parallelism', lower MAXDOP, use a MAXDOP hint, use Resource Governor to limit DOP using a workload group with a MAX_DOP limit. Did a plan change from index seeks to parallel table scans because a tipping point was reached or a plan recompiled with an atypical SP parameter or poor statistics? Do NOT knee-jerk and set server MAXDOP to 1 – that's some of the worst advice I see on the Internet.);
+	-- NESTING_TRANSACTION_FULL  = This latch, along with NESTING_TRANSACTION_READONLY, is used to control access to transaction description structures (called an XDES) for parallel nested transactions. The _FULL is for a transaction that's 'active', i.e. it's changed the database (usually for an index build/rebuild), and that makes the _READONLY description obvious. A query that involves a parallel operator must start a sub-transaction for each parallel thread that is used – these transactions are sub-transactions of the parallel nested transaction. For contention on these, I'd investigate unwanted parallelism but I don't have a definite "it's usually this problem". Also check out the comments for some info about these also sometimes being a problem when RCSI is used.
+	-- LOG_MANAGER = you see this latch it is almost certainly because a transaction log is growing because it could not clear/truncate for some reason. Find the database where the log is growing and then figure out what's preventing log clearing using sys.databases.
+	-- DBCC_MULTIOBJECT_SCANNER  = This latch appears on Enterprise Edition when DBCC CHECK_ commands are allowed to run in parallel. It is used by threads to request the next data file page to process. Late last year this was identified as a major contention point inside DBCC CHECK* and there was work done to reduce the contention and make DBCC CHECK* run faster.
+	-- https://techcommunity.microsoft.com/t5/SQL-Server-Support/A-faster-CHECKDB-8211-Part-II/ba-p/316882
+	-- FGCB_ADD_REMOVE = FGCB stands for File Group Control Block. This latch is required whenever a file is added or dropped from the filegroup, whenever a file is grown (manually or automatically), when recalculating proportional-fill weightings, and when cycling through the files in the filegroup as part of round-robin allocation. If you're seeing this, the most common cause is that there's a lot of file auto-growth happening. It could also be from a filegroup with lots of file (e.g. the primary filegroup in tempdb) where there are thousands of concurrent connections doing allocations. The proportional-fill weightings are recalculated every 8192 allocations, so there's the possibility of a slowdown with frequent recalculations over many files.
 
 		;WITH
 			cteLatches1 (latch_class, wait_time_ms, waiting_requests_count)
@@ -10227,7 +10345,7 @@ END'')
 		FROM #tblFinalLatches AS W1 INNER JOIN #tblFinalLatches AS W2 ON W2.rn <= W1.rn
 		GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
 		HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(14, 2)) < 100;
-		-- percentage threshold
+	-- percentage threshold
 
 		;WITH
 			Latches
@@ -10265,7 +10383,7 @@ END'')
 			ON W2.rn <= W1.rn
 		GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
 		HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(14, 2)) < 100;
-		-- percentage threshold
+	-- percentage threshold
 
 		;WITH
 			Latches
@@ -10303,7 +10421,7 @@ END'')
 			ON W2.rn <= W1.rn
 		GROUP BY W1.rn, W1.latch_class, W1.wait_time_s, W1.waiting_requests_count, CAST(W1.pct AS DECIMAL(14, 2))
 		HAVING SUM(W2.pct) - CAST(W1.pct AS DECIMAL(14, 2)) < 100;
-		-- percentage threshold
+	-- percentage threshold
 
 		;WITH
 			cteSpinlocks1
@@ -10339,14 +10457,16 @@ END'')
 		FROM #tblFinalSpinlocks AS S1 INNER JOIN #tblFinalSpinlocks AS S2 ON S2.rn <= S1.rn
 		GROUP BY S1.rn, S1.name, S1.collisions, S1.spins, S1.spins_per_collision, S1.sleep_time, S1.backoffs, S1.spins_pct
 		HAVING CAST(SUM(S2.spins_pct) AS DECIMAL(14, 2)) - CAST(S1.spins_pct AS DECIMAL(14, 2)) < 100
-		-- percentage threshold
+	-- percentage threshold
 		ORDER BY spins DESC;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Worker thread exhaustion subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Worker thread exhaustion subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Worker thread exhaustion', 10, 1) WITH NOWAIT
@@ -10370,11 +10490,13 @@ BEGIN
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Blocking Chains subsection
-	-- - Checks for blocking chains taking over 5s.
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Blocking Chains subsection
+-- - Checks for blocking chains taking over 5s.
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Blocking Chains', 10, 1) WITH NOWAIT
@@ -10421,13 +10543,13 @@ BEGIN
 
 		INSERT INTO #tblBlkChains
 		SELECT
-			-- blocked
+		-- blocked
 			es.session_id AS blocked_spid,
 			es.[status] AS [blocked_spid_status],
 			ot.task_state AS [blocked_task_status],
 			owt.wait_type AS blocked_spid_wait_type,
 			COALESCE(owt.wait_duration_ms, ABS(CONVERT(BIGINT,(DATEDIFF(mi, es.last_request_start_time, GETDATE())))*60)) AS blocked_spid_wait_time_ms,
-			--er.total_elapsed_time AS blocked_elapsed_time_ms,
+		--er.total_elapsed_time AS blocked_elapsed_time_ms,
 			/* 
 			Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/library/ms188743.aspx.
 			- Wait Resource e_waitPipeNewRow in CXPACKET waits – Producer waiting on consumer for a packet to fill.
@@ -10465,12 +10587,12 @@ BEGIN
 			ELSE CONVERT (VARCHAR(30), COALESCE(es.transaction_isolation_level, er.transaction_isolation_level)) + '-UNKNOWN' 
 		END, 30) AS blocked_tran_isolation_level,
 
-			-- blocker
+		-- blocker
 			er.blocking_session_id As blocker_spid,
 			CASE 
-			-- session has an active request, is blocked, but is blocking others or session is idle but has an open tran and is blocking others
+		-- session has an active request, is blocked, but is blocking others or session is idle but has an open tran and is blocking others
 			WHEN (er2.session_id IS NULL OR owt.blocking_session_id IS NULL) AND (er.blocking_session_id = 0 OR er.session_id IS NULL) THEN 1
-			-- session is either not blocking someone, or is blocking someone but is blocked by another party
+		-- session is either not blocking someone, or is blocking someone but is blocked by another party
 			ELSE 0
 		END AS is_head_blocker,
 			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
@@ -10498,7 +10620,7 @@ BEGIN
 			ELSE CONVERT (VARCHAR(30), COALESCE(er2.transaction_isolation_level, es.transaction_isolation_level)) + '-UNKNOWN' 
 		END, 30) AS blocker_tran_isolation_level,
 
-			-- blocked - other data
+		-- blocked - other data
 			DB_NAME(er.database_id) AS blocked_database,
 			es.[host_name] AS blocked_host,
 			es.[program_name] AS blocked_program,
@@ -10508,7 +10630,7 @@ BEGIN
 			WHEN es.session_id = -4 THEN 'Unknown_tran' ELSE NULL END AS blocked_session_comment,
 			es.is_user_process AS [blocked_is_user_process],
 
-			-- blocker - other data
+		-- blocker - other data
 			DB_NAME(er2.database_id) AS blocker_database,
 			es2.[host_name] AS blocker_host,
 			es2.[program_name] AS blocker_program,
@@ -10526,10 +10648,10 @@ BEGIN
 			LEFT OUTER JOIN sys.dm_exec_connections ec2 ON es2.session_id = ec2.session_id
 			LEFT OUTER JOIN
 			(
-		-- In some cases (e.g. parallel queries, also waiting for a worker), one thread can be flagged as 
-		-- waiting for several different threads.  This will cause that thread to show up in multiple rows 
-		-- in our grid, which we don't want.  Use ROW_NUMBER to select the longest wait for each thread, 
-		-- and use it as representative of the other wait relationships this thread is involved in. 
+	-- In some cases (e.g. parallel queries, also waiting for a worker), one thread can be flagged as 
+	-- waiting for several different threads.  This will cause that thread to show up in multiple rows 
+	-- in our grid, which we don't want.  Use ROW_NUMBER to select the longest wait for each thread, 
+	-- and use it as representative of the other wait relationships this thread is involved in. 
 		SELECT waiting_task_address, session_id, exec_context_id, wait_duration_ms,
 				wait_type, resource_address, blocking_task_address, blocking_session_id,
 				blocking_exec_context_id, resource_description,
@@ -10539,8 +10661,8 @@ BEGIN
 			FROM sys.dm_os_waiting_tasks
 			WHERE wait_type <> 'SP_SERVER_DIAGNOSTICS_SLEEP'
 	) owt ON ot.task_address = owt.waiting_task_address AND owt.row_num = 1
-		--OUTER APPLY sys.dm_exec_sql_text (er.sql_handle) est
-		--OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) eqp
+	--OUTER APPLY sys.dm_exec_sql_text (er.sql_handle) est
+	--OUTER APPLY sys.dm_exec_query_plan (er.plan_handle) eqp
 		WHERE es.session_id <> @@SPID AND es.is_user_process = 1
 			AND ((owt.wait_duration_ms/1000) > 5 OR (er.total_elapsed_time/1000) > 5 OR er.total_elapsed_time IS NULL) --Only report blocks > 5 Seconds plus head blocker
 			AND (es.session_id IN (SELECT er3.blocking_session_id
@@ -10566,11 +10688,13 @@ BEGIN
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Plan use ratio subsection
-	-- - Refer to BOL for more information (https://docs.microsoft.com/sql/database-engine/configure-windows/optimize-for-ad-hoc-workloads-server-configuration-option)
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Plan use ratio subsection
+-- - Refer to BOL for more information (https://docs.microsoft.com/sql/database-engine/configure-windows/optimize-for-ad-hoc-workloads-server-configuration-option)
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Plan use ratio', 10, 1) WITH NOWAIT
@@ -10590,13 +10714,13 @@ BEGIN
 			SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Check], '[OK]' AS [Deviation], '' AS [Comment]
 		END;
 
-		--High number of cached plans with usecounts = 1.
+	--High number of cached plans with usecounts = 1.
 					SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Information], objtype, cacheobjtype, AVG(CAST(usecounts AS bigint)) AS Avg_UseCount_perPlan, SUM(refcounts) AS AllRefObjects, SUM(CAST(size_in_bytes AS bigint))/1024/1024 AS Size_MB
 			FROM sys.dm_exec_cached_plans (NOLOCK)
 			WHERE cacheobjtype LIKE '%Plan%' AND usecounts = 1
 			GROUP BY objtype, cacheobjtype
 		UNION ALL
-			--High number of cached plans with usecounts > 1.
+		--High number of cached plans with usecounts > 1.
 			SELECT 'Performance_checks' AS [Category], 'Plan_use_ratio' AS [Information], objtype, cacheobjtype, AVG(CAST(usecounts AS bigint)) AS Avg_UseCount_perPlan, SUM(refcounts) AS AllRefObjects, SUM(CAST(size_in_bytes AS bigint))/1024/1024 AS Size_MB
 			FROM sys.dm_exec_cached_plans (NOLOCK)
 			WHERE cacheobjtype LIKE '%Plan%' AND usecounts > 1
@@ -10604,11 +10728,13 @@ BEGIN
 		ORDER BY objtype, cacheobjtype;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Hints usage subsection
-	-- - Refer to "Hints" BOL entry for more information (https://docs.microsoft.com/sql/t-sql/queries/hints-transact-sql)
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Hints usage subsection
+-- - Refer to "Hints" BOL entry for more information (https://docs.microsoft.com/sql/t-sql/queries/hints-transact-sql)
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Hints usage', 10, 1) WITH NOWAIT
@@ -10721,17 +10847,19 @@ AND OBJECTPROPERTY(sm.[object_id],''IsMSShipped'') = 0;'
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Cached Query Plans issues subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Cached Query Plans issues subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Cached Query Plans issues', 10, 1) WITH NOWAIT
-		--DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(500), @sqlmajorver int, @sqlminorver int, @sqlbuild int
-		--SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
-		--SELECT @sqlminorver = CONVERT(int, (@@microsoftversion / 0x10000) & 0xff);
-		--SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
+	--DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(500), @sqlmajorver int, @sqlminorver int, @sqlbuild int
+	--SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
+	--SELECT @sqlminorver = CONVERT(int, (@@microsoftversion / 0x10000) & 0xff);
+	--SELECT @sqlbuild = CONVERT(int, @@microsoftversion & 0xffff);
 
 		IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
@@ -10776,15 +10904,15 @@ BEGIN
 			[last_elapsed_time] [bigint] NOT NULL,
 			[min_elapsed_time] [bigint] NOT NULL,
 			[max_elapsed_time] [bigint] NOT NULL,
-			--2008 only
+		--2008 only
 			[query_hash] [binary](8) NULL,
 			[query_plan_hash] [binary](8) NULL,
-			--2008R2 only
+		--2008R2 only
 			[total_rows] bigint NULL,
 			[last_rows] bigint NULL,
 			[min_rows] bigint NULL,
 			[max_rows] bigint NULL,
-			--post 2012 SP3, 2014 SP2 and 2016
+		--post 2012 SP3, 2014 SP2 and 2016
 			[Last_grant_kb] bigint NULL,
 			[Min_grant_kb] bigint NULL,
 			[Max_grant_kb] bigint NULL,
@@ -10855,15 +10983,15 @@ BEGIN
 			[last_elapsed_time] [bigint] NOT NULL,
 			[min_elapsed_time] [bigint] NOT NULL,
 			[max_elapsed_time] [bigint] NOT NULL,
-			--2008 only
+		--2008 only
 			[query_hash] [binary](8) NULL,
 			[query_plan_hash] [binary](8) NULL,
-			--2008R2 only
+		--2008R2 only
 			[total_rows] bigint NULL,
 			[last_rows] bigint NULL,
 			[min_rows] bigint NULL,
 			[max_rows] bigint NULL,
-			--post 2012 SP3, 2014 SP2 and 2016
+		--post 2012 SP3, 2014 SP2 and 2016
 			[Last_grant_kb] bigint NULL,
 			[Min_grant_kb] bigint NULL,
 			[Max_grant_kb] bigint NULL,
@@ -10889,7 +11017,7 @@ BEGIN
 			[Max_used_threads] bigint NULL,
 			[Total_used_threads] bigint NULL,
 			[Grant2Used_Ratio] float NULL,
-			--end
+		--end
 			[query_plan] [xml] NULL,
 			[text] [nvarchar](MAX) COLLATE database_default NULL,
 			[text_filtered] [nvarchar](MAX) COLLATE database_default NULL
@@ -10897,12 +11025,12 @@ BEGIN
 
 		IF @sqlmajorver = 9
 	BEGIN
-			--CPU 
+		--CPU 
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK) 
-			--ORDER BY qs.total_worker_time DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK) 
+		--ORDER BY qs.total_worker_time DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -10916,12 +11044,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_worker_time DESC');
-			--IO
+		--IO
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.total_logical_reads DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.total_logical_reads DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -10935,12 +11063,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_logical_reads DESC');
-			--Recompiles
+		--Recompiles
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.plan_generation_num DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.plan_generation_num DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -10957,12 +11085,12 @@ ORDER BY tfs.plan_generation_num DESC');
 		END
 	ELSE IF @sqlmajorver = 10 AND (@sqlminorver = 0 OR (@sqlminorver = 50 AND @sqlbuild < 2500))
 	BEGIN
-			--CPU 
+		--CPU 
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.total_worker_time DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.total_worker_time DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -10976,12 +11104,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_worker_time DESC');
-			--IO
+		--IO
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.total_logical_reads DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.total_logical_reads DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -10995,12 +11123,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_logical_reads DESC');
-			--Recompiles
+		--Recompiles
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.plan_generation_num DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.plan_generation_num DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11017,12 +11145,12 @@ ORDER BY tfs.plan_generation_num DESC');
 		END
 	ELSE IF (@sqlmajorver = 10 AND @sqlminorver = 50) OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 5000)
 	BEGIN
-			--CPU 
+		--CPU 
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.total_worker_time DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.total_worker_time DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11036,12 +11164,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_worker_time DESC');
-			--IO
+		--IO
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.total_logical_reads DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.total_logical_reads DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11055,12 +11183,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_logical_reads DESC');
-			--Recompiles
+		--Recompiles
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.plan_generation_num DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.plan_generation_num DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows]
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11077,12 +11205,12 @@ ORDER BY tfs.plan_generation_num DESC');
 		END
 	ELSE IF (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
-			--CPU 
+		--CPU 
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.total_worker_time DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.total_worker_time DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11096,12 +11224,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_worker_time DESC');
-			--IO
+		--IO
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.total_logical_reads DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.total_logical_reads DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11115,12 +11243,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.total_logical_reads DESC');
-			--Recompiles
+		--Recompiles
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.plan_generation_num DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.plan_generation_num DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11134,12 +11262,12 @@ FROM TopFineSearch tfs
 CROSS APPLY StmtSimple.nodes(''//Object'') AS o(obj)
 WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemresource]'')
 ORDER BY tfs.plan_generation_num DESC');
-			--Mem Grants
+		--Mem Grants
 			INSERT INTO #tmp_dm_exec_query_stats
 				([sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],[Grant2Used_Ratio])
-			--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
-			--FROM sys.dm_exec_query_stats qs (NOLOCK)
-			--ORDER BY qs.Total_grant_kb DESC');
+		--EXEC ('SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads]
+		--FROM sys.dm_exec_query_stats qs (NOLOCK)
+		--ORDER BY qs.Total_grant_kb DESC');
 			EXEC (';WITH XMLNAMESPACES (DEFAULT ''http://schemas.microsoft.com/sqlserver/2004/07/showplan''), 
 TopSearch AS (SELECT DISTINCT TOP 25 [sql_handle],[statement_start_offset],[statement_end_offset],[plan_generation_num],[plan_handle],[creation_time],[last_execution_time],[execution_count],[total_worker_time],[last_worker_time],[min_worker_time],[max_worker_time],[total_physical_reads],[last_physical_reads],[min_physical_reads],[max_physical_reads],[total_logical_writes],[last_logical_writes],[min_logical_writes],[max_logical_writes],[total_logical_reads],[last_logical_reads],[min_logical_reads],[max_logical_reads],[total_clr_time],[last_clr_time],[min_clr_time],[max_clr_time],[total_elapsed_time],[last_elapsed_time],[min_elapsed_time],[max_elapsed_time],[query_hash],[query_plan_hash],[total_rows],[last_rows],[min_rows],[max_rows],[Last_grant_kb],[Min_grant_kb],[Max_grant_kb],[Total_grant_kb],[Last_used_grant_kb],[Min_used_grant_kb],[Max_used_grant_kb],[Total_used_grant_kb],[Last_ideal_grant_kb],[Min_ideal_grant_kb],[Max_ideal_grant_kb],[Total_ideal_grant_kb],[Last_dop],[Min_dop],[Max_dop],[Total_dop],[Last_reserved_threads],[Min_reserved_threads],[Max_reserved_threads],[Total_reserved_threads],[Last_used_threads],[Min_used_threads],[Max_used_threads],[Total_used_threads],COALESCE((([Total_used_grant_kb] * 100.00) / NULLIF([Total_grant_kb],0)), 0) AS Grant2Used_Ratio
 FROM sys.dm_exec_query_stats qs (NOLOCK)
@@ -11156,7 +11284,7 @@ WHERE obj.value(''@Database'',''sysname'') NOT IN (''[master]'',''[mssqlsystemre
 ORDER BY tfs.Grant2Used_Ratio ASC');
 		END;
 
-		-- Remove duplicates before inserting XML
+	-- Remove duplicates before inserting XML
 		IF @sqlmajorver = 9
 	BEGIN
 			INSERT INTO #dm_exec_query_stats
@@ -11196,11 +11324,11 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS st
 		CROSS APPLY sys.dm_exec_query_plan(qs.plan_handle) AS qp
 
-		-- Delete own queries
+	-- Delete own queries
 		DELETE FROM #dm_exec_query_stats
 	WHERE CAST(query_plan AS NVARCHAR(MAX)) LIKE '%Query_Plan_Warnings%';
 
-		-- Aggregate results
+	-- Aggregate results
 		IF EXISTS (SELECT [object_id]
 		FROM tempdb.sys.objects (NOLOCK)
 		WHERE [object_id] = OBJECT_ID('tempdb.dbo.#qpwarnings')) 
@@ -11217,7 +11345,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 			[statement] XML
 		)
 
-		-- Find issues
+	-- Find issues
 		INSERT INTO #qpwarnings
 													SELECT 'Scalar_UDFs'AS [Deviation],
 				('[WARNING: Scalar UDF found in a top resource-intensive query, which that may inhibit parallelism]') AS [Comment],
@@ -11277,7 +11405,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		IF @sqlmajorver > 10
 	BEGIN
 			INSERT INTO #qpwarnings
-			-- Note that currently SpillToTempDb warnings are only found in actual execution plans
+		-- Note that currently SpillToTempDb warnings are only found in actual execution plans
 																SELECT 'Spill_to_TempDb'AS [Deviation],
 					('[WARNING: Spill to TempDB found during a HASH or SORT operation]') AS [Comment],
 					qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
@@ -11327,7 +11455,7 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		IF (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 	BEGIN
 			INSERT INTO #qpwarnings
-			-- Note that currently MemoryGrant warnings are only found in actual execution plans
+		-- Note that currently MemoryGrant warnings are only found in actual execution plans
 										SELECT 'Excessive_Memory_Grant'AS [Deviation],
 					('[WARNING: Granted memory was much larger than maximum used memory]') AS [Comment],
 					qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
@@ -11432,10 +11560,12 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Tuning recommendations info subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Tuning recommendations info subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @sqlmajorver > 13 AND @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Tuning recommendations', 10, 1) WITH NOWAIT
@@ -11604,12 +11734,14 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Declarative Referential Integrity - Untrusted Constraints subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
-	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexes.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Declarative Referential Integrity - Untrusted Constraints subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexes.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Declarative Referential Integrity - Untrusted Constraints', 10, 1) WITH NOWAIT
@@ -11723,10 +11855,12 @@ ORDER BY mst.name, [constraint_name];'
 	IF @ptochecks = 1
 RAISERROR (N'|-Starting Indexes and Statistics Checks', 10, 1) WITH NOWAIT
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Statistics update subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Statistics update subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Statistics update', 10, 1) WITH NOWAIT
@@ -11879,10 +12013,12 @@ HAVING SUM(p.[rows]) > 0
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Statistics sampling subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Statistics sampling subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		IF (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver > 11
@@ -11994,12 +12130,14 @@ WHERE sp.[rows] > 0
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Hypothetical objects subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
-	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Hypothetical objects subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Hypothetical objects', 10, 1) WITH NOWAIT
@@ -12116,14 +12254,16 @@ AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Index Health Analysis subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	-- - You can set @ixfrag to ON if you want to check for index fragmentation. 
-	-- - Can take some time to collect data depending on number of databases and indexes, as well as the scan mode chosen in @ixfragscanmode.
-	-- - You can set @ixfragscanmode to the scanning mode you prefer. (Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
-	-- 	- More detail on scanning modes available at https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-db-index-physical-stats-transact-sql  
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Index Health Analysis subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+-- - You can set @ixfrag to ON if you want to check for index fragmentation. 
+-- - Can take some time to collect data depending on number of databases and indexes, as well as the scan mode chosen in @ixfragscanmode.
+-- - You can set @ixfragscanmode to the scanning mode you prefer. (Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
+-- 	- More detail on scanning modes available at https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-db-index-physical-stats-transact-sql  
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ixfrag = 1 AND @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Index Health Analysis check', 10, 1) WITH NOWAIT
@@ -12262,7 +12402,7 @@ BEGIN
 			type_desc NVARCHAR(60),
 			is_done bit
 		)
-		-- type 0 = Heap; 1 = Clustered; 2 = Nonclustered; 3 = XML; 4 = Spatial; 5 = Clustered columnstore; 6 = Nonclustered columnstore; 7 = Nonclustered hash
+	-- type 0 = Heap; 1 = Clustered; 2 = Nonclustered; 3 = XML; 4 = Spatial; 5 = Clustered columnstore; 6 = Nonclustered columnstore; 7 = Nonclustered hash
 
 		RAISERROR (N'    |-Populating support table...', 10, 1) WITH NOWAIT
 
@@ -12437,7 +12577,7 @@ WHERE o.[type] = ''U'''
 				INSERT INTO #tmpIPS
 				SELECT ps.database_id, ps.[object_id], ps.index_id, ps.partition_number, SUM(ps.avg_fragmentation_in_percent), SUM(ps.page_count),
 					CAST((SUM(ps.page_count)*8)/1024 AS DECIMAL(26,3)) AS [size_MB], ps.record_count, ps.forwarded_record_count
-				-- for heaps
+			-- for heaps
 				FROM sys.dm_db_index_physical_stats(@dbid, @objectid, @indexid , @partition_nr, @ixfragscanmode) AS ps
 				WHERE /*ps.index_id > 0 -- ignore heaps
 				AND */ps.index_level = 0 -- leaf-level nodes only
@@ -12474,7 +12614,7 @@ FROM [' + DB_NAME(@dbid) + '].sys.column_store_row_groups rg
 WHERE rg.object_id = @objectid_In
 	AND rg.index_id = @indexid_In
 	AND rg.partition_number = @partition_nr_In
-	--AND rg.state = 3 -- Only COMPRESSED row groups
+--AND rg.state = 3 -- Only COMPRESSED row groups
 GROUP BY rg.object_id, rg.index_id, rg.partition_number, rg.total_rows, rg.delta_store_hobt_id, rg.row_group_id, rg.state, rg.state_description
 OPTION (MAXDOP 2)'
 				SET @ColumnStoreGetIXSQL_Param = N'@dbid_In int, @objectid_In int, @indexid_In int, @partition_nr_In int';
@@ -12494,7 +12634,7 @@ OPTION (MAXDOP 2)'
 			END
 		END;
 
-		-- Check for index fragmentation over 5 pct when index has more than 1 extent allocated, or in CCI, all compressed row groups
+	-- Check for index fragmentation over 5 pct when index has more than 1 extent allocated, or in CCI, all compressed row groups
 		IF (SELECT COUNT(*)
 			FROM #tmpIPS
 			WHERE fragmentation > 5 AND [page_count] > 8) > 0
@@ -12525,8 +12665,8 @@ OPTION (MAXDOP 2)'
 
 		IF @sqlmajorver >= 12
 	BEGIN
-			-- For the below values, your mileage may vary. Assuming more than 50 percent empty buckets and an average chain length over 5 requires investigation
-			-- http://blogs.technet.com/b/dataplatforminsider/archive/2014/01/30/in-memory-oltp-index-troubleshooting-part-ii.aspx
+		-- For the below values, your mileage may vary. Assuming more than 50 percent empty buckets and an average chain length over 5 requires investigation
+		-- http://blogs.technet.com/b/dataplatforminsider/archive/2014/01/30/in-memory-oltp-index-troubleshooting-part-ii.aspx
 			IF (SELECT COUNT(*)
 			FROM #tmpXIS
 			WHERE FLOOR((CAST(empty_bucket_count AS FLOAT)/total_bucket_count) * 100) > 50 AND [avg_chain_length] > 5) > 0
@@ -12578,8 +12718,8 @@ OPTION (MAXDOP 2)'
 				SELECT 'Index_and_Stats_checks' AS [Category], 'XTP_HashIX_Health_TooFewBuckets' AS [Check], '[OK]' AS [Deviation]
 			END;
 
-			-- For the below values, your mileage may vary. Assuming more than 5 percent retries requires investigation	.
-			-- https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-db-xtp-nonclustered-index-stats-transact-sql	
+		-- For the below values, your mileage may vary. Assuming more than 5 percent retries requires investigation	.
+		-- https://docs.microsoft.com/sql/relational-databases/system-dynamic-management-views/sys-dm-db-xtp-nonclustered-index-stats-transact-sql	
 			IF (SELECT COUNT(*)
 			FROM #tmpXNCIS
 			WHERE FLOOR((CAST(page_update_retry_count AS FLOAT)/CASE WHEN page_update_count = 0 THEN 1 ELSE page_update_count END) * 100) > 5
@@ -12613,14 +12753,16 @@ OPTION (MAXDOP 2)'
 ELSE
 BEGIN
 		RAISERROR('  |- [INFORMATION: "Index Health Analysis" check is disabled]', 10, 1, N'disallow_ixfrag')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Duplicate or Redundant indexes subsection 
-	-- (clustered, non-clustered, clustered and non-clustered columnstore indexes only)
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Duplicate or Redundant indexes subsection 
+-- (clustered, non-clustered, clustered and non-clustered columnstore indexes only)
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Duplicate or Redundant indexes', 10, 1) WITH NOWAIT
@@ -12770,7 +12912,7 @@ OPTION (MAXDOP 2);'
 					AND ((I.filter_definition = I2.filter_definition) OR (I.filter_definition IS NULL AND I2.filter_definition IS NULL))
 			WHERE I.indexType IN (1,2,5,6) -- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 				AND I2.indexType IN (1,2,5,6)
-			-- clustered, non-clustered, clustered and non-clustered columnstore indexes only
+		-- clustered, non-clustered, clustered and non-clustered columnstore indexes only
 			GROUP BY I.[databaseID], I.[DatabaseName], I.[schemaName], I.[objectName], I.[indexID], I.[indexName], I.KeyCols, I.IncludedCols, I.[KeyColsOrdered], I.IncludedColsOrdered, I.is_primary_key, I.is_unique_constraint, I.is_unique, I.fill_factor, I.is_padded, I.has_filter, I.filter_definition
 			ORDER BY I.DatabaseName, I.[objectName], I.[indexID]
 
@@ -12936,7 +13078,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 		WHERE I.indexType IN (1,2,5,6) -- 1 = clustered, 2 = non-clustered, 5 = clustered and 7 = non-clustered columnstore indexes only
 			AND I2.indexType IN (1,2,5,6) -- 1 = clustered, 2 = non-clustered, 5 = clustered and 7 = non-clustered columnstore indexes only
 			AND I.is_unique_constraint = 0 -- no unique constraints
-			AND I2.is_unique_constraint = 0	-- no unique constraints
+			AND I2.is_unique_constraint = 0-- no unique constraints
 		) > 0
 	BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Redundant_Indexes' AS [Check], '[WARNING: Some databases have possibly redundant indexes. It is recommended to revise the need to maintain all these objects as soon as possible]' AS [Deviation]
@@ -12961,7 +13103,7 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 				AND I2.indexType IN (1,2,5,6) -- 1 = clustered, 2 = non-clustered, 5 = clustered and 7 = non-clustered columnstore indexes only
 				AND I.is_unique_constraint = 0 -- no unique constraints
 				AND I2.is_unique_constraint = 0
-			-- no unique constraints
+		-- no unique constraints
 			GROUP BY I.[DatabaseName], I.[schemaName], I.[objectName], I.[indexID], I.[indexName], I.KeyCols, I.IncludedCols, I.[KeyColsOrdered], I.IncludedColsOrdered, I.is_unique, I.fill_factor, I.is_padded, I.has_filter, I.filter_definition
 			ORDER BY I.DatabaseName, I.[objectName], I.[KeyColsOrdered], I.IncludedColsOrdered, I.[indexID]
 		END
@@ -12971,12 +13113,14 @@ WHERE sm.[definition] LIKE ''%' + @indexName + N'%'''
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Unused and rarely used indexes subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
-	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Unused and rarely used indexes subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Unused and rarely used indexes', 10, 1) WITH NOWAIT
@@ -13044,11 +13188,11 @@ INNER JOIN sys.schemas AS t (NOLOCK) ON t.[schema_id] = mst.[schema_id]
 INNER JOIN sys.dm_db_index_usage_stats AS s (NOLOCK) ON s.database_id = ' + CONVERT(VARCHAR(8), @dbid) + ' 
 	AND s.object_id = si.object_id AND s.index_id = si.index_id
 WHERE mst.is_ms_shipped = 0
-	--AND OBJECTPROPERTY(o.object_id,''IsUserTable'') = 1 -- sys.tables only returns type U
-	AND si.type IN (2,6) 			-- non-clustered and non-clustered columnstore indexes only
-	AND si.is_primary_key = 0 		-- no primary keys
-	AND si.is_unique_constraint = 0	-- no unique constraints
-	--AND si.is_unique = 0 			-- no alternate keys
+--AND OBJECTPROPERTY(o.object_id,''IsUserTable'') = 1 -- sys.tables only returns type U
+	AND si.type IN (2,6) 		-- non-clustered and non-clustered columnstore indexes only
+	AND si.is_primary_key = 0 	-- no primary keys
+	AND si.is_unique_constraint = 0-- no unique constraints
+--AND si.is_unique = 0 		-- no alternate keys
 GROUP BY mst.[object_id], t.[name], mst.[name], si.index_id, si.[name], s.user_seeks, s.user_scans, s.user_lookups, s.user_updates, si.is_unique,
 	si.[type], si.is_primary_key, si.is_unique_constraint, si.is_disabled
 ORDER BY objectName	
@@ -13096,10 +13240,10 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 			AND si.index_id = s.index_id 
 			AND database_id = ' + CONVERT(VARCHAR(8), @dbid) + ')
 	AND si.name IS NOT NULL
-	AND si.type IN (2,6) 			-- non-clustered and non-clustered columnstore indexes only
-	AND si.is_primary_key = 0 		-- no primary keys
-	AND si.is_unique_constraint = 0	-- no unique constraints
-	--AND si.is_unique = 0 			-- no alternate keys
+	AND si.type IN (2,6) 		-- non-clustered and non-clustered columnstore indexes only
+	AND si.is_primary_key = 0 	-- no primary keys
+	AND si.is_unique_constraint = 0-- no unique constraints
+--AND si.is_unique = 0 		-- no alternate keys
 '
 
 			BEGIN TRY
@@ -13233,10 +13377,12 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Indexes with large keys (> 900 bytes for clustered index; 1700 bytes for nonclustered index) subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Indexes with large keys (> 900 bytes for clustered index; 1700 bytes for nonclustered index) subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Indexes with large keys', 10, 1) WITH NOWAIT
@@ -13262,10 +13408,12 @@ BEGIN
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Indexes with fill factor < 80 pct subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Indexes with fill factor < 80 pct subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Indexes with fill factor < 80 pct', 10, 1) WITH NOWAIT
@@ -13286,10 +13434,12 @@ BEGIN
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Disabled indexes subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Disabled indexes subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Disabled indexes', 10, 1) WITH NOWAIT
@@ -13314,10 +13464,12 @@ BEGIN
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Non-unique clustered indexes subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Non-unique clustered indexes subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Non-unique clustered indexes', 10, 1) WITH NOWAIT
@@ -13337,10 +13489,12 @@ BEGIN
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Clustered Indexes with GUIDs in key subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Clustered Indexes with GUIDs in key subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Clustered Indexes with GUIDs in key', 10, 1) WITH NOWAIT
@@ -13415,7 +13569,7 @@ INNER JOIN sys.tables AS mst ON mst.[object_id] = mi.[object_id]
 INNER JOIN sys.schemas AS t ON t.[schema_id] = mst.[schema_id]
 WHERE mi.type = 1 AND mi.is_unique_constraint = 0
 	AND mst.is_ms_shipped = 0
-	--AND OBJECTPROPERTY(o.object_id,''IsUserTable'') = 1 -- sys.tables only returns type U
+--AND OBJECTPROPERTY(o.object_id,''IsUserTable'') = 1 -- sys.tables only returns type U
 ORDER BY objectName
 OPTION (MAXDOP 2);'
 
@@ -13450,10 +13604,12 @@ OPTION (MAXDOP 2);'
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Foreign Keys with no Index subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Foreign Keys with no Index subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Foreign Keys with no Index', 10, 1) WITH NOWAIT
@@ -13598,10 +13754,12 @@ WHERE NOT EXISTS (SELECT 1 FROM cteIndexCols ict
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Indexing per Table subsection
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Indexing per Table subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Indexing per Table', 10, 1) WITH NOWAIT
@@ -13726,7 +13884,7 @@ INNER JOIN sys.schemas AS s (NOLOCK) ON s.[schema_id] = t.[schema_id]
 WHERE t.[type] = ''U''
 	AND i.[type] IN (1,2)
 	AND i.is_hypothetical = 0
-	-- Get partitioned tables
+-- Get partitioned tables
 	AND t.name IN (SELECT ob.name 
 			FROM sys.tables AS ob (NOLOCK)
 			INNER JOIN sys.indexes AS ind (NOLOCK) ON ind.[object_id] = ob.[object_id] 
@@ -13804,13 +13962,15 @@ WHERE t.[type] = ''U''
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Missing Indexes subsection
-	-- - Outputs only potentially most relevant, based in scoring method - use at you own discretion)
-	-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
-	-- - You can set @gen_scripts to ON if you want to generate index related scripts.
-	-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Missing Indexes subsection
+-- - Outputs only potentially most relevant, based in scoring method - use at you own discretion)
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+-- - You can set @gen_scripts to ON if you want to generate index related scripts.
+-- - These include drops for Duplicate, Redundant, Hypothetical and Rarely Used indexes, as well as creation statements for FK and Missing Indexe
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @ptochecks = 1
 BEGIN
 		RAISERROR (N'  |-Starting Missing Indexes', 10, 1) WITH NOWAIT
@@ -13821,9 +13981,9 @@ BEGIN
 	SET @editionCheck = 1 -- supports enterprise only features
 	ELSE	
 	SET @editionCheck = 0;
-		-- does not support enterprise only features
+	-- does not support enterprise only features
 
-		-- Create the helper functions
+	-- Create the helper functions
 		EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
 		EXEC ('USE tempdb; EXEC(''
 CREATE FUNCTION dbo.fn_createindex_allcols (@ix_handle int)
@@ -13998,8 +14158,8 @@ END'')
 				FOR XML PATH('')), 2, 8000) AS [Possibly_Redundant_With],
 				CASE WHEN IC.[Score] >= 100000 THEN 'Y' ELSE 'N' END AS [Generate_Script]
 			FROM #IndexCreation IC
-			--WHERE [Score] >= 100000
-			--ORDER BY IC.DBName, IC.[Score] DESC, IC.[User_Hits_on_Missing_Index], IC.[Estimated_Improvement_Percent];
+		--WHERE [Score] >= 100000
+		--ORDER BY IC.DBName, IC.[Score] DESC, IC.[User_Hits_on_Missing_Index], IC.[Estimated_Improvement_Percent];
 			ORDER BY IC.[Score] DESC;
 
 			SELECT DISTINCT 'Index_and_Stats_checks' AS [Category], 'Missing_Indexes' AS [Check], 'Possibly_redundant_IXs_in_list' AS Comments, I.DBName AS [Database_Name], I.[Table] AS [Table_Name],
@@ -14104,7 +14264,7 @@ END'')
 				FOR XML PATH('')), 2, 8000) AS [Possibly_Redundant_With],
 				CASE WHEN IC.[Score] >= 100000 THEN 'Y' ELSE 'N' END AS [Generate_Script]
 			FROM #IndexCreation IC
-			--WHERE [Score] < 100000
+		--WHERE [Score] < 100000
 			ORDER BY IC.DBName, IC.[Score] DESC, IC.[User_Hits_on_Missing_Index], IC.[Estimated_Improvement_Percent];
 		END
 	ELSE
@@ -14113,13 +14273,15 @@ END'')
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Objects naming conventions subsection
-	-- Refer to BOL for more information 
-	-- https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172115(v=vs.100)  
-	-- https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172134(v=vs.100)  
-	-- https://docs.microsoft.com/sql/t-sql/language-elements/reserved-keywords-transact-sql  
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Objects naming conventions subsection
+-- Refer to BOL for more information 
+-- https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172115(v=vs.100)  
+-- https://docs.microsoft.com/previous-versions/visualstudio/visual-studio-2010/dd172134(v=vs.100)  
+-- https://docs.microsoft.com/sql/t-sql/language-elements/reserved-keywords-transact-sql  
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'|-Starting Objects naming conventions Checks', 10, 1) WITH NOWAIT
 
 	IF EXISTS (SELECT [object_id]
@@ -14220,7 +14382,7 @@ SET isdone = 0
 		OR [Object] LIKE '%;%'
 		OR [Object] LIKE '%' + CHAR(34) + '%' --double quote
 		OR [Object] LIKE '%' + CHAR(39) + '%');
-	--single quote
+--single quote
 
 	INSERT INTO #tmpfinalobjectnames
 	SELECT 3, [DBName], [schemaName], [Object], [Col], type_desc, CASE WHEN [Col] LIKE '% %' THEN 'Space - ' + QUOTENAME([Col]) ELSE NULL END COLLATE database_default AS [Comment]
@@ -14235,7 +14397,7 @@ SET isdone = 0
 		OR [Col] LIKE '%;%'
 		OR [Col] LIKE '%' + CHAR(34) + '%' --double quote
 		OR [Col] LIKE '%' + CHAR(39) + '%');
-	--single quote
+--single quote
 
 	/* https://docs.microsoft.com/sql/t-sql/language-elements/reserved-keywords-transact-sql */
 	INSERT INTO #tmpfinalobjectnames
@@ -14671,9 +14833,11 @@ BEGIN
 
 	RAISERROR (N'|-Starting Security Checks', 10, 1) WITH NOWAIT
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Password check subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Password check subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Password check', 10, 1) WITH NOWAIT
 	DECLARE @passwords TABLE ([Deviation] VARCHAR(15),
 		[Name] sysname,
@@ -14816,9 +14980,11 @@ BEGIN
 
 	RAISERROR (N'|-Starting Maintenance and Monitoring Checks', 10, 1) WITH NOWAIT
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### SQL Agent alerts for severe errors subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### SQL Agent alerts for severe errors subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting SQL Agent alerts for severe errors', 10, 1) WITH NOWAIT
 	IF (SELECT [perm]
 		FROM tempdb.dbo.permstbl_msdb
@@ -14827,7 +14993,7 @@ BEGIN
 		WHERE [id] = 2) = 0
 BEGIN
 		RAISERROR('[WARNING: If not sysadmin, then you must be a member of MSDB SQLAgentOperatorRole role, or have SELECT permission on the sysalerts table in MSDB. Bypassing check]', 16, 1, N'msdbperms')
-	--RETURN
+--RETURN
 	END
 ELSE
 BEGIN
@@ -14895,9 +15061,11 @@ BEGIN
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### DBCC CHECKDB, Direct Catalog Updates and Data Purity subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### DBCC CHECKDB, Direct Catalog Updates and Data Purity subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting DBCC CHECKDB, Direct Catalog Updates and Data Purity', 10, 1) WITH NOWAIT
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
@@ -14932,7 +15100,7 @@ CREATE TABLE #dbinfo
 
 	IF (ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1)
 BEGIN
-		--DECLARE @dbname NVARCHAR(255);
+	--DECLARE @dbname NVARCHAR(255);
 		DECLARE @dbcc bit, @catupd bit, @purity bit;
 		DECLARE curDBs CURSOR FAST_FORWARD FOR SELECT [name]
 		FROM master.sys.databases (NOLOCK)
@@ -15020,7 +15188,7 @@ BEGIN
 		SELECT @purity = CASE WHEN COUNT(name) > 0 THEN 1 ELSE 0 END
 		FROM cte_purity
 		WHERE dbi_createVersion <= 611 AND dbi_dbccFlags = 0;
-		-- <= SQL Server 2005
+	-- <= SQL Server 2005
 
 		IF @dbcc = 1
 	BEGIN
@@ -15052,8 +15220,8 @@ BEGIN
 			SELECT 'Instance_checks' AS [Category], 'Direct_Catalog_Updates' AS [Check], '[OK]' AS [Deviation]
 		END;
 
-		-- http://support.microsoft.com/kb/923247/en-us
-		-- http://www.sqlskills.com/blogs/paul/checkdb-from-every-angle-how-to-tell-if-data-purity-checks-will-be-run
+	-- http://support.microsoft.com/kb/923247/en-us
+	-- http://www.sqlskills.com/blogs/paul/checkdb-from-every-angle-how-to-tell-if-data-purity-checks-will-be-run
 		IF @purity = 1
 	BEGIN
 			SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Databases_need_data_purity_check' AS [Check], '[WARNING: Databases were found that need to run data purity checks.]' AS [Deviation]
@@ -15070,13 +15238,15 @@ BEGIN
 ELSE
 BEGIN
 		RAISERROR('[WARNING: Only a sysadmin can run the "DBCC CHECKDB, Direct Catalog Updates and Data Purity" checks. Bypassing check]', 16, 1, N'sysadmin')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### AlwaysOn/Mirroring automatic page repair subsection
-	-- Refer to "Automatic Page Repair" BOL entry for more information (https://docs.microsoft.com/sql/sql-server/failover-clusters/automatic-page-repair-availability-groups-database-mirroring) 
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### AlwaysOn/Mirroring automatic page repair subsection
+-- Refer to "Automatic Page Repair" BOL entry for more information (https://docs.microsoft.com/sql/sql-server/failover-clusters/automatic-page-repair-availability-groups-database-mirroring) 
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @sqlmajorver > 9
 BEGIN
 		RAISERROR (N'  |-Starting AlwaysOn/Mirroring automatic page repair', 10, 1) WITH NOWAIT
@@ -15158,10 +15328,12 @@ BEGIN
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Suspect pages subsection
-	-- Refer to "Manage the suspect_pages Table" BOL entry for more information (https://docs.microsoft.com/sql/relational-databases/backup-restore/manage-the-suspect-pages-table-sql-server)
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Suspect pages subsection
+-- Refer to "Manage the suspect_pages Table" BOL entry for more information (https://docs.microsoft.com/sql/relational-databases/backup-restore/manage-the-suspect-pages-table-sql-server)
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Suspect pages', 10, 1) WITH NOWAIT
 	IF (SELECT COUNT(*)
 	FROM msdb.dbo.suspect_pages
@@ -15188,9 +15360,11 @@ BEGIN
 		SELECT 'Maintenance_Monitoring_checks' AS [Category], 'Suspect_Pages' AS [Check], '[None]' AS [Deviation]
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Replication Errors subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Replication Errors subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @replication = 1 AND (SELECT COUNT(*)
 		FROM master.sys.databases (NOLOCK)
 		WHERE [name] = 'distribution') > 0
@@ -15228,13 +15402,15 @@ BEGIN
 		END
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Errorlog based checks subsection
-	-- - Because it is a string based search, add other search conditions as deemed fit. 
-	-- - You can set @logdetail to OFF if you want to get just the summary info on issues in the Errorlog, rather than the full detail.
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Errorlog based checks subsection
+-- - Because it is a string based search, add other search conditions as deemed fit. 
+-- - You can set @logdetail to OFF if you want to get just the summary info on issues in the Errorlog, rather than the full detail.
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Errorlog based checks', 10, 1) WITH NOWAIT
-	--DECLARE @lognumber int, @logcount int
+--DECLARE @lognumber int, @logcount int
 
 	IF ISNULL(IS_SRVROLEMEMBER(N'sysadmin'), 0) = 1 -- Is sysadmin
 		OR ISNULL(IS_SRVROLEMEMBER(N'securityadmin'), 0) = 1 -- Is securityadmin
@@ -15284,7 +15460,7 @@ BEGIN
 			logsize int
 		)
 
-		-- Get the number of available logs 
+	-- Get the number of available logs 
 		INSERT INTO #avail_logs
 		EXEC xp_enumerrorlogs
 
@@ -15293,7 +15469,7 @@ BEGIN
 
 		WHILE @lognumber < @logcount 
 	BEGIN
-			-- Cycle thru sql error logs
+		-- Cycle thru sql error logs
 			SELECT @sqlcmd = 'EXEC master..sp_readerrorlog ' + CONVERT(VARCHAR(3),@lognumber) + ', 1, ''15 seconds'''
 			BEGIN TRY
 			INSERT INTO #dbcc
@@ -15366,8 +15542,8 @@ BEGIN
 			SELECT @ErrorMessage = 'Errorlog based subsection - Error raised in TRY block 6. ' + ERROR_MESSAGE()
 			RAISERROR (@ErrorMessage, 16, 1);
 		END CATCH
-			-- Next log 
-			--SET @lognumber = @lognumber + 1 
+		-- Next log 
+		--SET @lognumber = @lognumber + 1 
 			SELECT @lognumber = MIN(lognum)
 			FROM #avail_logs
 			WHERE lognum > @lognumber
@@ -15427,7 +15603,7 @@ BEGIN
 				WHEN logmsg LIKE 'Error: 3624%' OR logmsg LIKE 'Error: 17065%' OR logmsg LIKE 'Error: 17066%' OR logmsg LIKE 'Error: 17067%' THEN 'System assertion check failed. Possible corruption'
 				WHEN logmsg LIKE 'Error: 5572%' THEN 'Possible FILESTREAM corruption'
 				WHEN logmsg LIKE 'Error: 9100%' THEN 'Possible index corruption'
-				-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/library/cc917684.aspx)
+			-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/library/cc917684.aspx)
 				WHEN logmsg LIKE 'Error: 17883%' THEN 'Non-yielding scheduler: http://technet.microsoft.com/library/cc917684.aspx'
 				WHEN logmsg LIKE 'Error: 17884%' OR logmsg LIKE 'Error: 17888%' THEN 'Deadlocked scheduler: http://technet.microsoft.com/library/cc917684.aspx'
 				WHEN logmsg LIKE 'Error: 17887%' THEN 'IO completion error: http://technet.microsoft.com/library/cc917684.aspx'
@@ -15436,15 +15612,15 @@ BEGIN
 				WHEN logmsg LIKE 'Error: 8621%' THEN 'QP stack overflow during optimization. Please simplify the query'
 				WHEN logmsg LIKE 'Error: 8642%' THEN 'QP insufficient threads for parallelism'
 				WHEN logmsg LIKE 'Error: 701%' THEN 'Insufficient memory'
-				-- How to troubleshoot SQL Server error 8645 (http://support.microsoft.com/kb/309256)
+			-- How to troubleshoot SQL Server error 8645 (http://support.microsoft.com/kb/309256)
 				WHEN logmsg LIKE 'Error: 8645%' THEN 'Insufficient memory: http://support.microsoft.com/kb/309256'
 				WHEN logmsg LIKE 'Error: 605%' THEN 'Page retrieval failed. Possible corruption'
-				-- How to troubleshoot Msg 5180 (http://support.microsoft.com/kb/2015747)
+			-- How to troubleshoot Msg 5180 (http://support.microsoft.com/kb/2015747)
 				WHEN logmsg LIKE 'Error: 5180%' THEN 'Invalid file ID. Possible corruption: http://support.microsoft.com/kb/2015747'
 				WHEN logmsg LIKE 'Error: 8966%' THEN 'Unable to read and latch on a PFS or GAM page'
 				WHEN logmsg LIKE 'Error: 9001%' OR logmsg LIKE 'Error: 9002%' THEN 'Transaction log errors.'
 				WHEN logmsg LIKE 'Error: 9003%' OR logmsg LIKE 'Error: 9004%' OR logmsg LIKE 'Error: 9015%' THEN 'Transaction log errors. Possible corruption'
-				-- How to reduce paging of buffer pool memory in the 64-bit version of SQL Server (http://support.microsoft.com/kb/918483)
+			-- How to reduce paging of buffer pool memory in the 64-bit version of SQL Server (http://support.microsoft.com/kb/918483)
 				WHEN logmsg LIKE 'A significant part of sql server process memory has been paged out%' THEN 'SQL Server process was trimmed by the OS. Preventable if LPIM is granted'
 				WHEN logmsg LIKE '%cachestore flush%' THEN 'CacheStore flush'
 			ELSE '' END AS [Comment],
@@ -15486,7 +15662,7 @@ BEGIN
 					WHEN logmsg LIKE 'Error: 3624%' OR logmsg LIKE 'Error: 17065%' OR logmsg LIKE 'Error: 17066%' OR logmsg LIKE 'Error: 17067%' THEN 'System assertion check failed. Possible corruption'
 					WHEN logmsg LIKE 'Error: 5572%' THEN 'Possible FILESTREAM corruption'
 					WHEN logmsg LIKE 'Error: 9100%' THEN 'Possible index corruption'
-					-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/library/cc917684.aspx)
+				-- How To Diagnose and Correct Errors 17883, 17884, 17887, and 17888 (http://technet.microsoft.com/library/cc917684.aspx)
 					WHEN logmsg LIKE 'Error: 17883%' THEN 'Non-yielding scheduler'
 					WHEN logmsg LIKE 'Error: 17884%' OR logmsg LIKE 'Error: 17888%' THEN 'Deadlocked scheduler'
 					WHEN logmsg LIKE 'Error: 17887%' THEN 'IO completion error'
@@ -15495,15 +15671,15 @@ BEGIN
 					WHEN logmsg LIKE 'Error: 8621%' THEN 'QP stack overflow during optimization. Please simplify the query'
 					WHEN logmsg LIKE 'Error: 8642%' THEN 'QP insufficient threads for parallelism'
 					WHEN logmsg LIKE 'Error: 701%' THEN 'Insufficient memory'
-					-- How to troubleshoot SQL Server error 8645 (http://support.microsoft.com/kb/309256)
+				-- How to troubleshoot SQL Server error 8645 (http://support.microsoft.com/kb/309256)
 					WHEN logmsg LIKE 'Error: 8645%' THEN 'Insufficient memory'
 					WHEN logmsg LIKE 'Error: 605%' THEN 'Page retrieval failed. Possible corruption'
-					-- How to troubleshoot Msg 5180 (http://support.microsoft.com/kb/2015747)
+				-- How to troubleshoot Msg 5180 (http://support.microsoft.com/kb/2015747)
 					WHEN logmsg LIKE 'Error: 5180%' THEN 'Invalid file ID. Possible corruption'
 					WHEN logmsg LIKE 'Error: 8966%' THEN 'Unable to read and latch on a PFS or GAM page'
 					WHEN logmsg LIKE 'Error: 9001%' OR logmsg LIKE 'Error: 9002%' THEN 'Transaction log errors.'
 					WHEN logmsg LIKE 'Error: 9003%' OR logmsg LIKE 'Error: 9004%' OR logmsg LIKE 'Error: 9015%' THEN 'Transaction log errors. Possible corruption'
-					-- How to reduce paging of buffer pool memory in the 64-bit version of SQL Server (http://support.microsoft.com/kb/918483)
+				-- How to reduce paging of buffer pool memory in the 64-bit version of SQL Server (http://support.microsoft.com/kb/918483)
 					WHEN logmsg LIKE 'A significant part of sql server process memory has been paged out%' THEN 'SQL Server process was trimmed by the OS. Preventable if LPIM is granted'
 					WHEN logmsg LIKE '%cachestore flush%' THEN 'CacheStore flush'
 				ELSE '' END AS [Comment]
@@ -15520,12 +15696,14 @@ ELSE
 BEGIN
 		RAISERROR('[WARNING: Only a sysadmin or securityadmin can run the "Errorlog" check. Bypassing check]', 16, 1, N'permissions')
 		RAISERROR('[WARNING: If not sysadmin or securityadmin, then user must be a granted EXECUTE permissions on the following sprocs to run checks: xp_enumerrorlogs and sp_readerrorlog. Bypassing check]', 16, 1, N'extended_sprocs')
-	--RETURN
+--RETURN
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### System health error checks subsection
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### System health error checks subsection
+--------------------------------------------------------------------------------------------------------------------------------
 	IF @sqlmajorver > 10
 BEGIN
 		RAISERROR (N'  |-Starting System health checks', 10, 1) WITH NOWAIT
@@ -15542,7 +15720,7 @@ BEGIN
 			target_data XML
 		)
 
-		-- Store the XML data in a temporary table
+	-- Store the XML data in a temporary table
 		INSERT INTO #SystemHealthSessionData
 		SELECT CAST(xet.target_data AS XML)
 		FROM sys.dm_xe_session_targets xet
@@ -15555,7 +15733,7 @@ BEGIN
 	BEGIN
 			SELECT 'Maintenance_Monitoring_checks' AS [Category], 'SystemHealth_Errors' AS [Check], '[WARNING: System Health Session contains important messages.]' AS [Deviation];
 
-			-- Get statistical information about all the errors reported
+		-- Get statistical information about all the errors reported
 			;WITH
 				cteHealthSession (EventXML)
 				AS
@@ -15583,7 +15761,7 @@ BEGIN
 			WHERE b.language_id = @langid
 			GROUP BY a.ErrorNumber, b.[text]
 
-			-- Get detailed information about all the errors reported
+		-- Get detailed information about all the errors reported
 			;WITH
 				cteHealthSession
 				AS
@@ -15615,9 +15793,11 @@ BEGIN
 		END;
 	END;
 
-	--------------------------------------------------------------------------------------------------------------------------------
-	-- ### Clean up temp objects 
-	--------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+-- ### Clean up temp objects 
+--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'Clearing up temporary objects', 10, 1) WITH NOWAIT
 
 	IF EXISTS (SELECT [object_id]
@@ -15818,7 +15998,7 @@ DROP TABLE #tblCode;
 DROP TABLE #tblWorking;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
-	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tempdb.dbo.tmpdbs_userchoice'))
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs_userchoice'))
 DROP TABLE tempdb.dbo.tmpdbs_userchoice;
 	IF EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
@@ -15938,6 +16118,14 @@ IF EXISTS (SELECT [object_id]
 		BEGIN
 			DROP TABLE tempdb.dbo.permstbl_msdb
 		END
+IF EXISTS (SELECT [object_id]
+	FROM tempdb.sys.objects (NOLOCK)
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs0'))
+DROP TABLE tempdb.dbo.tmpdbs0;
+IF EXISTS (SELECT [object_id]
+	FROM tempdb.sys.objects (NOLOCK)
+	WHERE [object_id] = OBJECT_ID('tempdb.dbo.tmpdbs1'))
+DROP TABLE tempdb.dbo.tmpdbs1;
 
 	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_perfctr'')) DROP FUNCTION dbo.fn_perfctr')
 	EXEC ('USE tempdb; IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID(''tempdb.dbo.fn_createindex_allcols'')) DROP FUNCTION dbo.fn_createindex_allcols')
