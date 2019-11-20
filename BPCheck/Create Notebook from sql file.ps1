@@ -35,7 +35,6 @@ DECLARE @lpim bit, @lognumber int, @logcount int
 DECLARE @query NVARCHAR(1000)
 DECLARE @diskfrag bit
 DECLARE @accntsqlservice NVARCHAR(128)
-DECLARE @maxservermem bigint
 DECLARE @maxservermem bigint, @systemmem bigint
 -- Does not include reserved memory in the memory manager
 DECLARE @mwthreads_count int
