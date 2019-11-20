@@ -301,6 +301,14 @@ WHERE dp.state = ''G''
 	DECLARE @langid smallint
 	DECLARE @lpim bit, @lognumber int, @logcount int
 	DECLARE @query NVARCHAR(1000)
+	DECLARE @diskfrag bit
+	DECLARE @accntsqlservice NVARCHAR(128)
+	DECLARE @maxservermem bigint, @systemmem bigint
+	-- Does not include reserved memory in the memory manager
+	DECLARE @mwthreads_count int
+	DECLARE @ifi bit
+	DECLARE @duration tinyint
+	DECLARE @adhoc smallint
 	
 	SELECT @langid = lcid FROM sys.syslanguages WHERE name = @@LANGUAGE
 	SELECT @instancename = CONVERT(VARCHAR(128),SERVERPROPERTY('InstanceName'))
@@ -389,7 +397,6 @@ BEGIN
 				SELECT @psavail = [PS_OUTPUT]
 				FROM @psavail_output
 				WHERE [PS_OUTPUT] IS NOT NULL;
-				INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 			END
 		ELSE
 		BEGIN
@@ -445,8 +452,9 @@ The Set-ExecutionPolicy cmdlet enables you to determine which Windows PowerShell
 		--RETURN
 		END
 	END;
-
+INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 	/*
+
 --------------------------------------------------------------------------------------------------------------------------------
 -- ## Pre-requisites section
 -- Check pre-requisites for all checks
@@ -688,6 +696,7 @@ ELSE
 BEGIN
     RAISERROR ('WARNING: Missing permissions for Powershell enablement verification', 16, 1) WITH NOWAIT
 END;
+INSERT INTO tempdb.dbo.dbvars (VarName, VarValue) VALUES ('psavail', @psavail )
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- ## Information section
@@ -2571,12 +2580,12 @@ BEGIN
 	-- ### Server Memory subsection
 	--------------------------------------------------------------------------------------------------------------------------------
 	RAISERROR (N'  |-Starting Server Memory', 10, 1) WITH NOWAIT
-	DECLARE @maxservermem bigint, @minservermem bigint, @systemmem bigint, @systemfreemem bigint, @numa_nodes_afinned tinyint, @LowMemoryThreshold int
+	DECLARE  @minservermem bigint,  @systemfreemem bigint, @numa_nodes_afinned tinyint, @LowMemoryThreshold int
 	DECLARE @commit_target bigint
 	-- Includes stolen and reserved memory in the memory manager
 	DECLARE @committed bigint
 	-- Does not include reserved memory in the memory manager
-	DECLARE @mwthreads_count int, @xtp int
+	DECLARE @xtp int
 
 	IF @sqlmajorver = 9
 BEGIN
@@ -5088,7 +5097,7 @@ BEGIN
 		DECLARE @statusbrowservice NVARCHAR(20), @statusolapservice NVARCHAR(20), @statusrsservice NVARCHAR(20)
 		DECLARE @regkeysqlservice NVARCHAR(256), @regkeysqlagentservice NVARCHAR(256), @regkeydtsservice NVARCHAR(256), @regkeyftservice NVARCHAR(256)
 		DECLARE @regkeybrowservice NVARCHAR(256), @regkeyolapservice NVARCHAR(256), @regkeyrsservice NVARCHAR(256)
-		DECLARE @accntsqlservice NVARCHAR(128), @accntsqlagentservice NVARCHAR(128), @accntdtsservice NVARCHAR(128), @accntftservice NVARCHAR(128)
+		DECLARE @accntsqlagentservice NVARCHAR(128), @accntdtsservice NVARCHAR(128), @accntftservice NVARCHAR(128)
 		DECLARE @accntbrowservice NVARCHAR(128), @accntolapservice NVARCHAR(128), @accntrsservice NVARCHAR(128)
 
 		-- Get service names
