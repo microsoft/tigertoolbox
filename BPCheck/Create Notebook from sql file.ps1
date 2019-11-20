@@ -39,7 +39,7 @@ DECLARE @maxservermem bigint, @systemmem bigint
 -- Does not include reserved memory in the memory manager
 DECLARE @mwthreads_count int
 DECLARE @ifi bit
-DECALRE @duration tinyint
+DECLARE @duration tinyint
 DECLARE @adhoc smallint
 DECLARE @gen_scripts bit 
 DECLARE @ixfrag bit = 1 --(1 = ON; 0 = OFF)
