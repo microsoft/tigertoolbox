@@ -22,6 +22,7 @@ DECLARE @sqlcmd NVARCHAR(max), @params NVARCHAR(600)
 DECLARE @sqlmajorver int, @sqlminorver int, @sqlbuild int, @masterpid int, @clustered bit
 DECLARE @ptochecks int
 DECLARE @permstbl TABLE ([name] sysname)
+DECLARE @permstbl_msdb TABLE ([id] tinyint IDENTITY(1,1), [perm] tinyint)
 DECLARE @dbScope VARCHAR(256) 	
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
 DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
@@ -32,6 +33,19 @@ DECLARE @affined_cpus int
 DECLARE @langid smallint
 DECLARE @lpim bit, @lognumber int, @logcount int
 DECLARE @query NVARCHAR(1000)
+DECLARE @diskfrag bit
+DECLARE @accntsqlservice NVARCHAR(128)
+DECLARE @maxservermem bigint
+DECLARE @maxservermem bigint, @systemmem bigint
+-- Does not include reserved memory in the memory manager
+DECLARE @mwthreads_count int
+DECLARE @ifi bit
+DECALRE @duration tinyint
+DECLARE @adhoc smallint
+DECLARE @gen_scripts bit 
+DECLARE @ixfrag bit = 1 --(1 = ON; 0 = OFF)
+DECLARE @ixfragscanmode VARCHAR(8) = 'LIMITED' --(Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
+DECLARE @logdetail bit = 0 --(1 = ON; 0 = OFF)
 
 SELECT @masterpid = principal_id FROM master.sys.database_principals (NOLOCK) WHERE sid = SUSER_SID()
 
@@ -54,6 +68,14 @@ SELECT @bpool_consumer = 1 -- 1 for enable 0 for disable
 SELECT @allow_xpcmdshell = 1 -- 1 for enable 0 for disable
 SELECT @custompath = NULL
 SELECT @langid = lcid FROM sys.syslanguages WHERE name = @@LANGUAGE
+SELECT @diskfrag = 1
+SELECT @duration = 90
+SELECT @adhoc = CONVERT(bit, [value]) FROM sys.configurations WHERE [Name] = 'optimize for ad hoc workloads';
+SELECT @gen_scripts = 0 -- 1 for enable 0 for disable
+DECLARE @dbcmptlevel int
+SELECT @ixfrag = 1 --(1 = ON; 0 = OFF)
+SELECT @ixfragscanmode = 'LIMITED' --(Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
+SELECT @logdetail = 0 --(1 = ON; 0 = OFF)
 
 IF NOT EXISTS (SELECT [object_id]
 	FROM tempdb.sys.objects (NOLOCK)
@@ -64,6 +86,12 @@ IF NOT EXISTS (SELECT [object_id]
 SELECT @ostype = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'ostype');
 SELECT @osver = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'osver');
 SELECT @affined_cpus = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'affined_cpus');
+SELECT @psavail = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'psavail');
+SELECT @accntsqlservice = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'accntsqlservice');
+SELECT @maxservermem = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'maxservermem');
+SELECT @systemmem = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'systemmem');
+SELECT @mwthreads_count = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'mwthreads_count');
+SELECT @ifi = (SELECT VarValue FROM tempdb.dbo.dbvars WHERE VarName = 'ifi');
 
 IF @sqlmajorver > 10
 BEGIN
