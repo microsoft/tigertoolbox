@@ -8317,11 +8317,11 @@ FROM sys.database_query_store_options;'
 			FROM #tblQStoreInfo
 			ORDER BY DBName;
 		END
-	ELSE
+END
+ELSE
 	BEGIN
-			SELECT 'Information' AS [Category], 'Query_Store' AS [Information] , '[INFORMATION: No databases have Query Store enabled]' AS [Comment];
-		END
-	END;
+		SELECT 'Information' AS [Category], 'Query_Store' AS [Information] , '[INFORMATION: No databases have Query Store enabled]' AS [Comment];
+	END
 
 	--------------------------------------------------------------------------------------------------------------------------------
 	-- ### Automatic Tuning info subsection
