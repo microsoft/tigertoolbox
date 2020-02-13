@@ -1,0 +1,2 @@
+# Improving Availability in SQL Server and Azure SQL Database with Accelerated Database Recovery and Resumable Operations
+Demo source code available at [SQL Server Samples GitHub: Accelerated Database Recovery](https://github.com/microsoft/sql-server-samples/tree/master/samples/features/accelerated-database-recovery) and [SQL Server Samples GitHub: Resumable Index Operations](https://github.com/microsoft/sql-server-samples/tree/master/samples/features/resumable-index-operations) in T-SQL Notebooks.

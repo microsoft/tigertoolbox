@@ -1,0 +1,2 @@
+# Turbocharge Your SQL Server with In-Memory Database Technologies
+Demo source code available at [SQL Server Samples GitHub: In-Memory Database](https://github.com/microsoft/sql-server-samples/tree/master/samples/features/in-memory-database).
