@@ -1106,7 +1106,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.6.9';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.6.7';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1872,6 +1872,9 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 			IF (@fragmentation < @rebuildThreshold AND @ixtype IN (1,2) AND @has_filter = 0 AND @allowPageLocks = 1)
 				OR (@fragmentation < @rebuildThreshold_cs AND @ixtype IN (5,6))
 			BEGIN		
+				IF @debugMode = 1
+				RAISERROR('     Index eligible for REORGANIZE...', 0, 42) WITH NOWAIT;
+
 				SET @operationFlag = 0	
 
 				/* Set Reorg command */
@@ -1899,7 +1902,11 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 			ELSE IF ((@fragmentation >= @rebuildThreshold AND @ixtype IN (1,2)) OR @rebuildThreshold = 0)
 				OR ((@fragmentation >= @rebuildThreshold_cs AND @ixtype IN (5,6)) OR @rebuildThreshold_cs = 0)
 				OR @has_filter = 1 OR @allowPageLocks = 0
-			BEGIN			
+			BEGIN	
+
+				IF @debugMode = 1
+				RAISERROR('     Index eligible for REBUILD...', 0, 42) WITH NOWAIT;
+				
 				SET @rebuildcommand = N' REBUILD'
 				SET @operationFlag = 1
 
@@ -2008,7 +2015,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				SET @HasRI = 0
 				IF @sqlmajorver > 14
 				BEGIN
-					SET @sqlcmdRI = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.index_resumable_operations'
+					SET @sqlcmdRI = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.index_resumable_operations'
 					SET @paramsRI = N'@HasRI_OUT int OUTPUT'
 				
 					EXECUTE sp_executesql @sqlcmdRI, @paramsRI, @HasRI_OUT = @HasRI OUTPUT
@@ -2043,7 +2050,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					ELSE					
 					SET @sqlprecommand = @sqlprecommand + N'; '
 				END
-				
+			
 				/* Set Rebuild command */
 				SET @sqlcommand = N'ALTER INDEX ' + @indexName + N' ON ' + @dbName + N'.' + @schemaName + N'.' + @objectName + REPLACE(@rebuildcommand,', )', ')');
 				
