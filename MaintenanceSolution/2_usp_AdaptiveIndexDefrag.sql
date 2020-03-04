@@ -2008,7 +2008,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				SET @HasRI = 0
 				IF @sqlmajorver > 14
 				BEGIN
-					SET @sqlcmdRI = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.index_resumable_operations'
+					SET @sqlcmdRI = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @HasRI_OUT = COUNT(*) FROM sys.index_resumable_operations'
 					SET @paramsRI = N'@HasRI_OUT int OUTPUT'
 				
 					EXECUTE sp_executesql @sqlcmdRI, @paramsRI, @HasRI_OUT = @HasRI OUTPUT
@@ -2335,26 +2335,26 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_incremental_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
 				END
 				ELSE IF ((@sqlmajorver = 12 AND @sqlbuild < 5000) OR (@sqlmajorver = 13 AND @sqlbuild < 4000)) AND ISNULL(@stats_isincremental,1) = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
 				END
 				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (ISNULL(@stats_isincremental,1) = 0 OR UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1)
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties(@statsobjectID_In, @statsID_In);'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties(@statsobjectID_In, @statsID_In);'
 				END
 				ELSE
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.sysindexes...', 0, 42) WITH NOWAIT;
 					SELECT TOP 1 @surrogateStatsID = indexID FROM dbo.tbl_AdaptiveIndexDefrag_Working (NOLOCK) WHERE objectID = @statsobjectID AND indexName = @statsName 
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)), @rows_Out = ISNULL(rowcnt,0), @rows_sampled_Out = -1 FROM sys.sysindexes WHERE id = @statsobjectID_In AND indid = @statsID_In AND rowmodctr > 0;'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)), @rows_Out = ISNULL(rowcnt,0), @rows_sampled_Out = -1 FROM sys.sysindexes WHERE id = @statsobjectID_In AND indid = @statsID_In AND rowmodctr > 0;'
 					
 					IF @statsID IS NULL
 					SET @statsID = @surrogateStatsID	
@@ -2603,7 +2603,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 				/* Get stat associated table record count */
 				BEGIN TRY
-					SELECT @getStatSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT TOP 1 @record_count_Out = p.[rows] FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Stats_Working idss INNER JOIN sys.partitions AS p ON idss.objectID = p.[object_id] AND idss.partitionNumber = p.partition_number WHERE idss.updateDate IS NULL ' + CASE WHEN @Exec_Print = 0 THEN 'AND idss.printStatus = 0 ' ELSE '' END + ' AND idss.statsID = @statsID_In AND idss.dbID = @dbID_In AND idss.objectID = @statsobjectID_In' 
+					SELECT @getStatSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT TOP 1 @record_count_Out = p.[rows] FROM [' + DB_NAME(@AID_dbID) + '].dbo.tbl_AdaptiveIndexDefrag_Stats_Working idss INNER JOIN sys.partitions AS p ON idss.objectID = p.[object_id] AND idss.partitionNumber = p.partition_number WHERE idss.updateDate IS NULL ' + CASE WHEN @Exec_Print = 0 THEN 'AND idss.printStatus = 0 ' ELSE '' END + ' AND idss.statsID = @statsID_In AND idss.dbID = @dbID_In AND idss.objectID = @statsobjectID_In' 
 					SET @getStatSQL_Param = N'@statsID_In int, @dbID_In int, @statsobjectID_In int, @record_count_Out bigint OUTPUT'
 					EXECUTE sp_executesql @getStatSQL, @getStatSQL_Param, @statsID_In = @statsID, @dbID_In = @dbID, @statsobjectID_In = @statsobjectID, @record_count_Out = @record_count OUTPUT;
 				END TRY
@@ -2634,26 +2634,26 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_incremental_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_incremental_stats_properties(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
 				END
 				ELSE IF ((@sqlmajorver = 12 AND @sqlbuild < 5000) OR (@sqlmajorver = 13 AND @sqlbuild < 4000)) AND ISNULL(@stats_isincremental,1) = 1 AND (@statsSample IS NULL OR UPPER(@statsSample) = 'RESAMPLE')
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties_internal DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties_internal(@statsobjectID_In, @statsID_In) WHERE partition_number = @partitionNumber_In;'
 				END
 				ELSE IF ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 4000) OR (@sqlmajorver = 11 AND @sqlbuild >= 3000) OR @sqlmajorver >= 12) AND (ISNULL(@stats_isincremental,1) = 0 OR UPPER(@statsSample) = 'FULLSCAN' OR ISNUMERIC(@statsSample) = 1)
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.dm_db_stats_properties DMF...', 0, 42) WITH NOWAIT;
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties(@statsobjectID_In, @statsID_In);'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = ISNULL(modification_counter,0), @rows_Out = ISNULL(rows,0), @rows_sampled_Out = ISNULL(rows_sampled,0) FROM sys.dm_db_stats_properties(@statsobjectID_In, @statsID_In);'
 				END
 				ELSE
 				BEGIN
 					IF @debugMode = 1
 					RAISERROR('     Using sys.sysindexes...', 0, 42) WITH NOWAIT;
 					SELECT TOP 1 @surrogateStatsID = indexID FROM dbo.tbl_AdaptiveIndexDefrag_Working (NOLOCK) WHERE objectID = @statsobjectID AND indexName = @statsName 
-					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + QUOTENAME(@dbName) ELSE '' END + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)), @rows_Out = ISNULL(rowcnt,0), @rows_sampled_Out = -1 FROM sys.sysindexes WHERE id = @statsobjectID_In AND indid = @statsID_In AND rowmodctr > 0;'
+					SELECT @rowmodctrSQL = CASE WHEN @engineedition NOT IN (5, 6) THEN 'USE ' + @dbName ELSE '' END + '; SELECT @rowmodctr_Out = SUM(ISNULL(rowmodctr,0)), @rows_Out = ISNULL(rowcnt,0), @rows_sampled_Out = -1 FROM sys.sysindexes WHERE id = @statsobjectID_In AND indid = @statsID_In AND rowmodctr > 0;'
 
 					IF @statsID IS NULL
 					SET @statsID = @surrogateStatsID
