@@ -378,4 +378,12 @@ v2.4.1.5 - 06/06/2019 - Fixed table error with Query Store and Auto Tuning secti
 						Fixed Disk space subsection not working with SQL 2008;
 						Fixed case sensitivity issues (Thanks sm8680);
 						Fixed issues with XML conversion in plan cache queries.
-v2.4.1.5.1 - 06/25/2019 - Added batch mode syncpoint waits to wait stats section.   
+v2.4.1.5.1 - 06/25/2019 - Added batch mode syncpoint waits to wait stats section. 
+v2.4.1.6 - 08/20/2019 - Reviewed entire trace flag check section;
+						Minor revisions to System configurations and Plan use ratio subsections.
+v2.4.1.6.1 - 08/21/2019 - Fixed syntax errors in trace flag section.
+v2.4.2 - 08/28/2019 - Fixed various string formatting issues (Thanks Alex Protesenko);						
+						Updated Indexes with large keys check for SQL 2016+ (Thanks Petar Trbos);
+						Fixed PK violation in Foreign Keys with no Index check (Thanks Scott Ivey).
+v2.4.3 - 10/07/2019 - Extended deprecated features subsection;
+						Fixed conversion errors in Missing Indexes subsection.
