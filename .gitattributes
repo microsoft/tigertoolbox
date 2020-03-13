@@ -1,2 +1,2 @@
 # Ensure sql is not interpreted as binary
-**/*.sql text
+*.sql diff
