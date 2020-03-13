@@ -1,0 +1,2 @@
+# Ensure sql is not interprited as binary
+*.sql diff
