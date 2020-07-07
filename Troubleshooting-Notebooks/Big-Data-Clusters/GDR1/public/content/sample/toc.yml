@@ -1,0 +1,17 @@
+- title: Samples 
+  url: /sample/readme
+  not_numbered: true
+  expand_sections: false
+  sections:
+  - title: SAM001 - Storage Pool - Load sample data
+    url: sample/sam001-load-sample-data-into-bdc
+  - title: SAM002 - Storage Pool - Query HDFS
+    url: sample/sam002-query-hdfs-in-sql-server
+  - title: SAM003 - Data Pool Example
+    url: sample/sam003-data-pool
+  - title: SAM008 - Spark using azdata
+    url: sample/sam008-spark-using-azdata
+  - title: SAM009 - HDFS using azdata
+    url: sample/sam009-hdfs-using-azdata
+  - title: SAM010 - App using azdata
+    url: sample/sam010-app-using-azdata

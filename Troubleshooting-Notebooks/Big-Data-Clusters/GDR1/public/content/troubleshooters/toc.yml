@@ -1,0 +1,19 @@
+- title: Troubleshooters
+  url: /troubleshooters/readme
+  not_numbered: true
+  expand_sections: true
+  sections:
+  - title: TSG100 - The Big Data Cluster troubleshooter
+    url: troubleshooters/tsg100-troubleshoot-bdc
+  - title: TSG101 - SQL Server troubleshooter
+    url: troubleshooters/tsg101-troubleshoot-sql-server
+  - title: TSG102 - HDFS troubleshooter
+    url: troubleshooters/tsg102-troubleshoot-hdfs
+  - title: TSG103 - Spark troubleshooter
+    url: troubleshooters/tsg103-troubleshoot-spark
+  - title: TSG104 - Control troubleshooter
+    url: troubleshooters/tsg104-troubleshoot-control
+  - title: TSG105 - Gateway troubleshooter
+    url: troubleshooters/tsg105-troubleshoot-gateway
+  - title: TSG106 - App troubleshooter
+    url: troubleshooters/tsg106-troubleshoot-app
