@@ -114,7 +114,7 @@ SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
 SELECT @Message = '** Start: ' + CONVERT(VARCHAR, GETDATE())
 RAISERROR(@Message, 0, 42) WITH NOWAIT;
 
-SET @sqlcmd_AO = 'SELECT sd.database_id, sd.name, SUM((size * 8) / 1024) AS rows_size_MB, 0 
+SET @sqlcmd_AO = 'SELECT sd.database_id, sd.name, SUM((cast(size as bigint) * 8) / 1024) AS rows_size_MB, 0 
 FROM sys.databases sd (NOLOCK)
 INNER JOIN sys.master_files smf (NOLOCK) ON sd.database_id = smf.database_id
 WHERE sd.is_read_only = 0 AND sd.state = 0 AND sd.database_id <> 2 AND smf.[type] = 0';
