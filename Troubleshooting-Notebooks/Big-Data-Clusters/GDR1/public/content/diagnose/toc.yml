@@ -1,0 +1,15 @@
+- title: Diagnose
+  url: /diagnose/readme
+  not_numbered: true
+  expand_sections: true
+  sections:
+  - title: TSG027 - Observe cluster deployment
+    url: diagnose/tsg027-observe-bdc-create
+  - title: TSG078 - Is cluster healthy
+    url: diagnose/tsg078-is-cluster-healthy
+  - title: TSG029 - Find dumps in the cluster
+    url: diagnose/tsg029-find-dumps-in-the-cluster
+  - title: TSG032 - CPU and Memory usage for all containers
+    url: diagnose/tsg032-get-cpu-and-memory-for-all-containers
+  - title: TSG060 - Persistent Volume disk space for all BDC PVCs
+    url: diagnose/tsg060-get-disk-space-for-all-pvcs

@@ -1,0 +1,41 @@
+8316 | 2020-03-11 15:22:49.0581 UTC | DEBUG | cli.knack.log | File logging enabled - writing logs to 'canary-sql-storage-v1'.
+8316 | 2020-03-11 15:22:49.0582 UTC | DEBUG | cli.knack.cli | Event: OutputProducer.OnOutput [<function OutputProducer.__init__.<locals>.<lambda> at 0x04AB04B0>]
+8316 | 2020-03-11 15:22:49.0582 UTC | DEBUG | cli.knack.cli | Event: Cli.PreExecute []
+8316 | 2020-03-11 15:22:49.0583 UTC | DEBUG | cli.knack.cli | Event: CommandParser.OnGlobalArgumentsCreate [<function CLILogging.on_global_arguments at 0x0303E4F8>, <function OutputProducer.on_global_arguments at 0x02E92198>, <function CLIQuery.on_global_arguments at 0x03071270>]
+8316 | 2020-03-11 15:22:49.0584 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnPreCommandTableTruncate [<function CliLogging.init_command_file_logging at 0x04AACB28>]
+8316 | 2020-03-11 15:22:49.0647 UTC | DEBUG | cli.mssqlctl.cli.core.profile | None
+8316 | 2020-03-11 15:22:49.0647 UTC | DEBUG | cli.mssqlctl.cli.core.profile | profile base location: C:\Users\Admin\.azdata
+8316 | 2020-03-11 15:22:49.0647 UTC | DEBUG | cli.mssqlctl.cli.core.profile | profile location: C:\Users\Admin\.azdata\azdata-profile.json
+8316 | 2020-03-11 15:22:52.0756 UTC | INFO | azdata_command_data_logger | command args: login -n dogfood-b --auth ad
+8316 | 2020-03-11 15:22:52.0756 UTC | DEBUG | cli.mssqlctl.cli.core.logging | metadata file logging enabled - writing logs to "C:\Users\Admin\.azdata\commands".
+8316 | 2020-03-11 15:22:52.0757 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnPreCommandTableCreate []
+8316 | 2020-03-11 15:22:52.0772 UTC | DEBUG | cli.knack.cli | Event: CommandLoader.OnLoadArguments []
+8316 | 2020-03-11 15:22:52.0773 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnPostCommandTableCreate []
+8316 | 2020-03-11 15:22:52.0801 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnCommandTableLoaded []
+8316 | 2020-03-11 15:22:52.0801 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnPreParseArgs []
+8316 | 2020-03-11 15:22:52.0802 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnPostParseArgs [<function OutputProducer.handle_output_argument at 0x02E921E0>, <function CLIQuery.handle_query_parameter at 0x030712B8>]
+8316 | 2020-03-11 15:22:52.0803 UTC | DEBUG | cli.mssqlctl.cli.core.clients.controller_client | Controller endpoint https://control.dogfood-b.local:30080
+8316 | 2020-03-11 15:22:52.0803 UTC | DEBUG | cli.mssqlctl.cli.core.clients.controller_client | ['__abstractmethods__', '__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '__weakref__', '_abc_cache', '_abc_negative_cache', '_abc_negative_cache_version', '_abc_registry', 'acquire_token', 'api_client', 'create_app', 'create_cluster', 'create_mount', 'delete_app', 'delete_cluster', 'delete_mount', 'endpoint', 'get_bdc_status', 'get_cluster', 'get_cluster_state', 'get_control_status', 'get_controller_logs', 'get_endpoints', 'get_mount_status', 'is_ready', 'list_app', 'list_apps', 'refresh_mount', 'set_authorization_header', 'update_app', 'upgrade_bdc', 'upgrade_control_plane']
+8316 | 2020-03-11 15:22:53.0491 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | KERBEROS: stage authGSSClientInit
+8316 | 2020-03-11 15:22:53.0491 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | KERBEROS: service HTTP@control.dogfood-b.local:30080
+8316 | 2020-03-11 15:22:53.0493 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | KERBEROS: code 1
+8316 | 2020-03-11 15:22:53.0494 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | KERBEROS: context -----------
+8316 | 2020-03-11 15:22:53.0494 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | <capsule object NULL at 0x05977FE0>
+8316 | 2020-03-11 15:22:53.0494 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | -----------------------------
+8316 | 2020-03-11 15:22:53.0494 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | KERBEROS: stage authGSSClientStep
+8316 | 2020-03-11 15:22:53.0495 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | KERBEROS: code 0
+8316 | 2020-03-11 15:22:53.0495 UTC | DEBUG | cli.mssqlctl.cli.core.clients.kerberos_client | KERBEROS: stage authGSSClientResponse
+8316 | 2020-03-11 15:22:53.0495 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request url: https://control.dogfood-b.local:30080/api/v1/token
+8316 | 2020-03-11 15:22:53.0495 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request method: POST
+8316 | 2020-03-11 15:22:53.0495 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request header[Accept]: application/json
+8316 | 2020-03-11 15:22:53.0495 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request header[version]: 15.0.4013
+8316 | 2020-03-11 15:22:53.0496 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request header[User-Agent]: azdata-cli-core/15.0.4013/python
+8316 | 2020-03-11 15:22:53.0496 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request header[Authorization]: <PRIVATE>
+8316 | 2020-03-11 15:22:53.0496 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request header[Content-Type]: application/json
+8316 | 2020-03-11 15:22:53.0496 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | request body: None
+8316 | 2020-03-11 15:22:53.0894 UTC | DEBUG | cli.mssqlctl.cli.core.clients.api_client | response body: {"token_type":"Bearer","access_token":"eyJhbGciOiJSUzI1NiIsImtpZCI6IkNCOUNFNEJERDU4QTE4MzQwMzIwMDhEM0U4MjI4QkE3NzE3MTNDMzMiLCJ0eXAiOiJKV1QifQ.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9zaWQiOiJTLTEtNS0yMS0xNTE2NzM1OTEwLTg5MjUzNTQxNi0xMjI0Mjk3NzEzLTExMDMiLCJnaXZlbl9uYW1lIjoiYWRtaW4iLCJuYW1laWQiOiJhZG1pbkBkb2dmb29kLWIubG9jYWwiLCJncm91cHNpZCI6WyJTLTEtNS0yMS0xNTE2NzM1OTEwLTg5MjUzNTQxNi0xMjI0Mjk3NzEzLTUxMiIsIlMtMS01LTIxLTE1MTY3MzU5MTAtODkyNTM1NDE2LTEyMjQyOTc3MTMtNTEzIl0sInJvbGUiOlsiRG9tYWluIEFkbWlucyIsIkRvbWFpbiBVc2VycyIsImF1dGhlbnRpY2F0ZWQiLCJhcHBPd25lciIsImJkY0FkbWluIiwiYmRjVXNlciJdLCJuYmYiOjE1ODM5NjUzNzMsImV4cCI6MTU4NDAwMTM3MywiaWF0IjoxNTgzOTY1MzczLCJpc3MiOiJtc3NxbC5taWNyb3NvZnQuY29tIiwiYXVkIjoibXNzcWwubWljcm9zb2Z0LmNvbSJ9.lmwi3jr9wsBu6VJCnhSbXcDr3o9LJwljoyHk7tSWgmcW51IFggFe7BPWbcjytmAmgbF1o7z79rDJm4WXcf_XT2UwexGGHWaIT-FmtrskVsPJuNHSk0c2x_leDmkrGWDdNmBvxrloaNS9dSPCUtdkPuzpcxjkC5kh-OCx88SYpuGcY14D9UpZ3sBBfyBggfu8n481K_Jd-JZU1vyAIKlnCD8gq2WH4yKEjO6y45_a4eXzYagN7GS_qVz8abxVuQuqP-h_0IoJkXk7PG1tn-uVEFCvqJGwgsMhfJcQoncer-lFlrb2xVL3F7xn3sMOZ_vZZGAVGCUzsfpyKhxbr8iUkg","expires_in":36000,"expires_on":1584001373,"token_id":"OfGgYRJ1zkMe30qE3ZBnEQ47QZASMASNLyYplF0nyxnMdm8ZTxieA0fYMOkJqQ7tS/qd1m4z0HotRMb0VbL+cX6kLYK4cSZQQ0tyVVx9aqOkwer5BPd0tVOVRyMrepLAT4+81JwMFkgQRWDzWC0SUtWSFm9uvlZW0NPdatvOSgR2ff5vfw7jl+H4O/r6u3veSb5kVKcBbltpf/1GZDpaDD794FgHFM/Nw/Hf9ePd4ZymMhDSpqxX598RcrltpAuLu5skw9hCvzh3mc+qLsm70rrpvnABO/OrzpaxDgJmj6G2lbr6cacZfU73ikaJxp6pfNQs4EDyYzNDtgkBSoA3gg==","namespace":"dogfood-b"}
+8316 | 2020-03-11 15:22:53.0896 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnTransformResult []
+8316 | 2020-03-11 15:22:53.0896 UTC | DEBUG | cli.knack.cli | Event: CommandInvoker.OnFilterResult []
+8316 | 2020-03-11 15:22:53.0897 UTC | DEBUG | cli.knack.cli | Event: Cli.PostExecute []
+8316 | 2020-03-11 15:22:53.0897 UTC | INFO | azdata_command_data_logger | exit code: 0
+8316 | 2020-03-11 15:22:53.0898 UTC | INFO | cli.mssqlctl.cli.entry | command ran in 4.345 seconds.
