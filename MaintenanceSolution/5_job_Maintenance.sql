@@ -1010,9 +1010,9 @@ BEGIN
 	CREATE TABLE #tmpdbs (id int IDENTITY(1,1), [dbname] sysname, isdone bit)
 
 	INSERT INTO #tmpdbs ([dbname], isdone)
-	(SELECT QUOTENAME(name), 0 FROM sys.databases JOIN sys.dm_hadr_database_replica_states hadrdrs ON d.database_id = hadrdrs.database_id WHERE is_read_only = 0 AND state = 0 AND database_id > 4 AND is_distributor = 0 AND hadrdrs.is_primary_replica = 1)
+	(SELECT QUOTENAME(name), 0 FROM sys.databases d JOIN sys.dm_hadr_database_replica_states hadrdrs ON d.database_id = hadrdrs.database_id WHERE is_read_only = 0 AND state = 0 AND d.database_id > 4 AND is_distributor = 0 AND hadrdrs.is_primary_replica = 1)
 	UNION
-	(SELECT QUOTENAME(name), 0 FROM sys.databases LEFT JOIN sys.dm_hadr_database_replica_states hadrdrs ON d.database_id = hadrdrs.database_id WHERE is_read_only = 0 AND state = 0 AND database_id > 4 AND is_distributor = 0 AND hadrdrs.database_id IS NULL);
+	(SELECT QUOTENAME(name), 0 FROM sys.databases d LEFT JOIN sys.dm_hadr_database_replica_states hadrdrs ON d.database_id = hadrdrs.database_id WHERE is_read_only = 0 AND state = 0 AND d.database_id > 4 AND is_distributor = 0 AND hadrdrs.database_id IS NULL);
 
 	WHILE (SELECT COUNT([dbname]) FROM #tmpdbs WHERE isdone = 0) > 0
 	BEGIN
