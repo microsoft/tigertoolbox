@@ -21,7 +21,7 @@ EXEC usp_bpcheck
 EXEC usp_bpcheck @allow_xpcmdshell = 0, @ptochecks = 1, @duration = 60
 */
 
-CREATE PROCEDURE usp_bpcheck
+alter PROCEDURE usp_bpcheck
 	@custompath NVARCHAR(500) = NULL, -- = 'C:\<temp_location>',
 	@dbScope VARCHAR(256) = NULL, -- (NULL = All DBs; '<database_name>')	
 	@allow_xpcmdshell bit = 1, --(1 = ON; 0 = OFF)
@@ -13431,6 +13431,39 @@ BEGIN
 	ELSE
 	BEGIN
 			SELECT 'Index_and_Stats_checks' AS [Category], 'Low_Fill_Factor' AS [Check], '[OK]' AS [Deviation]
+		END;
+	END;
+
+--------------------------------------------------------------------------------------------------------------------------------
+---
+---
+--### Indexes with fill factor = 100 pct subsection
+-- - You can set @ptochecks to OFF in this block if you want to skip more performance tuning and optimization oriented checks.
+--------------------------------------------------------------------------------------------------------------------------------
+	IF @ptochecks = 1
+	BEGIN
+		RAISERROR (N'  |-Starting Indexes with fill factor = 100 pct', 10, 1) WITH NOWAIT
+		IF (SELECT COUNT(*)
+			FROM tempdb.dbo.tblIxs1 I
+			JOIN #tmpIPS F ON I.databaseid = F.database_id and I.objectID = F.object_id
+						 AND I.indexID = F.index_id
+			WHERE [fill_factor] IN(0,100)  
+			  AND fragmentation > 5 AND [page_count] > 8
+			) > 0
+	BEGIN
+			SELECT 'Index_and_Stats_checks' AS [Category], 'Full_Fill_Factor' AS [Check], '[WARNING: Some fragmented indexes have a fill factor 100 percent. Revise the need to maintain this value]' AS [Deviation]
+			SELECT 'Index_and_Stats_checks' AS [Category], 'Full_Fill_Factor' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name],
+				[partition_number], [fragmentation], [fill_factor], I.KeyCols, I.IncludedCols, CASE WHEN I.IncludedCols IS NULL THEN I.[KeyCols] ELSE I.[KeyCols] + ',' + I.IncludedCols END AS [AllColsOrdered]
+			FROM tempdb.dbo.tblIxs1 I
+			JOIN #tmpIPS F ON I.databaseid = F.database_id and I.objectID = F.object_id
+						 AND I.indexID = F.index_id
+			WHERE [fill_factor] IN(0,100)  
+			  AND fragmentation > 5 AND [page_count] > 8
+			ORDER BY I.[DatabaseName], I.schemaName, I.[objectName], I.[indexID]
+		END
+	ELSE
+	BEGIN
+			SELECT 'Index_and_Stats_checks' AS [Category], 'Full_Fill_Factor' AS [Check], '[OK]' AS [Deviation]
 		END;
 	END;
 
