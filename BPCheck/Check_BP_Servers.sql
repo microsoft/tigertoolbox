@@ -21,7 +21,7 @@ EXEC usp_bpcheck
 EXEC usp_bpcheck @allow_xpcmdshell = 0, @ptochecks = 1, @duration = 60
 */
 
-alter PROCEDURE usp_bpcheck
+CREATE PROCEDURE usp_bpcheck
 	@custompath NVARCHAR(500) = NULL, -- = 'C:\<temp_location>',
 	@dbScope VARCHAR(256) = NULL, -- (NULL = All DBs; '<database_name>')	
 	@allow_xpcmdshell bit = 1, --(1 = ON; 0 = OFF)
