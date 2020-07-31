@@ -1,0 +1,27 @@
+- title: Monitor - Big Data Cluster
+  url: /monitor-bdc/readme
+  not_numbered: true
+  expand_sections: true
+  sections:
+  - title: TSG014 - Show BDC endpoints
+    url: monitor-bdc/tsg014-azdata-bdc-endpoint-list
+  - title: TSG012 - Show BDC Status
+    url: monitor-bdc/tsg012-azdata-bdc-status
+  - title: TSG069 - Show Big Data Cluster Gateway status
+    url: monitor-bdc/tsg069-azdata-bdc-gateway-status
+  - title: TSG049 - Show BDC Controller status
+    url: monitor-bdc/tsg049-azdata-bdc-control-status
+  - title: TSG033 - Show BDC SQL status
+    url: monitor-bdc/tsg033-azdata-bdc-sql-status
+  - title: TSG068 - Show BDC HDFS status
+    url: monitor-bdc/tsg068-azdata-bdc-hdfs-status
+  - title: TSG017 - Show BDC Configuration
+    url: monitor-bdc/tsg017-azdata-bdc-config-show
+  - title: TSG004 - Show BDC Apps
+    url: monitor-bdc/tsg004-show-app-list
+  - title: TSG003 - Show BDC Spark sessions
+    url: monitor-bdc/tsg003-show-spark-sessions
+  - title: TSG013 - Show file list in Storage Pool (HDFS)
+    url: monitor-bdc/tsg013-azdata-bdc-hdfs-ls
+  - title: TSG070 - Query SQL master pool
+    url: monitor-bdc/tsg070-use-azdata-sql-query

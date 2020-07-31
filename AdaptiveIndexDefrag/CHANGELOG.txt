@@ -141,4 +141,6 @@ v1.6.6.7 - 04/17/2019 - Fixed resumable index DMV syntax error issue.
 v1.6.6.8 - 06/19/2019 - Addressed DCR #102 by d-moloney;
 			Capped the max columnstore frag calculation to 100 (issue #115 by timlandrum).
 v1.6.6.9 - 06/26/2019 - Fixed issues running in Azure SQL Database.
-v1.6.7 - 09/19/2019 - Fixed additional issues running in Azure SQL Database.
+v1.6.7 - 09/19/2019 - Added additional debug info;
+			Fixed additional issues running in Azure SQL Database;
+			Fixed issue with resumable index discovery on SQL Server 2017+.

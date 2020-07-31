@@ -1,0 +1,17 @@
+- title: Common 
+  url: /common/readme
+  not_numbered: true
+  expand_sections: false
+  sections:
+  - title: SOP028 - azdata login
+    url: common/sop028-azdata-login
+  - title: SOP033 - azdata logout
+    url: common/sop033-azdata-logout
+  - title: SOP005 - az login
+    url: common/sop005-az-login
+  - title: SOP006 - az logout
+    url: common/sop006-az-logout
+  - title: SOP007 - Version information (azdata, bdc, kubernetes)
+    url: common/sop007-get-key-version-information
+  - title: SOP011 - Set kubernetes configuration context
+    url: common/sop011-set-kubernetes-context
