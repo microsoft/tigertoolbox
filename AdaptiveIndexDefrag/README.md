@@ -11,7 +11,7 @@ Yes, but it is used as a part of a full maintenance solution that also handles d
 ## On what version of SQL can I use it?
 This procedure can be used from SQL Server 2005 SP2 onwards, because of the DMVs and DMFs involved.
 
-**NOTE:** no longer garanteed to work with SQL Server 2005. Use at your own volution.
+**NOTE:** no longer garanteed to work with SQL Server 2005. Use at your own volition.
 
 ## How to deploy it?
 Starting with v1.3.7, on any database context you choose to create the usp_AdaptiveIndexDefrag and its supporting objects, open the attached script, and either keep the @deploymode variable at the top to upgrade mode (preserving all historic data), or change for new deployments or overwrite old versions and objects (disregarding historic data).
