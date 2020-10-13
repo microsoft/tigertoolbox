@@ -29,67 +29,86 @@ The first notebook (CER100) will first generate a Root CA certificate.  The 2nd 
 [Home](../readme.md)
 
 ## Notebooks in this Chapter
-- [CER001 - Generate a Root CA certificate](cer001-create-root-ca.ipynb)
+- [CER001 - Generate a Root CA certificate
+](cer001-create-root-ca.ipynb)
 
-- [CER002 - Download existing Root CA certificate](cer002-download-existing-root-ca.ipynb)
+- [CER002 - Download existing Root CA certificate
+](cer002-download-existing-root-ca.ipynb)
 
-- [CER003 - Upload existing Root CA certificate](cer003-upload-existing-root-ca.ipynb)
+- [CER003 - Upload existing Root CA certificate
+](cer003-upload-existing-root-ca.ipynb)
 
-- [CER004 - Download and Upload existing Root CA certificate](cer004-download-upload-existing-root-ca.ipynb)
+- [CER004 - Download and Upload existing Root CA certificate
+](cer004-download-upload-existing-root-ca.ipynb)
 
-- [CER005 - Upload and install existing Root CA certificate](cer005-upload-and-install-existing-root-ca.ipynb)
+- [CER010 - Install generated Root CA locally
+](cer010-install-generated-root-ca-locally.ipynb)
 
-- [CER010 - Install generated Root CA locally](cer010-install-generated-root-ca-locally.ipynb)
+- [CER020 - Create Management Proxy certificate
+](cer020-create-management-service-proxy-cert.ipynb)
 
-- [CER020 - Create Management Proxy certificate](cer020-create-management-service-proxy-cert.ipynb)
+- [CER021 - Create Knox certificate
+](cer021-create-knox-cert.ipynb)
 
-- [CER021 - Create Knox certificate](cer021-create-knox-cert.ipynb)
+- [CER022 - Create App Proxy certificate
+](cer022-create-app-proxy-cert.ipynb)
 
-- [CER022 - Create App Proxy certificate](cer022-create-app-proxy-cert.ipynb)
+- [CER023 - Create Master certificate
+](cer023-create-master-cert.ipynb)
 
-- [CER023 - Create Master certificate](cer023-create-master-cert.ipynb)
+- [CER024 - Create Controller certificate
+](cer024-create-controller-cert.ipynb)
 
-- [CER024 - Create Controller certificate](cer024-create-controller-cert.ipynb)
+- [CER025 - Upload existing Management Proxy certificate
+](cer025-upload-management-service-proxy-cert.ipynb)
 
-- [CER025 - Upload existing Management Proxy certificate](cer025-upload-management-service-proxy-cert.ipynb)
+- [CER026 - Upload existing Gateway certificate
+](cer026-upload-knox-cert.ipynb)
 
-- [CER026 - Upload existing Gateway certificate](cer026-upload-knox-cert.ipynb)
+- [CER027 - Upload existing App Service Proxy certificate
+](cer027-upload-app-proxy-cert.ipynb)
 
-- [CER027 - Upload existing App Service Proxy certificate](cer027-upload-app-proxy-cert.ipynb)
+- [CER028 - Upload existing Master certificate
+](cer028-upload-master-cert.ipynb)
 
-- [CER028 - Upload existing Master certificate](cer028-upload-master-cert.ipynb)
+- [CER028 - Upload existing Contoller certificate
+](cer029-upload-controller-cert.ipynb)
 
-- [CER028 - Upload existing Contoller certificate](cer029-upload-controller-cert.ipynb)
+- [CER030 - Sign Management Proxy certificate with generated CA
+](cer030-sign-service-proxy-generated-cert.ipynb)
 
-- [CER030 - Sign Management Proxy certificate with generated CA](cer030-sign-service-proxy-generated-cert.ipynb)
+- [CER031 - Sign Knox certificate with generated CA
+](cer031-sign-knox-generated-cert.ipynb)
 
-- [CER031 - Sign Knox certificate with generated CA](cer031-sign-knox-generated-cert.ipynb)
+- [CER032 - Sign App-Proxy certificate with generated CA
+](cer032-sign-app-proxy-generated-cert.ipynb)
 
-- [CER032 - Sign App-Proxy certificate with generated CA](cer032-sign-app-proxy-generated-cert.ipynb)
+- [CER033 - Sign Master certificate with generated CA
+](cer033-sign-master-generated-cert.ipynb)
 
-- [CER033 - Sign Master certificate with generated CA](cer033-sign-master-generated-cert.ipynb)
+- [CER034 - Sign Controller certificate with cluster Root CA
+](cer034-sign-controller-generated-cert.ipynb)
 
-- [CER034 - Sign Controller certificate with cluster Root CA](cer034-sign-controller-generated-cert.ipynb)
+- [CER035 - Sign Controller certificate with external Root CA
+](cer035-ca-sign-controller-generated-cert.ipynb)
 
-- [CER035 - Sign Controller certificate with external Root CA](cer035-ca-sign-controller-generated-cert.ipynb)
+- [CER040 - Install signed Management Proxy certificate
+](cer040-install-service-proxy-cert.ipynb)
 
-- [CER040 - Install signed Management Proxy certificate](cer040-install-service-proxy-cert.ipynb)
+- [CER041 - Install signed Knox certificate
+](cer041-install-knox-cert.ipynb)
 
-- [CER041 - Install signed Knox certificate](cer041-install-knox-cert.ipynb)
+- [CER042 - Install signed App-Proxy certificate
+](cer042-install-app-proxy-cert.ipynb)
 
-- [CER042 - Install signed App-Proxy certificate](cer042-install-app-proxy-cert.ipynb)
+- [CER044 - Install signed Controller certificate
+](cer044-install-controller-cert.ipynb)
 
-- [CER043 - Install signed Master certificate](cer043-install-master-cert.ipynb)
+- [CER050 - Wait for BDC to be Healthy
+](cer050-wait-cluster-healthly.ipynb)
 
-- [CER044 - Install signed Controller certificate](cer044-install-controller-cert.ipynb)
+- [CER100 - Configure Cluster with Self Signed Certificates
+](cer100-create-root-ca-install-certs.ipynb)
 
-- [CER050 - Wait for BDC to be Healthy](cer050-wait-cluster-healthly.ipynb)
-
-- [CER100 - Configure Cluster with Self Signed Certificates](cer100-create-root-ca-install-certs.ipynb)
-
-- [CER101 - Configure Cluster with Self Signed Certificates using existing Root CA](cer101-use-root-ca-install-certs.ipynb)
-
-- [CER103 - Configure Cluster with externally signed certificates](cer103-upload-install-certs.ipynb)
-
-- [CER103 - Configure Cluster with externally signed certificates](cer103-upload-install-certs.ipynb)
-
+- [CER101 - Configure Cluster with Self Signed Certificates using existing Root CA
+](cer101-use-root-ca-install-certs.ipynb)
