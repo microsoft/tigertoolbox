@@ -298,8 +298,6 @@
     url: cert-management/cer003-upload-existing-root-ca
   - title: CER004 - Download and Upload existing Root CA certificate
     url: cert-management/cer004-download-upload-existing-root-ca
-  - title: CER005 - Upload and install existing Root CA certificate
-    url: cert-management/cer005-upload-and-install-existing-root-ca
   - title: CER010 - Install generated Root CA locally
     url: cert-management/cer010-install-generated-root-ca-locally
   - title: CER020 - Create Management Proxy certificate
@@ -340,8 +338,6 @@
     url: cert-management/cer041-install-knox-cert
   - title: CER042 - Install signed App-Proxy certificate
     url: cert-management/cer042-install-app-proxy-cert
-  - title: CER043 - Install signed Master certificate
-    url: cert-management/cer043-install-master-cert
   - title: CER044 - Install signed Controller certificate
     url: cert-management/cer044-install-controller-cert
   - title: CER050 - Wait for BDC to be Healthy
@@ -350,8 +346,6 @@
     url: cert-management/cer100-create-root-ca-install-certs
   - title: CER101 - Configure Cluster with Self Signed Certificates using existing Root CA
     url: cert-management/cer101-use-root-ca-install-certs
-  - title: CER103 - Configure Cluster with externally signed certificates
-    url: cert-management/cer103-upload-install-certs
 - title: Common 
   url: /common/readme
   not_numbered: true
