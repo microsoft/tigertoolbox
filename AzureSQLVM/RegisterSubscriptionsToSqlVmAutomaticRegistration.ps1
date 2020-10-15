@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Register provided subscriptions with Automatic Registraion feature. Failed registration information will be stored in RegistrationErrors.csv
+    Register provided subscriptions with Automatic Registration feature. Failed registration information will be stored in RegistrationErrors.csv
     file in the current directory where this script is executed. RegistrationErrors.csv will be empty when there are no errors in subscription registration.
 .DESCRIPTION
     Registering each subscription is a two step process:
