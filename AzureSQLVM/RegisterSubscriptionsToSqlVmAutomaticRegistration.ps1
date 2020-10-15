@@ -5,7 +5,7 @@
 .DESCRIPTION
     Registering each subscription is a two step process:
         -Register subscription to Microsoft.SqlVirtualMachine Resource provider.
-        -Register subscription to the Automatic Registraion feature.
+        -Register subscription to the Automatic Registration feature.
     Prerequisites:
     - The user account running the script should have "Microsoft.SqlVirtualMachine/register/action" RBAC access over the subscriptions.
     - The user account running the script should have "Microsoft.Features/providers/features/register/action" RBAC access over the subscriptions.
