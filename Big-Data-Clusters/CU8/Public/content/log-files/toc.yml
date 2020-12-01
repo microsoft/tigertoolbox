@@ -1,0 +1,17 @@
+- title: Logs
+  url: /log-files/readme
+  not_numbered: true
+  expand_sections: false
+  sections:
+  - title: TSG001 - Run azdata copy-logs
+    url: log-files/tsg001-copy-logs
+  - title: TSG091 - Get the azdata CLI logs
+    url: log-files/tsg091-get-azdata-logs
+  - title: TSG083 - Run kubectl cluster-info dump
+    url: log-files/tsg083-run-kubectl-cluster-info-dump
+  - title: TSG061 - Get tail of all container logs for pods in BDC namespace
+    url: log-files/tsg061-tail-bdc-container-logs
+  - title: TSG062 - Get tail of all previous container logs for pods in BDC namespace
+    url: log-files/tsg062-tail-bdc-previous-container-logs
+  - title: TSG084 - Internal Query Processor Error
+    url: log-files/tsg084-internal-query-process-error

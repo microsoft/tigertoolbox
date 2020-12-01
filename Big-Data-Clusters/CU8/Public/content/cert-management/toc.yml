@@ -1,0 +1,55 @@
+- title: Certificate Management
+  url: /cert-management/readme
+  not_numbered: true
+  expand_sections: false
+  sections:
+  - title: CER001 - Generate a Root CA certificate
+    url: cert-management/cer001-create-root-ca
+  - title: CER002 - Download existing Root CA certificate
+    url: cert-management/cer002-download-existing-root-ca
+  - title: CER003 - Upload existing Root CA certificate
+    url: cert-management/cer003-upload-existing-root-ca
+  - title: CER004 - Download and Upload existing Root CA certificate
+    url: cert-management/cer004-download-upload-existing-root-ca
+  - title: CER005 - Install new Root CA certificate
+    url: cert-management/cer005-install-existing-root-ca
+  - title: CER010 - Install generated Root CA locally
+    url: cert-management/cer010-install-generated-root-ca-locally
+  - title: CER020 - Create Management Proxy certificate
+    url: cert-management/cer020-create-management-service-proxy-cert
+  - title: CER021 - Create Knox certificate
+    url: cert-management/cer021-create-knox-cert
+  - title: CER022 - Create App Proxy certificate
+    url: cert-management/cer022-create-app-proxy-cert
+  - title: CER023 - Create Master certificates
+    url: cert-management/cer023-create-master-certs
+  - title: CER024 - Create Controller certificate
+    url: cert-management/cer024-create-controller-cert
+  - title: CER030 - Sign Management Proxy certificate with generated CA
+    url: cert-management/cer030-sign-service-proxy-generated-cert
+  - title: CER031 - Sign Knox certificate with generated CA
+    url: cert-management/cer031-sign-knox-generated-cert
+  - title: CER032 - Sign App-Proxy certificate with generated CA
+    url: cert-management/cer032-sign-app-proxy-generated-cert
+  - title: CER033 - Sign Master certificates with generated CA
+    url: cert-management/cer033-sign-master-generated-certs
+  - title: CER034 - Sign Controller certificate with cluster Root CA
+    url: cert-management/cer034-sign-controller-generated-cert
+  - title: CER040 - Install signed Management Proxy certificate
+    url: cert-management/cer040-install-service-proxy-cert
+  - title: CER041 - Install signed Knox certificate
+    url: cert-management/cer041-install-knox-cert
+  - title: CER042 - Install signed App-Proxy certificate
+    url: cert-management/cer042-install-app-proxy-cert
+  - title: CER043 - Install signed Master certificates
+    url: cert-management/cer043-install-master-certs
+  - title: CER044 - Install signed Controller certificate
+    url: cert-management/cer044-install-controller-cert
+  - title: CER050 - Wait for BDC to be Healthy
+    url: cert-management/cer050-wait-cluster-healthly
+  - title: CER100 - Configure Cluster with Self Signed Certificates
+    url: cert-management/cer100-create-root-ca-install-certs
+  - title: CER101 - Configure Cluster with Self Signed Certificates using existing Root CA
+    url: cert-management/cer101-use-root-ca-install-certs
+  - title: CER102 - Configure Cluster with Self Signed Certificates using existing Big Data Cluster CA
+    url: cert-management/cer102-use-bdc-ca-install-certs
