@@ -1,0 +1,35 @@
+- title: Install 
+  url: /install/readme
+  not_numbered: true
+  expand_sections: false
+  sections:
+  - title: SOP036 - Install kubectl command line interface
+    url: install/sop036-install-kubectl
+  - title: SOP037 - Uninstall kubectl command line interface
+    url: install/sop037-uninstall-kubectl
+  - title: SOP059 - Install Kubernetes Python module
+    url: install/sop059-install-kubernetes-module
+  - title: SOP060 - Uninstall kubernetes module
+    url: install/sop060-uninstall-kubernetes-module
+  - title: SOP062 - Install ipython-sql and pyodbc modules
+    url: install/sop062-install-ipython-sql-module
+  - title: SOP063 - Install azdata CLI (using package manager)
+    url: install/sop063-packman-install-azdata
+  - title: SOP064 - Uninstall azdata CLI (using package manager)
+    url: install/sop064-packman-uninstall-azdata
+  - title: SOP054 - Install azdata CLI (using pip)
+    url: install/sop054-install-azdata
+  - title: SOP055 - Uninstall azdata CLI (using pip)
+    url: install/sop055-uninstall-azdata
+  - title: SOP038 - Install azure command line interface
+    url: install/sop038-install-az
+  - title: SOP039 - Uninstall azure command line interface
+    url: install/sop039-uninstall-az
+  - title: SOP040 - Upgrade pip in ADS Python sandbox
+    url: install/sop040-upgrade-pip
+  - title: SOP069 - Install ODBC for SQL Server
+    url: install/sop069-install-odbc-driver-for-sql-server
+  - title: SOP012 - Install unixodbc for Mac
+    url: install/sop012-brew-install-odbc-for-sql-server
+  - title: SOP010 - Upgrade a big data cluster
+    url: install/sop010-upgrade-bdc

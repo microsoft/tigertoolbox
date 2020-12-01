@@ -1,0 +1,16 @@
+- title: Encryption Key Management 
+  url: /tde/readme
+  not_numbered: true
+  expand_sections: false
+  sections:
+
+  - title: SOP0124 - List Keys For Encryption At Rest.
+    url: tde/sop124-list-keys-encryption-at-rest
+  - title: SOP0128 - Enable HDFS Encryption zones in Big Data Clusters.
+    url: tde/sop128-enable-encryption-zones
+  - title: SOP0125 - Delete Key For Encryption At Rest
+    url: tde/sop125-delete-keys-encryption-at-rest
+  - title: SOP0126 - Backup Keys For Encryption At Rest
+    url: tde/sop126-backup-keys-encryption-at-rest
+  - title: SOP0127 - Restore Keys For Encryption At Rest
+    url: tde/sop127-restore-keys-encryption-at-rest
