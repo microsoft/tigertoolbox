@@ -14,13 +14,18 @@
     To register list of Subscriptions
     .\RegisterSubscriptionsToSqlVmAutomaticRegistration.ps1 -SubscriptionList SubscriptionId1,SubscriptionId2
 
+    To register all Subscriptions
+    .\RegisterSubscriptionsToSqlVmAutomaticRegistration.ps1 -AllSubscriptions
 #>
 Param
 (
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [ValidateNotNullOrEmpty()]
     [Guid[]]
-    $SubscriptionList
+    $SubscriptionList,
+
+    [Switch]
+    $AllSubscriptions
 );
 
 #Array of objects for storing failure subscriptionIds and failure reasons.
@@ -35,12 +40,22 @@ if ($PSVersionTable.PSEdition -eq 'Desktop' -and (Get-Module -Name AzureRM -List
     Write-Host "Please login to your account which have access to the listed subscriptions";
     $Output = Connect-AzureRmAccount -ErrorAction Stop;
 
-    foreach ($SubscriptionId in $SubscriptionList) {
+    # Get a list of all subscriptions you have access to
+    if ($AllSubscriptions) {
+        $SubscriptionIds = [System.Collections.ArrayList]@();
+        foreach ($Subscription in Get-AzSubscription) {
+            $SubscriptionIds.Add([Guid]$Subscription.Id);
+        }
+    } else {
+        $SubscriptionIds = $SubscriptionList;
+    }
+
+    foreach ($SubscriptionId in $SubscriptionIds) {
         Write-host "`n`n--------------------$SubscriptionId----------------------------`n`n";
 
         try {
             Write-Host "Setting powershell context to subscriptionid: $SubscriptionId";
-            $Output = Set-AzureRmContext  -SubscriptionId $SubscriptionId -ErrorAction Stop;
+            $Output = Set-AzureRmContext -SubscriptionId $SubscriptionId -ErrorAction Stop;
 
             Write-Host "Registering subscription($SubscriptionId) to Microsoft.SqlVirtualMachine Resource provider";
             $Output = Register-AzureRmResourceProvider -ProviderNamespace Microsoft.SqlVirtualMachine -ErrorAction Stop;
@@ -69,7 +84,17 @@ else {
     Write-Host "Please login to your account which have access to the listed subscriptions";
     $Output = Connect-AzAccount -ErrorAction Stop;
 
-    foreach ($SubscriptionId in $SubscriptionList) {
+    # Get a list of all subscriptions you have access to
+    if ($AllSubscriptions) {
+        $SubscriptionIds = [System.Collections.ArrayList]@();
+        foreach ($Subscription in Get-AzSubscription) {
+            $SubscriptionIds.Add([Guid]$Subscription.Id);
+        }
+    } else {
+        $SubscriptionIds = $SubscriptionList;
+    }
+
+    foreach ($SubscriptionId in $SubscriptionIds) {
         Write-host "`n`n--------------------$SubscriptionId----------------------------`n`n"
 
         try {
