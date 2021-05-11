@@ -4,8 +4,7 @@
     Equivalent to the GUI method of enablement shown here:
     https://docs.microsoft.com/en-us/azure/azure-sql/virtual-machines/windows/sql-agent-extension-automatic-registration-all-vms?tabs=azure-cli
     
-
-    Prerequisites:
+    .PREREQUISITES
     - The script needs to be run on Powershell 5.1 (Windows Only) and is incompatible with Powershell 6.x
     - The subscription whose VMs are to be registered, needs to be registered to Microsoft.SqlVirtualMachine resource provider first. This link describes
       how to register to a resource provider: https://docs.microsoft.com/azure/azure-resource-manager/resource-manager-supported-services
@@ -18,7 +17,7 @@
       It specifically requires Az.Subscription module which comes as part of Az module (>=2.8.0) installation.
     - The script requires the EnableBySubscription script to be accessible and executable.
 
-    EXECUTION
+    .EXAMPLE
     Option 1: EnableAllSubscriptions
     Option 2: EnableSubscriptionList @('sub1guid','sub2guid',...)
     Option 3: EnableSubscriptionList [Enter] then enter paste in subscription guid when prompted
