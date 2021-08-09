@@ -74,7 +74,7 @@ OPEN cshrk
 FETCH NEXT FROM cshrk INTO @dbname, @count
 WHILE (@@FETCH_STATUS <> -1)
 BEGIN
-	SET @sqlcmd = 'SELECT @nameout = name, @logsizeout = (size*8)/1024 FROM [' + @dbname + '].dbo.sysfiles WHERE (64 & status) = 64'
+	SET @sqlcmd = 'SELECT @nameout = name, @logsizeout = (CAST(size AS BIGINT)*8)/1024 FROM [' + @dbname + '].dbo.sysfiles WHERE (64 & status) = 64'
 	SET @sqlparam = '@nameout NVARCHAR(100) OUTPUT, @logsizeout bigint OUTPUT'
 	EXEC sp_executesql @sqlcmd, @sqlparam, @nameout = @filename OUTPUT, @logsizeout = @logsize OUTPUT;
 	PRINT '---------------------------------------------------------------------------------------------------------- '
