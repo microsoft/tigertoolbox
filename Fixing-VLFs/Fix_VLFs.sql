@@ -35,7 +35,7 @@ FETCH NEXT FROM csr INTO @dbname
 WHILE (@@FETCH_STATUS <> -1)
 BEGIN
 	CREATE TABLE #log_info (recoveryunitid int NULL,
-	fileid tinyint,
+	fileid smallint,
 	file_size bigint,
 	start_offset bigint,
 	FSeqNo int,
