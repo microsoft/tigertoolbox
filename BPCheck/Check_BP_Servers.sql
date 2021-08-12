@@ -6701,7 +6701,7 @@ BEGIN
 				DROP TABLE #log_info3;
 				IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#log_info3'))
 				CREATE TABLE #log_info3 (recoveryunitid int NULL,
-					fileid tinyint,
+					fileid smallint,
 					file_size bigint,
 					start_offset bigint,
 					FSeqNo int,
