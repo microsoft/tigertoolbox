@@ -8370,7 +8370,7 @@ BEGIN
 		AND (es.session_id IN (SELECT er3.blocking_session_id FROM sys.dm_exec_requests er3) OR er.blocking_session_id IS NOT NULL)
 	ORDER BY blocked_spid, is_head_blocker DESC, blocked_spid_wait_time_ms DESC, blocker_spid;
 		
-	IF (SELECT COUNT(blocked_spid) FROM #tblBlkChains WHERE CONVERT(VARCHAR(max), blocked_batch) <> 'sp_server_diagnostics') > 0
+	IF (SELECT COUNT(blocked_spid) FROM #tblBlkChains WHERE CONVERT(NVARCHAR(max), blocked_batch) <> 'sp_server_diagnostics') > 0
 	BEGIN
 		SELECT 'Performance_checks' AS [Category], 'Blocking_Chains_over_5s' AS [Check], '[WARNING: Blocking chains in excess of 5s were found.]' AS [Deviation]
 		SELECT 'Performance_checks' AS [Category], 'Blocking_Chains_over_5s' AS [Information],[blocked_spid],[blocked_spid_status],[blocked_task_status],
