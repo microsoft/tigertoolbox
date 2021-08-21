@@ -1,0 +1,2 @@
+# Ensure sql is not interpreted as binary
+*.sql text working-tree-encoding=UTF-16LE eol=CRLF
