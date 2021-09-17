@@ -6,6 +6,7 @@
     Registering each subscription is a two step process:
         -Register subscription to Microsoft.SqlVirtualMachine Resource provider.
         -Register subscription to the Automatic Registraion feature.
+    By default (no subscriptions are specified), all subscription in the account will be registered.
     Prerequisites:
     - The user account running the script should have "Microsoft.SqlVirtualMachine/register/action" RBAC access over the subscriptions.
     - The user account running the script should have "Microsoft.Features/providers/features/register/action" RBAC access over the subscriptions.
@@ -13,14 +14,15 @@
 .EXAMPLE
     To register list of Subscriptions
     .\EnableBySubscription.ps1 -SubscriptionList SubscriptionId1,SubscriptionId2
+    To register all subscriptions the user account has access to
+    .\EnableBySubscription.ps1
 
 #>
 Param
 (
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [ValidateNotNullOrEmpty()]
-    [Guid[]]
-    $SubscriptionList
+    [Guid[]]$SubscriptionList
 );
 
 #Array of objects for storing failure subscriptionIds and failure reasons.
@@ -34,6 +36,11 @@ if ($PSVersionTable.PSEdition -eq 'Desktop' -and (Get-Module -Name AzureRM -List
 
     Write-Host "Please login to your account which have access to the listed subscriptions";
     $Output = Connect-AzureRmAccount -ErrorAction Stop;
+    
+    If (!$SubscriptionList) {
+        [Guid[]]$SubscriptionList = $null
+        Get-AzureRmSubscription | ForEach-Object -Process {$SubscriptionList += $_.Id}
+    }
 
     foreach ($SubscriptionId in $SubscriptionList) {
         Write-host "`n`n--------------------$SubscriptionId----------------------------`n`n";
@@ -68,6 +75,11 @@ else {
 
     Write-Host "Please login to your account which have access to the listed subscriptions";
     $Output = Connect-AzAccount -ErrorAction Stop;
+    
+    If (!$SubscriptionList) {
+        [Guid[]]$SubscriptionList = $null
+        Get-AzSubscription | ForEach-Object -Process {$SubscriptionList += $_.Id}
+    }
 
     foreach ($SubscriptionId in $SubscriptionList) {
         Write-host "`n`n--------------------$SubscriptionId----------------------------`n`n"
