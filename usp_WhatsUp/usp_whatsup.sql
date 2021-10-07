@@ -1,6 +1,6 @@
 -- 2012-04-07 Pedro Lopes (Microsoft) (http://aka.ms/tigertoolbox/)
 
--- Replace CREATE PROCEDURE with ALTER PROCEDURE or CREATE OR ALTER PROCEDURE to allow new changes to the SP if the SP is already present.
+-- Replace CREATE PROCEDURE with ALTER PROCEDURE or CREATE OR ALTER PROCEDURE to allow new changes to the SP if the SP is already present. Wonks in SQL Server, Azure SQL Managed INstance, and Azure SQL DB (create in user DB)
 
 CREATE PROCEDURE usp_whatsup @sqluptime bit = 1, @requests bit = 1, @blocking bit = 1, @spstats bit = 0, @qrystats bit = 0, @trstats bit = 0, @fnstats bit = 0, @top smallint = 100
 AS
@@ -226,9 +226,9 @@ SELECT ''Requests'' AS [Information], es.session_id, DB_NAME(er.database_id) AS 
 	er.percent_complete,
 	CONVERT(VARCHAR(20),DATEADD(ms,er.estimated_completion_time,GETDATE()),20) AS [ETA_completion_time],
 	(er.cpu_time/1000) AS cpu_time_sec,
-	(er.reads*8)/1024 AS physical_reads_KB,
-	(er.logical_reads*8)/1024 AS logical_reads_KB,
-	(er.writes*8)/1024 AS writes_KB,
+	(er.reads*8)/1024 AS physical_reads_MB,
+	(er.logical_reads*8)/1024 AS logical_reads_MB,
+	(er.writes*8)/1024 AS writes_MB,
 	(er.total_elapsed_time/1000)/60 AS elapsed_minutes,
 	er.wait_type,
 	er.wait_resource,
@@ -387,8 +387,8 @@ BEGIN
 		--er.total_elapsed_time AS blocked_elapsed_time_ms,
 		/* 
 			Check sys.dm_os_waiting_tasks for Exchange wait types in http://technet.microsoft.com/en-us/library/ms188743.aspx.
-			- Wait Resource e_waitPipeNewRow in CXPACKET waits – Producer waiting on consumer for a packet to fill.
-			- Wait Resource e_waitPipeGetRow in CXPACKET waits – Consumer waiting on producer to fill a packet.
+			- Wait Resource e_waitPipeNewRow in CXPACKET waits Â– Producer waiting on consumer for a packet to fill.
+			- Wait Resource e_waitPipeGetRow in CXPACKET waits Â– Consumer waiting on producer to fill a packet.
 		*/
 		owt.resource_description AS blocked_spid_res_desc,
 		owt.[objid] AS blocked_objectid,
