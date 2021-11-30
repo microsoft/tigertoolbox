@@ -1,0 +1,422 @@
+- title: Welcome
+  url: /readme
+  not_numbered: true
+  sections:
+  - title: Troubleshooters
+    url: /troubleshooters/readme
+    not_numbered: true
+    sections:
+    - title: TSG100 - The Big Data Cluster troubleshooter
+      url: troubleshooters/tsg100-troubleshoot-bdc
+    - title: TSG101 - SQL Server troubleshooter
+      url: troubleshooters/tsg101-troubleshoot-sql-server
+    - title: TSG102 - HDFS troubleshooter
+      url: troubleshooters/tsg102-troubleshoot-hdfs
+    - title: TSG103 - Spark troubleshooter
+      url: troubleshooters/tsg103-troubleshoot-spark
+    - title: TSG104 - Control troubleshooter
+      url: troubleshooters/tsg104-troubleshoot-control
+    - title: TSG105 - Gateway troubleshooter
+      url: troubleshooters/tsg105-troubleshoot-gateway
+    - title: TSG106 - App troubleshooter
+      url: troubleshooters/tsg106-troubleshoot-app
+  - title: Log Analyzers
+    url: /log-analyzers/readme
+    not_numbered: true
+    sections:
+    - title: TSG046 - Knox gateway logs
+      url: log-analyzers/tsg046-get-knox-logs
+    - title: TSG036 - Controller logs
+      url: log-analyzers/tsg036-get-controller-logs
+    - title: TSG034 - Livy logs
+      url: log-analyzers/tsg034-get-livy-logs
+    - title: TSG035 - Spark History logs
+      url: log-analyzers/tsg035-get-sparkhistory-logs
+    - title: TSG030 - SQL Server errorlog files
+      url: log-analyzers/tsg030-get-errorlog-from-all-pods
+    - title: TSG031 - SQL Server PolyBase logs
+      url: log-analyzers/tsg031-get-polybase-logs-for-all-pods
+    - title: TSG095 - Hadoop namenode logs
+      url: log-analyzers/tsg095-get-namenode-logs
+    - title: TSG090 - Yarn nodemanager logs
+      url: log-analyzers/tsg090-get-nodemanager-logs
+    - title: TSG088 - Hadoop datanode logs
+      url: log-analyzers/tsg088-get-datanode-logs
+    - title: TSG096 - Zookeeper logs
+      url: log-analyzers/tsg096-get-zookeeper-logs
+    - title: TSG073 - InfluxDB logs
+      url: log-analyzers/tsg073-get-influxdb-logs
+    - title: TSG076 - Elastic Search logs
+      url: log-analyzers/tsg076-get-elastic-search-logs
+    - title: TSG077 - Kibana logs
+      url: log-analyzers/tsg077-get-kibana-logs
+    - title: TSG092 - Supervisord log tail for all containers in BDC
+      url: log-analyzers/tsg092-get-all-supervisord-log-tails
+    - title: TSG093 - Agent log tail for all containers in BDC
+      url: log-analyzers/tsg093-get-all-agent-log-tails
+    - title: TSG094 - Grafana logs
+      url: log-analyzers/tsg094-get-grafana-logs
+    - title: TSG117 - App-Deploy Proxy Nginx Logs
+      url: log-analyzers/tsg117-get-approxy-nginx-logs
+    - title: TSG120 - Provisioner log tail for all containers in BDC
+      url: log-analyzers/tsg120-get-all-provisioner-log-tails
+    - title: TSG121 - Supervisor mssql-server logs
+      url: log-analyzers/tsg121-get-all-supervisor-mssql-logs
+    - title: TSG122 - Hive Metastore logs
+      url: log-analyzers/tsg122-get-hive-metastore-logs
+    - title: TSG123 - Hive logs
+      url: log-analyzers/tsg123-get-hive-logs
+  - title: Diagnose
+    url: /diagnose/readme
+    not_numbered: true
+    sections:
+    - title: TSG027 - Observe cluster deployment
+      url: diagnose/tsg027-observe-bdc-create
+    - title: TSG078 - Is cluster healthy
+      url: diagnose/tsg078-is-cluster-healthy
+    - title: TSG029 - Find dumps in the cluster
+      url: diagnose/tsg029-find-dumps-in-the-cluster
+    - title: TSG032 - CPU and Memory usage for all containers
+      url: diagnose/tsg032-get-cpu-and-memory-for-all-containers
+    - title: TSG060 - Persistent Volume disk space for all BDC PVCs
+      url: diagnose/tsg060-get-disk-space-for-all-pvcs
+    - title: TSG087 - Use hadoop fs CLI on nmnode pod
+      url: diagnose/tsg087-use-hadoop-fs
+    - title: TSG037 - Determine master pool pod hosting primary replica
+      url: diagnose/tsg037-determine-primary-master-replica
+    - title: TSG055 - Time Curl to Sparkhead
+      url: diagnose/tsg055-time-curl-to-sparkhead
+    - title: TSG079 - Generate `controller` core dump
+      url: diagnose/tsg079-generate-controller-core-dump
+    - title: TSG086 - Run `top` in all containers
+      url: diagnose/tsg086-run-top-for-all-containers
+    - title: TSG108 - View the controller upgrade config map
+      url: diagnose/tsg108-controller-failed-to-upgrade
+    - title: TSG114 - Connect to ControlDB using Port Fowarding
+      url: diagnose/tsg114-port-forwarding-for-controldb
+    - title: TSG112 - Active Directory Pre-Deployment Checks
+      url: diagnose/tsg112-ad-predeployment-checks
+    - title: TSG119 - AD Post-deployment Checks
+      url: diagnose/tsg119-ad-postdeployment-checks
+    - title: TSG115 - SQL Server on Linux security log translator
+      url: diagnose/tsg115-parse-security-log
+    - title: TSG116 - SQL BDC security support log translator
+      url: diagnose/tsg116-parse-secsupp-log
+    - title: TSG125 - Verify same image is used on all Pods
+      url: diagnose/tsg125-verify-same-image-on-all-pods
+  - title: Repair
+    url: /repair/readme
+    not_numbered: true
+    sections:
+    - title: SOP016 - Get SID for Active Directory user/group
+      url: repair/sop016-get-sid-for-principal
+    - title: SOP017 - Add app-deploy AD group
+      url: repair/sop017-add-app-deploy-group
+    - title: TSG024 - Namenode is in safe mode
+      url: repair/tsg024-name-node-is-in-safe-mode
+    - title: TSG028 - Restart node manager on all storage pool nodes
+      url: repair/tsg028-restart-nodemanager-in-storage-pool
+    - title: TSG038 - BDC create failures due to - doc is missing key
+      url: repair/tsg038-doc-is-missing-key-error
+    - title: TSG041 - Unable to create a new asynchronous I/O context (increase sysctl
+        fs.aio-max-nr)
+      url: repair/tsg041-increase-fs-aio-max-nr
+    - title: TSG045 - The maximum number of data disks allowed to be attached to a
+        VM of this size (AKS)
+      url: repair/tsg045-max-number-data-disks-allowed
+    - title: TSG047 - ConfigException - Expected only one object with name
+      url: repair/tsg047-expected-only-one-object-with-name
+    - title: TSG048 - Deployment stuck at "Waiting for controller pod to be up"
+      url: repair/tsg048-create-stuck-waiting-for-controller
+    - title: TSG050 - Cluster create hangs with "timeout expired waiting for volumes
+        to attach or mount for pod"
+      url: repair/tsg050-timeout-expired-waiting-for-volumes
+    - title: TSG053 - ADS Provided Books must be saved before use
+      url: repair/tsg053-save-book-first
+    - title: TSG056 - Kubectl fails with No connection could be made because the target
+        machine actively refused it
+      url: repair/tsg056-kubectl-no-connection-could-be-made
+    - title: TSG057 - Failed when starting controller service. System.TimeoutException
+      url: repair/tsg057-failed-when-starting-controller
+    - title: TSG067 - Failed to complete kube config setup
+      url: repair/tsg067-failed-to-complete-kube-config-setup
+    - title: TSG075 - FailedCreatePodSandBox due to NetworkPlugin cni failed to set
+        up pod
+      url: repair/tsg075-networkplugin-cni-failed-to-setup-pod
+    - title: TSG109 - Set upgrade timeouts
+      url: repair/tsg109-upgrade-stalled
+    - title: TSG110 - Azdata returns ApiError
+      url: repair/tsg110-azdata-returns-apierror
+    - title: TSG124 - 'No credentials were supplied' error from azdata login
+      url: repair/tsg124-no-credentials-were-supplied
+    - title: TSG126 - azdata fails with 'accept the license terms to use this product'
+      url: repair/tsg126-accept-license-terms
+  - title: Notebook Runner
+    url: /notebook-runner/readme
+    not_numbered: true
+    sections:
+    - title: RUN000 - Setup Master Pool runner infrastructure
+      url: notebook-runner/run000-setup-infrastructure
+    - title: RUN001 - Run a notebook
+      url: notebook-runner/run001-run-notebook
+    - title: RUN002 - Save result in Big Data Cluster
+      url: notebook-runner/run002-save-result-in-bdc
+    - title: RUN003 - Run expert rules
+      url: notebook-runner/run003-run-expert-rules
+    - title: RUN600 - Monitor infrastructure (SQL)
+      url: notebook-runner/run600-monitor-infrastructure-sql
+    - title: RUN999 - Cleanup Master Pool runner infrastructure
+      url: notebook-runner/run999-cleanup-infrastructure
+  - title: Monitor - Big Data Cluster
+    url: /monitor-bdc/readme
+    not_numbered: true
+    sections:
+    - title: TSG014 - Show BDC endpoints
+      url: monitor-bdc/tsg014-azdata-bdc-endpoint-list
+    - title: TSG012 - Show BDC Status
+      url: monitor-bdc/tsg012-azdata-bdc-status
+    - title: TSG069 - Show Big Data Cluster Gateway status
+      url: monitor-bdc/tsg069-azdata-bdc-gateway-status
+    - title: TSG049 - Show BDC Controller status
+      url: monitor-bdc/tsg049-azdata-bdc-control-status
+    - title: TSG033 - Show BDC SQL status
+      url: monitor-bdc/tsg033-azdata-bdc-sql-status
+    - title: TSG068 - Show BDC HDFS status
+      url: monitor-bdc/tsg068-azdata-bdc-hdfs-status
+    - title: TSG017 - Show BDC Configuration
+      url: monitor-bdc/tsg017-azdata-bdc-config-show
+    - title: TSG019 - Show BDC Pools status
+      url: monitor-bdc/tsg019-azdata-bdc-pool-status
+    - title: TSG004 - Show BDC Apps
+      url: monitor-bdc/tsg004-show-app-list
+    - title: TSG003 - Show BDC Spark sessions
+      url: monitor-bdc/tsg003-show-spark-sessions
+    - title: TSG013 - Show file list in Storage Pool (HDFS)
+      url: monitor-bdc/tsg013-azdata-bdc-hdfs-ls
+    - title: TSG070 - Query SQL master pool
+      url: monitor-bdc/tsg070-use-azdata-sql-query
+  - title: Monitor - Kubernetes
+    url: /monitor-k8s/readme
+    not_numbered: true
+    sections:
+    - title: TSG021 - Get cluster info (Kubernetes)
+      url: monitor-k8s/tsg021-get-k8s-cluster-info
+    - title: TSG008 - Get version information (Kubernetes)
+      url: monitor-k8s/tsg008-get-k8s-version-info
+    - title: TSG081 - Get namespaces (Kubernetes)
+      url: monitor-k8s/tsg081-get-kubernetes-namespaces
+    - title: TSG009 - Get nodes (Kubernetes)
+      url: monitor-k8s/tsg009-get-nodes
+    - title: TSG006 - Get system pod status
+      url: monitor-k8s/tsg006-view-system-pod-status
+    - title: TSG007 - Get BDC pod status
+      url: monitor-k8s/tsg007-view-bdc-pod-status
+    - title: TSG015 - View BDC services (Kubernetes)
+      url: monitor-k8s/tsg015-view-k8s-services-for-bdc
+    - title: TSG097 - Get BDC stateful sets (Kubernetes)
+      url: monitor-k8s/tsg097-get-statefulsets
+    - title: TSG098 - Get BDC replicasets (Kubernetes)
+      url: monitor-k8s/tsg098-get-replicasets
+    - title: TSG099 - Get BDC daemonsets (Kubernetes)
+      url: monitor-k8s/tsg099-get-daemonsets
+    - title: TSG023 - Get all BDC objects (Kubernetes)
+      url: monitor-k8s/tsg023-run-kubectl-get-all
+    - title: TSG063 - Get storage classes (Kubernetes)
+      url: monitor-k8s/tsg063-get-storage-classes
+    - title: TSG072 - Get Persistent Volumes (Kubernetes)
+      url: monitor-k8s/tsg072-get-persistent-volumes
+    - title: TSG064 - Get BDC Persistent Volume Claims
+      url: monitor-k8s/tsg064-get-persistent-volume-claims
+    - title: TSG065 - Get BDC secrets (Kubernetes)
+      url: monitor-k8s/tsg065-get-secrets-for-bdc-namespace
+    - title: TSG066 - Get BDC event (Kubernetes)
+      url: monitor-k8s/tsg066-get-kubernetes-events
+    - title: TSG020- Describe nodes (Kubernetes)
+      url: monitor-k8s/tsg020-describe-all-nodes
+    - title: TSG016- Describe BDC pods
+      url: monitor-k8s/tsg016-describe-all-pods-in-bdc-namespace
+    - title: TSG089 - Describe BDC non-running pods
+      url: monitor-k8s/tsg089-describe-non-running-pods-in-bdc
+    - title: TSG010 - Get configuration contexts
+      url: monitor-k8s/tsg010-get-kubernetes-contexts
+    - title: TSG022 - Get external IP address for kubeadm host
+      url: monitor-k8s/tsg022-get-external-ip-of-kubeadm-host
+    - title: TSG042 - Get `node name` and external mounts for `Data` and `Logs` `PVCs`
+      url: monitor-k8s/tsg042-get-hosting-node-and-data-log-mount
+  - title: Logs
+    url: /log-files/readme
+    not_numbered: true
+    sections:
+    - title: TSG001 - Run azdata copy-logs
+      url: log-files/tsg001-copy-logs
+    - title: TSG061 - Get tail of all container logs for pods in BDC namespace
+      url: log-files/tsg061-tail-bdc-container-logs
+    - title: TSG062 - Get tail of all previous container logs for pods in BDC namespace
+      url: log-files/tsg062-tail-bdc-previous-container-logs
+    - title: TSG083 - Run kubectl cluster-info dump
+      url: log-files/tsg083-run-kubectl-cluster-info-dump
+    - title: TSG084 - Internal Query Processor Error
+      url: log-files/tsg084-internal-query-process-error
+    - title: TSG091 - Get the azdata CLI logs
+      url: log-files/tsg091-get-azdata-logs
+  - title: Samples
+    url: /sample/readme
+    not_numbered: true
+    sections:
+    - title: SAM001a - Query Storage Pool from SQL Server Master Pool (1 of 3) - Load
+        sample data
+      url: sample/sam001a-load-sample-data-into-bdc
+    - title: SAM001b - Query Storage Pool from SQL Server Master Pool (2 of 3) - Convert
+        data to parquet
+      url: sample/sam001b-convert-csv-to-parquet
+    - title: SAM001c - Query Storage Pool from SQL Server Master Pool (3 of 3)  -
+        Query HDFS from SQL Server
+      url: sample/sam001c-query-hdfs-in-sql-server
+    - title: SAM002 - Storage Pool (2 of 2) - Query HDFS
+      url: sample/sam002-query-hdfs-in-sql-server
+    - title: SAM003 - Data Pool Example
+      url: sample/sam003-data-pool
+    - title: SAM008 - Spark using azdata
+      url: sample/sam008-spark-using-azdata
+    - title: SAM009 - HDFS using azdata
+      url: sample/sam009-hdfs-using-azdata
+    - title: SAM010 - App using azdata
+      url: sample/sam010-app-using-azdata
+    - title: SAM018 - Basic Spark R Example
+      url: sample/sam018-basic-sparkr
+  - title: Install
+    url: /install/readme
+    not_numbered: true
+    sections:
+    - title: SOP036 - Install kubectl command line interface
+      url: install/sop036-install-kubectl
+    - title: SOP059 - Install Kubernetes Python module
+      url: install/sop059-install-kubernetes-module
+    - title: SOP069 - Install ODBC for SQL Server
+      url: install/sop069-install-odbc-driver-for-sql-server
+    - title: SOP012 - Install unixodbc for Mac
+      url: install/sop012-brew-install-odbc-for-sql-server
+    - title: SOP037 - Uninstall kubectl command line interface
+      url: install/sop037-uninstall-kubectl
+    - title: SOP038 - Install azure command line interface
+      url: install/sop038-install-az
+    - title: SOP040 - Upgrade pip in ADS Python sandbox
+      url: install/sop040-upgrade-pip
+    - title: SOP060 - Uninstall kubernetes module
+      url: install/sop060-uninstall-kubernetes-module
+    - title: SOP062 - Install ipython-sql and pyodbc modules
+      url: install/sop062-install-ipython-sql-module
+  - title: Backup and Restore
+    url: /backup-restore/readme
+    not_numbered: true
+    sections:
+    - title: SOP008 - Backup HDFS files to Azure Data Lake Store Gen2 with distcp
+      url: backup-restore/sop008-distcp-backup-to-adl-gen2
+  - title: Certificate Management
+    url: /cert-management/readme
+    not_numbered: true
+    sections:
+    - title: CER001 - Generate a Root CA certificate
+      url: cert-management/cer001-create-root-ca
+    - title: CER002 - Download existing Root CA certificate
+      url: cert-management/cer002-download-existing-root-ca
+    - title: CER003 - Upload existing Root CA certificate
+      url: cert-management/cer003-upload-existing-root-ca
+    - title: CER004 - Download and Upload existing Root CA certificate
+      url: cert-management/cer004-download-upload-existing-root-ca
+    - title: CER005 - Install new Root CA certificate
+      url: cert-management/cer005-install-existing-root-ca
+    - title: CER010 - Install generated Root CA locally
+      url: cert-management/cer010-install-generated-root-ca-locally
+    - title: CER020 - Create Management Proxy certificate
+      url: cert-management/cer020-create-management-service-proxy-cert
+    - title: CER021 - Create Knox certificate
+      url: cert-management/cer021-create-knox-cert
+    - title: CER022 - Create App Proxy certificate
+      url: cert-management/cer022-create-app-proxy-cert
+    - title: CER023 - Create Master certificates
+      url: cert-management/cer023-create-master-certs
+    - title: CER024 - Create Controller certificate
+      url: cert-management/cer024-create-controller-cert
+    - title: CER025 - Upload existing Management Proxy certificate
+      url: cert-management/cer025-upload-management-service-proxy-cert
+    - title: CER026 - Upload existing Gateway certificate
+      url: cert-management/cer026-upload-knox-cert
+    - title: CER027 - Upload existing App Service Proxy certificate
+      url: cert-management/cer027-upload-app-proxy-cert
+    - title: CER028 - Upload existing Master certificates
+      url: cert-management/cer028-upload-master-certs
+    - title: CER028 - Upload existing Contoller certificate
+      url: cert-management/cer029-upload-controller-cert
+    - title: CER030 - Sign Management Proxy certificate with generated CA
+      url: cert-management/cer030-sign-service-proxy-generated-cert
+    - title: CER031 - Sign Knox certificate with generated CA
+      url: cert-management/cer031-sign-knox-generated-cert
+    - title: CER032 - Sign App-Proxy certificate with generated CA
+      url: cert-management/cer032-sign-app-proxy-generated-cert
+    - title: CER033 - Sign Master certificates with generated CA
+      url: cert-management/cer033-sign-master-generated-certs
+    - title: CER034 - Sign Controller certificate with cluster Root CA
+      url: cert-management/cer034-sign-controller-generated-cert
+    - title: CER040 - Install signed Management Proxy certificate
+      url: cert-management/cer040-install-service-proxy-cert
+    - title: CER041 - Install signed Knox certificate
+      url: cert-management/cer041-install-knox-cert
+    - title: CER042 - Install signed App-Proxy certificate
+      url: cert-management/cer042-install-app-proxy-cert
+    - title: CER043 - Install signed Master certificates
+      url: cert-management/cer043-install-master-certs
+    - title: CER044 - Install signed Controller certificate
+      url: cert-management/cer044-install-controller-cert
+    - title: CER050 - Wait for BDC to be Healthy
+      url: cert-management/cer050-wait-cluster-healthy
+    - title: CER100 - Configure Cluster with Self Signed Certificates
+      url: cert-management/cer100-create-root-ca-install-certs
+    - title: CER101 - Configure Cluster with Self Signed Certificates using existing
+        Root CA
+      url: cert-management/cer101-use-root-ca-install-certs
+    - title: CER102 - Configure Cluster with Self Signed Certificates using existing
+        Big Data Cluster CA
+      url: cert-management/cer102-use-bdc-ca-install-certs
+    - title: CER103 - Configure Cluster with externally signed certificates
+      url: cert-management/cer103-upload-install-certs
+  - title: Encryption key management
+    url: /tde/readme
+    not_numbered: true
+    sections:
+    - title: SOP0124 - List Keys For Encryption At Rest.
+      url: tde/sop124-list-keys-encryption-at-rest
+    - title: SOP0128 - Enable HDFS Encryption zones in Big Data Clusters.
+      url: tde/sop128-enable-encryption-zones
+    - title: SOP0125 - Delete Key For Encryption At Rest
+      url: tde/sop125-delete-keys-encryption-at-rest
+    - title: SOP0126 - Backup Keys For Encryption At Rest
+      url: tde/sop126-backup-keys-encryption-at-rest
+    - title: SOP0127 - Restore Keys For Encryption At Rest
+      url: tde/sop127-restore-keys-encryption-at-rest
+  - title: Common
+    url: /common/readme
+    not_numbered: true
+    sections:
+    - title: SOP005 - az login
+      url: common/sop005-az-login
+    - title: SOP006 - az logout
+      url: common/sop006-az-logout
+    - title: SOP007 - Version information (azdata, bdc, kubernetes)
+      url: common/sop007-get-key-version-information
+    - title: SOP013 - Create secret for azdata login (inside cluster)
+      url: common/sop013-create-secret-for-azdata-login
+    - title: SOP014 - Delete secret for azdata login (inside cluster)
+      url: common/sop014-delete-secret-for-azdata-login
+    - title: SOP028 - azdata login
+      url: common/sop028-azdata-login
+    - title: SOP033 - azdata logout
+      url: common/sop033-azdata-logout
+    - title: SOP034 - Wait for BDC to be Healthy
+      url: common/sop034-wait-cluster-healthy
+  - title: Password Rotation
+    url: /password-rotation/readme
+    not_numbered: true
+    sections:
+    - title: 'PASS001 - Update Adminstrator Domain Controller Password '
+      url: password-rotation/pass001-update-dsa-password
