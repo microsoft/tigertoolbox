@@ -10,5 +10,6 @@ This folder contains notebooks related to troubleshooting common issues and task
 * **[CU6](https://github.com/microsoft/tigertoolbox/tree/master/Big-Data-Clusters/CU6/Public/content)**
 * **[CU8](https://github.com/microsoft/tigertoolbox/tree/master/Big-Data-Clusters/CU8/Public/content)**
 * **[CU9](https://github.com/microsoft/tigertoolbox/tree/master/Big-Data-Clusters/CU9/public/content)**
+* **[CU14](https://github.com/microsoft/tigertoolbox/tree/master/Big-Data-Clusters/CU14/public/content)**
 
 **[hdfs-kerberos-tester.ipynb](https://github.com/microsoft/sql-server-samples/blob/master/samples/manage/hdfs-kerberos-tester/hdfs-kerberos-tester.ipynb)** - Notebook for troubleshooting HDFS Kerberos connections. More details about this toolset can be found [here](https://github.com/microsoft/sql-server-samples/tree/master/samples/manage/hdfs-kerberos-tester).
