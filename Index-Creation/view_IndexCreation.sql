@@ -1,5 +1,5 @@
 --
--- 2007-10-11 Pedro Lopes (Microsoft) pedro.lopes@microsoft.com (http://aka.ms/sqlinsights/)
+-- 2007-10-11 Pedro Lopes (Microsoft) pedro.lopes@microsoft.com 
 --
 -- 2008-01-17 Check for possibly redundant indexes in the output.
 -- 2009-05-21 Changed index scoring method; Disregards indexes with [Score] < 100000 and [User_Hits_on_Missing_Index] < 99;
@@ -11,7 +11,7 @@ SET QUOTED_IDENTIFIER ON;
 
 DECLARE @IC VARCHAR(4000), @ICWI VARCHAR(4000), @editionCheck bit
 
-/* Refer to http://msdn.microsoft.com/en-us/library/ms174396.aspx */	
+/* Refer to http://docs.microsoft.com/sql/t-sql/functions/serverproperty-transact-sql */	
 IF (SELECT SERVERPROPERTY('EditionID')) IN (1804890536, 1872460670, 610778273, -2117995310)	
 SET @editionCheck = 1 -- supports enterprise only features
 ELSE	
