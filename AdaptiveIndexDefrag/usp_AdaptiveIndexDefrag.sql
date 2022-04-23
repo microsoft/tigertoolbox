@@ -3336,4 +3336,3 @@ PRINT 'Procedure usp_AdaptiveIndexDefrag_Exceptions created (If the defrag shoul
 PRINT 'All done!'
 
 GO
-
