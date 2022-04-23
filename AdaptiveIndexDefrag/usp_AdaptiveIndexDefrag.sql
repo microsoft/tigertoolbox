@@ -2,8 +2,8 @@
 -- please note that the job that runs AdaptiveIndexDefrag is expecting msdb. As such, change the database context accordingly.
 
 -- For deployment in Azure SQL Database, remove or comment the USE statement below.
---USE msdb
---GO
+USE msdb
+GO
 
 SET NOCOUNT ON;
 
@@ -3337,5 +3337,3 @@ PRINT 'All done!'
 
 GO
 
-
-EXEC usp_AdaptiveIndexDefrag @debugMode = 1
