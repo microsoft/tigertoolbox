@@ -22,11 +22,8 @@ This is an overview of the solution
 Best practices that were considered for this solution:
 1. This solution deploys SQL Server VMs to multiple subnets,thereby avoiding the dependency on an Azure Load Balancer or a distributed network name (DNN) to route traffic to your HADR solution.
 2. Use a single NIC per cluster node.
-3. 
-
 
 The following resources are deployed as part of the solution:
-
 1. AvailabilitySet
 2. Virtual machine 
 3. SQL virtual machine 
@@ -36,9 +33,8 @@ The following resources are deployed as part of the solution:
 7. Storage account 
 8. Failovercluster - Microsoft.sqlvirtualmachine/sqlvirtualmachinegroups 
 
-
-
 ## Prerequisites
+
 RBAC permissions required to deploy ARM template: Virtual machine contributor
 
 Before deploying the template you must have the following:
@@ -48,7 +44,6 @@ Before deploying the template you must have the following:
     SQL service
     DomainAdmin - This should have Create Computer object permissions.
 4. Subnets for VMs. Refer https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-manage-subnet#add-a-subnet
-
 
 Notes: 
 1. This [template] (https://github.com/Azure/azure-quickstart-templates/tree/master/application-workloads/active-directory/active-directory-new-domain) is helpful for above steps 1,2,3
