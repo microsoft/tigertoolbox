@@ -10,7 +10,7 @@
 
 This is an overview of the solution
 1. Creates availability set
-2. Creates multiple SQL VMs in availability set, each vm in a different subnet (Maximum number of VMs for this solution is 9, we recommend VM count > 3)
+2. Creates multiple SQL VMs in availability set, each vm in a different subnet (Maximum number of VMs for this solution is 9, we recommend VM count > 2)
 3. Join SQL VMs to the domain 
 4. Creates Storage account (if it doesn't exist already) which will act as Witness for Failover Cluster
 5. Creates Windows server Failover cluster
