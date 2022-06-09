@@ -18,10 +18,6 @@ This is an overview of the solution
 7. Creates Availability Group 
 8. Creates Availability Group Listener
 
-Best practices that were considered for this solution:
-1. This solution deploys SQL Server VMs to multiple subnets,thereby avoiding the dependency on an Azure Load Balancer or a distributed network name (DNN) to route traffic to your HADR solution.
-2. Use a single NIC per cluster node.
-
 The following resources are deployed as part of the solution:
 1. AvailabilitySet
 2. Virtual machine 
@@ -45,7 +41,7 @@ Before deploying the template you must have the following:
 4. Subnets for VMs. Refer https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-manage-subnet#add-a-subnet
 
 Notes: 
-1. This [template] (https://github.com/Azure/azure-quickstart-templates/tree/master/application-workloads/active-directory/active-directory-new-domain) is helpful for above steps 1,2,3
+1. This [template] (https://github.com/Azure/azure-quickstart-templates/tree/master/application-workloads/active-directory/active-directory-new-domain) is helpful for above prerequisite steps 1,2,3
 2. New resources should be in the same region as virtual network
 3. Tutorial for a manual solution of this [template] (https://docs.microsoft.com/en-us/azure/azure-sql/virtual-machines/windows/availability-group-manually-configure-prerequisites-tutorial-multi-subnet?msclkid=7c862b87b6c711ecae6e6866d0d72ae8&view=azuresql)
 
