@@ -34,7 +34,9 @@ BEGIN
 END	
 GO
 
-CREATE PROCEDURE usp_CheckIntegrity @VLDBMode bit = 1, @SingleUser bit = 0, @CreateSnap bit = 1, @SnapPath NVARCHAR(1000) = NULL, @AO_Secondary bit = 0, @Physical bit = 0
+CREATE PROCEDURE [dbo].[usp_CheckIntegrity] @VLDBMode bit = 1, @SingleUser bit = 0, @CreateSnap bit = 1, @SnapPath NVARCHAR(1000) = NULL, @AO_Secondary bit = 0, @Physical bit = 0
+ , @VLDBThresholdMB int = 1048576 -- Threshold in MB to consider a database as a VLDB
+ , @WeekendDayNum tinyint = 1 -- Sunday
 AS
 /* 
 This checks the logical and physical integrity of all the objects in the specified database by performing the following operations: 
@@ -87,6 +89,12 @@ BEGIN
 	RETURN
 END
 
+IF @WeekendDayNum NOT BETWEEN 1 AND 7
+BEGIN
+	RAISERROR('[ERROR: Must set weekend day between 1 and 7]', 16, 1, N'WeekendDayNum')
+	RETURN
+END
+
 DECLARE @dbid int, @dbname sysname, @sqlcmdROFG NVARCHAR(1000), @sqlcmd NVARCHAR(max), @sqlcmd_Create NVARCHAR(max), @sqlcmd_Drop NVARCHAR(500)
 DECLARE @msg NVARCHAR(500), @params NVARCHAR(500), @sqlcmd_AO NVARCHAR(4000);
 DECLARE @filename sysname, @filecreateid int, @Message VARCHAR(1000);
@@ -94,19 +102,19 @@ DECLARE @Buckets tinyint, @BucketCnt tinyint, @BucketPages bigint, @TodayBucket 
 DECLARE @BucketId tinyint, @object_id int, @name sysname, @schema sysname, @type CHAR(2), @type_desc NVARCHAR(60), @used_page_count bigint;
 DECLARE @sqlmajorver int, @ErrorMessage NVARCHAR(4000)
 		
-IF NOT EXISTS(SELECT [object_id] FROM sys.tables WHERE [name] = 'tblDbBuckets')
+IF OBJECT_ID('tblDbBuckets') IS NULL
 CREATE TABLE tblDbBuckets (BucketId int, [database_id] int, [object_id] int, [name] sysname, [schema] sysname, [type] CHAR(2), type_desc NVARCHAR(60), used_page_count bigint, isdone bit);
-IF NOT EXISTS(SELECT [object_id] FROM sys.tables WHERE [name] = 'tblFgBuckets')
+IF OBJECT_ID('tblFgBuckets') IS NULL
 CREATE TABLE tblFgBuckets (BucketId int, [database_id] int, [data_space_id] int, [name] sysname, used_page_count bigint, isdone bit);
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs'))
+IF OBJECT_ID('tempdb..#tmpdbs') IS NULL
 CREATE TABLE #tmpdbs (id int IDENTITY(1,1), [dbid] int, [dbname] sysname, rows_size_MB bigint, isdone bit)
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBuckets'))
+IF OBJECT_ID('tempdb..#tblBuckets') IS NULL
 CREATE TABLE #tblBuckets (BucketId int, MaxAmount bigint, CurrentRunTotal bigint)
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblObj'))
+IF OBJECT_ID('tempdb..#tblObj') IS NULL
 CREATE TABLE #tblObj ([object_id] int, [name] sysname, [schema] sysname, [type] CHAR(2), type_desc NVARCHAR(60), used_page_count bigint, isdone bit)
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFGs'))
+IF OBJECT_ID('tempdb..#tblFGs') IS NULL
 CREATE TABLE #tblFGs ([data_space_id] int, [name] sysname, used_page_count bigint, isdone bit)
-IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSnapFiles'))
+IF OBJECT_ID('tempdb.dbo.#tblSnapFiles') IS NULL
 CREATE TABLE #tblSnapFiles ([name] sysname, isdone bit)
 
 SELECT @sqlmajorver = CONVERT(int, (@@microsoftversion / 0x1000000) & 0xff);
@@ -144,11 +152,14 @@ SET @sqlcmd_AO = @sqlcmd_AO + CHAR(10) + 'GROUP BY sd.database_id, sd.name';
 INSERT INTO #tmpdbs ([dbid], [dbname], rows_size_MB, isdone)
 EXEC sp_executesql @sqlcmd_AO;
 
-WHILE (SELECT COUNT([dbid]) FROM #tmpdbs WHERE isdone = 0) > 0
+WHILE EXISTS (SELECT NULL FROM #tmpdbs WHERE isdone = 0)
 BEGIN
-	SET @dbid = (SELECT TOP 1 [dbid] FROM #tmpdbs WHERE isdone = 0)
-	SET @dbname = (SELECT TOP 1 [dbname] FROM #tmpdbs WHERE isdone = 0)
-	SET @dbsize = (SELECT TOP 1 [rows_size_MB] FROM #tmpdbs WHERE isdone = 0)
+	SELECT TOP 1
+		@dbid = [dbid],
+		@dbname = [dbname],
+		@dbsize = [rows_size_MB]
+	FROM #tmpdbs
+	WHERE isdone = 0
 	
 	-- If a snapshot is to be created, set the proper path
 	IF @SnapPath IS NULL
@@ -167,10 +178,10 @@ BEGIN
 	
 	SET @sqlcmd = ''
 
-	IF @dbsize < 1048576 -- smaller than 1TB
+	IF @dbsize < @VLDBThresholdMB -- smaller than 1TB
 	BEGIN
 		-- Is it Sunday yet? If so, start database check
-		IF (SELECT 1 & POWER(2, DATEPART(weekday, GETDATE())-1)) > 0
+		IF (SELECT POWER(2, @WeekendDayNum) & POWER(2, DATEPART(weekday, GETDATE())-1)) > 0
 		BEGIN
 			IF @HasROFG > 0 AND @CreateSnap = 1 AND @SnapPath IS NOT NULL
 			SELECT @msg = CHAR(10) + CONVERT(VARCHAR, GETDATE(), 9) + ' - Started integrity checks on ' + @dbname + '_CheckDB_Snapshot';
@@ -291,10 +302,10 @@ ALTER DATABASE [' + @dbname + '] SET MULTI_USER WITH ROLLBACK IMMEDIATE;'
 		END
 	END;
 
-	IF @dbsize >= 1048576 -- 1TB or Larger, then create buckets
+	IF @dbsize >= @VLDBThresholdMB -- 1TB or Larger, then create buckets
 	BEGIN
 		-- Buckets are built on a weekly basis, so is it Sunday yet? If so, start building
-		IF (SELECT 1 & POWER(2, DATEPART(weekday, GETDATE())-1)) > 0
+		IF (SELECT POWER(2, @WeekendDayNum) & POWER(2, DATEPART(weekday, GETDATE())-1)) > 0
 		BEGIN
 			TRUNCATE TABLE #tblObj
 			TRUNCATE TABLE #tblBuckets
@@ -354,7 +365,7 @@ ORDER BY SUM(sps.used_page_count) DESC, fg.data_space_id'
 
 			IF @VLDBMode = 0 -- Populate buckets by Table Size
 			BEGIN
-				WHILE (SELECT COUNT(*) FROM #tblObj WHERE isdone = 0) > 0
+				WHILE EXISTS (SELECT NULL FROM #tblObj WHERE isdone = 0)
 				BEGIN
 					SELECT TOP 1 @object_id = [object_id], @name = [name], @schema = [schema], @type = [type], @type_desc = type_desc, @used_page_count = used_page_count
 					FROM #tblObj
@@ -379,7 +390,7 @@ ORDER BY SUM(sps.used_page_count) DESC, fg.data_space_id'
 
 			IF @VLDBMode = 1 -- Populate buckets by Filegroup Size
 			BEGIN
-				WHILE (SELECT COUNT(*) FROM #tblFGs WHERE isdone = 0) > 0
+				WHILE EXISTS (SELECT NULL FROM #tblFGs WHERE isdone = 0)
 				BEGIN
 					SELECT TOP 1 @fg_id = [data_space_id], @name = [name], @used_page_count = used_page_count
 					FROM #tblFGs
@@ -414,7 +425,7 @@ ORDER BY SUM(sps.used_page_count) DESC, fg.data_space_id'
 			END;
 
 		-- Is it Sunday yet? If so, start working on allocation and catalog checks on todays bucket
-		IF (SELECT 1 & POWER(2, DATEPART(weekday, GETDATE())-1)) > 0
+		IF (SELECT POWER(2, @WeekendDayNum) & POWER(2, DATEPART(weekday, GETDATE())-1)) > 0
 		BEGIN
 			IF @VLDBMode = 0
 			BEGIN
@@ -442,7 +453,7 @@ ORDER BY SUM(sps.used_page_count) DESC, fg.data_space_id'
 					SET @filecreateid = 1
 					SET @sqlsnapcmd = ''
 
-					WHILE (SELECT COUNT([name]) FROM #tblSnapFiles WHERE isdone = 0) > 0
+					WHILE EXISTS (SELECT NULL FROM #tblSnapFiles WHERE isdone = 0)
 					BEGIN
 						SELECT TOP 1 @filename = [name] FROM #tblSnapFiles WHERE isdone = 0
 						SET @sqlsnapcmd = @sqlsnapcmd + CHAR(10) + '(NAME = [' + @filename + '], FILENAME = ''' + @SnapPath + '\' + @dbname + '_CheckDB_Snapshot_Data_' + CONVERT(VARCHAR(10), @filecreateid) + '.ss''),'
@@ -546,7 +557,7 @@ ALTER DATABASE [' + @dbname + '] SET MULTI_USER WITH ROLLBACK IMMEDIATE;'
 				SET @filecreateid = 1
 				SET @sqlsnapcmd = ''
 
-				WHILE (SELECT COUNT([name]) FROM #tblSnapFiles WHERE isdone = 0) > 0
+				WHILE EXISTS (SELECT NULL FROM #tblSnapFiles WHERE isdone = 0)
 				BEGIN
 					SELECT TOP 1 @filename = [name] FROM #tblSnapFiles WHERE isdone = 0
 					SET @sqlsnapcmd = @sqlsnapcmd + CHAR(10) + '(NAME = [' + @filename + '], FILENAME = ''' + @SnapPath + '\' + @dbname + '_CheckDB_Snapshot_Data_' + CONVERT(VARCHAR(10), @filecreateid) + '.ss''),'
@@ -627,9 +638,9 @@ ALTER DATABASE [' + @dbname + '] SET MULTI_USER WITH ROLLBACK IMMEDIATE;'
 
 		IF @VLDBMode = 0 -- Now do table checks on todays bucket
 		BEGIN
-			WHILE (SELECT COUNT(*) FROM tblDbBuckets WHERE [database_id] = @dbid AND isdone = 0 AND BucketId = @TodayBucket
+			WHILE EXISTS (SELECT NULL FROM tblDbBuckets WHERE [database_id] = @dbid AND isdone = 0 AND BucketId = @TodayBucket
                                -- Confirm the table still exists
-                               AND OBJECT_ID(N'[' + DB_NAME(database_id) + '].[' + [schema] + '].[' + [name] + ']') IS NOT NULL) > 0
+                               AND OBJECT_ID(N'[' + DB_NAME(database_id) + '].[' + [schema] + '].[' + [name] + ']') IS NOT NULL)
 			BEGIN
 				SELECT TOP 1 @name = [name], @schema = [schema], @used_page_count = used_page_count
 				FROM tblDbBuckets
@@ -670,7 +681,7 @@ DBCC CHECKTABLE (''' + @schema + '.' + @name + ''') WITH '
 
 		IF @VLDBMode = 1 -- Now do filegroup checks on todays bucket
 		BEGIN
-			WHILE (SELECT COUNT(*) FROM tblFgBuckets WHERE [database_id] = @dbid AND isdone = 0 AND BucketId = @TodayBucket) > 0
+			WHILE EXISTS (SELECT NULL FROM tblFgBuckets WHERE [database_id] = @dbid AND isdone = 0 AND BucketId = @TodayBucket)
 			BEGIN
 				SELECT TOP 1 @fg_id = [data_space_id], @name = [name], @used_page_count = used_page_count
 				FROM tblFgBuckets
@@ -707,7 +718,7 @@ DBCC CHECKFILEGROUP (' + CONVERT(NVARCHAR(10), @fg_id) + ')'
 					SET @filecreateid = 1
 					SET @sqlsnapcmd = ''
 
-					WHILE (SELECT COUNT([name]) FROM #tblSnapFiles WHERE isdone = 0) > 0
+					WHILE EXISTS (SELECT NULL FROM #tblSnapFiles WHERE isdone = 0)
 					BEGIN
 						SELECT TOP 1 @filename = [name] FROM #tblSnapFiles WHERE isdone = 0
 						SET @sqlsnapcmd = @sqlsnapcmd + CHAR(10) + '(NAME = [' + @filename + '], FILENAME = ''' + @SnapPath + '\' + @dbname + '_CheckDB_Snapshot_Data_' + CONVERT(VARCHAR(10), @filecreateid) + '.ss''),'
@@ -794,15 +805,15 @@ ALTER DATABASE [' + @dbname + '] SET MULTI_USER WITH ROLLBACK IMMEDIATE;'
 	WHERE [dbid] = @dbid AND isdone = 0
 END;
 
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tmpdbs'))
+IF OBJECT_ID('tempdb..#tmpdbs') IS NOT NULL
 DROP TABLE #tmpdbs
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblObj'))
+IF OBJECT_ID('tempdb.dbo.#tblObj') IS NOT NULL
 DROP TABLE #tblObj;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblBuckets'))
+IF OBJECT_ID('tempdb.dbo.#tblBuckets') IS NOT NULL
 DROP TABLE #tblBuckets;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFGs'))
+IF OBJECT_ID('tempdb.dbo.#tblFGs') IS NOT NULL
 DROP TABLE #tblFGs;
-IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblSnapFiles'))
+IF OBJECT_ID('tempdb.dbo.#tblSnapFiles') IS NOT NULL
 DROP TABLE #tblSnapFiles;
 
 SELECT @Message = '** Finished: ' + CONVERT(VARCHAR, GETDATE())
