@@ -1,6 +1,6 @@
 # End-to-End provision of Multi Subnet Availability Group for SQL Servers running on Azure Virtual Machines. 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fgithub.com%2Fmicrosoft%2Ftigertoolbox%2Fblob%2Fmaster%2FAzureSQLVM%2Fe2e-ag-setup%2Fazuredeploy.json)  
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fmicrosoft%2Ftigertoolbox%2Fmaster%2FAzureSQLVM%2Fe2e-ag-setup%2Fazuredeploy.json)  
 
 [![Visualize](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/visualizebutton.svg?sanitize=true)](http://armviz.io/#/?load=https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2Fquickstarts%2Fmicrosoft.sqlvirtualmachine%2Fe2e-sql-vm-ag-setup%2Fazuredeploy.json)
 
