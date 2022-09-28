@@ -1018,8 +1018,8 @@
                       "input": {
                         "sqlVirtualMachineInstanceId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.SqlVirtualMachine/sqlVirtualMachines/', parameters('existingVmArray')[copyIndex('Replicas')] )]",
                         "role": "[if(equals(copyIndex('Replicas'),0), 'Primary', 'Secondary')]",
-                        "failover": "[if(less(copyIndex('Replicas'),3), 'Automatic', 'Manual')]",
-                        "commit": "[if(less(copyIndex('Replicas'),3), 'Synchronous_Commit', 'Asynchronous_Commit')]",
+                        "failover": "[if(less(copyIndex('Replicas'),2), 'Automatic', 'Manual')]",
+                        "commit": "[if(less(copyIndex('Replicas'),2), 'Synchronous_Commit', 'Asynchronous_Commit')]",
                         "readableSecondary": "All"
                       }
                     }
