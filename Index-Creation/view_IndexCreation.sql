@@ -247,7 +247,7 @@ BEGIN
 		IC.[Ix_Name] + ''') DROP INDEX ' + IC.[Table] + '.' +
 		IC.[Ix_Name] + ';' + CHAR(10) + 'GO' + CHAR(10) + 'CREATE INDEX ' +
 		IC.[Ix_Name] + ' ON ' + IC.[Table] + ' (' + IC.[KeyCols] + ')' + CHAR(10) + 'INCLUDE (' + IC.[IncludedCols] + ')' + 
-		CASE WHEN @editionCheck = 1 THEN ' WITH (ONLINE = ON);' ELSE ');' END + CHAR(10) + 'GO' + CHAR(10)
+		CASE WHEN @editionCheck = 1 THEN ' WITH (ONLINE = ON);' ELSE ';' END + CHAR(10) + 'GO' + CHAR(10)
 	FROM #IndexCreation IC
 	WHERE IC.[IncludedCols] IS NOT NULL AND IC.[Score] >= 100000
 	ORDER BY IC.DBName, IC.[Table], IC.[Ix_Name]
