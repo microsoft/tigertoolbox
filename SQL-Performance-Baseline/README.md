@@ -21,8 +21,9 @@ You can follow the steps mentioned below  to set it up in your environment.
 2.	Run CREATEDATABASE.sql
 3.	Run CREATEOBJECTS.sql
 4.	Run CREATECOLLECTIONJOB.sql
-5.	Check SQL Agent JOBs History to see if it runs successfully
-6.	Repeat for each SQL Instance you want to monitor
+5.	Run CreateSystemhealthDBAndSchema.sql
+6.	Check SQL Agent JOBs History to see if it runs successfully
+7.	Repeat for each SQL Instance you want to monitor
 
 ### Setting up & Deploying Reporting  
 
