@@ -1,9 +1,12 @@
 USE [msdb]
 GO
 
-/*
-Replace CREATE PROCEDURE with ALTER PROCEDURE or CREATE OR ALTER PROCEDURE to allow new changes to the SP if the SP is already present.
+-- Drop the SP if the SP is already present.
+IF OBJECT_ID('dbo.usp_bpcheck') IS NOT NULL
+	DROP PROCEDURE dbo.usp_bpcheck
+GO
 
+/*
 Usage examples:
 EXEC usp_bpcheck
 EXEC usp_bpcheck @allow_xpcmdshell = 0, @ptochecks = 1, @duration = 60
