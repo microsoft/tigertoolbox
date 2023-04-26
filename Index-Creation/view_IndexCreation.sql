@@ -158,7 +158,7 @@ INNER JOIN sys.dm_db_missing_index_group_stats s ON s.group_handle = g.index_gro
 WHERE i.database_id > 4
 
 INSERT INTO #IndexRedundant
-SELECT I.DBName, I.[Table], I.[Ix_Name], i.[ix_handle], I.[KeyCols], I.[IncludedCols], I2.[Ix_Name]
+SELECT I.DBName, I.[Table], I.[Ix_Name], I.[ix_handle], I.[KeyCols], I.[IncludedCols], I2.[Ix_Name]
 FROM #IndexCreation I 
 INNER JOIN #IndexCreation I2 ON I.[database_id] = I2.[database_id] AND I.[Table] = I2.[Table] AND I.[Ix_Name] <> I2.[Ix_Name]
 	AND (((I.KeyColsOrdered <> I2.KeyColsOrdered OR I.[IncludedColsOrdered] <> I2.[IncludedColsOrdered])
