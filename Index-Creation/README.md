@@ -2,5 +2,5 @@
 
 In the output, you will find the following information:
 -  Missing indexes with the highest user impact. The higher the score, higher is the anticipated improvement for user queries.
--  Possibly redundant indexes in above list, whcih provides an opportunity to do some index consolidation.
+-  Possibly redundant indexes in above list, which provides an opportunity to do some index consolidation.
 -  Index creation scripts.
