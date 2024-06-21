@@ -1,17 +1,18 @@
 --
--- 2007-10-11 Pedro Lopes (Microsoft) pedro.lopes@microsoft.com (http://aka.ms/sqlinsights/)
+-- 2007-10-11 Pedro Lopes (Microsoft) pedro.lopes@microsoft.com 
 --
 -- 2008-01-17 Check for possibly redundant indexes in the output.
 -- 2009-05-21 Changed index scoring method; Disregards indexes with [Score] < 100000 and [User_Hits_on_Missing_Index] < 99;
 -- 2013-03-21 Changed database loop method;
 -- 2013-11-10 Added search for redundant indexes in missing indexes;
+-- 2022-11-22 Fixed issue with included column index generation
 
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 
 DECLARE @IC VARCHAR(4000), @ICWI VARCHAR(4000), @editionCheck bit
 
-/* Refer to http://msdn.microsoft.com/en-us/library/ms174396.aspx */	
+/* Refer to http://docs.microsoft.com/sql/t-sql/functions/serverproperty-transact-sql */	
 IF (SELECT SERVERPROPERTY('EditionID')) IN (1804890536, 1872460670, 610778273, -2117995310)	
 SET @editionCheck = 1 -- supports enterprise only features
 ELSE	
@@ -245,7 +246,8 @@ BEGIN
 		CHAR(10) + 'USE ' + QUOTENAME(IC.DBName) + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sysindexes WHERE name = N''' +
 		IC.[Ix_Name] + ''') DROP INDEX ' + IC.[Table] + '.' +
 		IC.[Ix_Name] + ';' + CHAR(10) + 'GO' + CHAR(10) + 'CREATE INDEX ' +
-		IC.[Ix_Name] + ' ON ' + IC.[Table] + ' (' + IC.[KeyCols] + CASE WHEN @editionCheck = 1 THEN ') WITH (ONLINE = ON);' ELSE ');' END + CHAR(10) + 'GO' + CHAR(10)
+		IC.[Ix_Name] + ' ON ' + IC.[Table] + ' (' + IC.[KeyCols] + ')' + CHAR(10) + 'INCLUDE (' + IC.[IncludedCols] + ')' + 
+		CASE WHEN @editionCheck = 1 THEN ' WITH (ONLINE = ON);' ELSE ';' END + CHAR(10) + 'GO' + CHAR(10)
 	FROM #IndexCreation IC
 	WHERE IC.[IncludedCols] IS NOT NULL AND IC.[Score] >= 100000
 	ORDER BY IC.DBName, IC.[Table], IC.[Ix_Name]

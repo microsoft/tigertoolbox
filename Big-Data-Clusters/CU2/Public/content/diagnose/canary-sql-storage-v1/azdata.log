@@ -1,0 +1,5 @@
+10732 | 2020-03-11 15:25:16.0749 UTC | DEBUG | cli.knack.log | File logging enabled - writing logs to 'canary-sql-storage-v1'.
+10732 | 2020-03-11 15:25:16.0750 UTC | DEBUG | cli.knack.cli | Event: OutputProducer.OnOutput [<function OutputProducer.__init__.<locals>.<lambda> at 0x054C74B0>]
+10732 | 2020-03-11 15:25:16.0750 UTC | DEBUG | cli.knack.cli | Event: Cli.PreExecute []
+10732 | 2020-03-11 15:25:16.0750 UTC | DEBUG | cli.knack.cli | Event: Cli.PostExecute []
+10732 | 2020-03-11 15:25:16.0750 UTC | INFO | cli.mssqlctl.cli.entry | command ran in 0.037 seconds.

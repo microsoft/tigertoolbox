@@ -1,0 +1,47 @@
+- title: Log Analyzers
+  url: /log-analyzers/readme
+  not_numbered: true
+  expand_sections: true
+  sections:
+  - title: TSG046 - Knox gateway logs
+    url: log-analyzers/tsg046-get-knox-logs
+  - title: TSG036 - Controller logs
+    url: log-analyzers/tsg036-get-controller-logs
+  - title: TSG034 - Livy logs
+    url: log-analyzers/tsg034-get-livy-logs
+  - title: TSG035 - Spark History logs
+    url: log-analyzers/tsg035-get-sparkhistory-logs
+  - title: TSG030 - SQL Server errorlog files
+    url: log-analyzers/tsg030-get-errorlog-from-all-pods
+  - title: TSG031 - SQL Server PolyBase logs
+    url: log-analyzers/tsg031-get-polybase-logs-for-all-pods
+  - title: TSG095 - Hadoop namenode logs
+    url: log-analyzers/tsg095-get-namenode-logs
+  - title: TSG090 - Yarn nodemanager logs
+    url: log-analyzers/tsg090-get-nodemanager-logs
+  - title: TSG088 - Hadoop datanode logs
+    url: log-analyzers/tsg088-get-datanode-logs
+  - title: TSG096 - Zookeeper logs
+    url: log-analyzers/tsg096-get-zookeeper-logs
+  - title: TSG073 - InfluxDB logs
+    url: log-analyzers/tsg073-get-influxdb-logs
+  - title: TSG076 - Elastic Search logs
+    url: log-analyzers/tsg076-get-elastic-search-logs
+  - title: TSG077 - Kibana logs
+    url: log-analyzers/tsg077-get-kibana-logs
+  - title: TSG092 - Supervisord log tail for all containers in BDC
+    url: log-analyzers/tsg092-get-all-supervisord-log-tails
+  - title: TSG093 - Agent log tail for all containers in BDC
+    url: log-analyzers/tsg093-get-all-agent-log-tails
+  - title: TSG094 - Grafana logs
+    url: log-analyzers/tsg094-get-grafana-logs
+  - title: TSG117 - App-Deploy Proxy Nginx Logs
+    url: log-analyzers/tsg117-get-approxy-nginx-logs
+  - title: TSG120 - Provisioner log tail for all containers in BDC
+    url: log-analyzers/tsg120-get-all-provisioner-log-tails
+  - title: TSG121 - Supervisor mssql-server logs
+    url: log-analyzers/tsg121-get-all-supervisor-mssql-logs
+  - title: TSG122 - Hive Metastore logs
+    url: log-analyzers/tsg122-get-hive-metastore-logs
+  - title: TSG123 - Hive logs
+    url: log-analyzers/tsg123-get-hive-logs

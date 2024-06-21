@@ -1,10 +1,22 @@
-**usp_WhatsUp**
+# usp_WhatsUp
 
-**Purpose:** Understand what's up with your SQL Server and get all sorts of useful troubleshooting information such as:
+## Purpose:
+Understand what's up with your SQL Server and get all sorts of useful troubleshooting information such as:
 -  A snapshot on running sessions/requests; 
 -  Current blocking information; 
 -  Optionally, SP/Query/Trigger/Function execution stats.
 
+## Parameters for executing usp_WhatsUp
+- **@sqluptime** Output current SQL Server instance uptime. Default is ON.
+- **@requests** Output in-flight batch requests. Default is ON.
+- **@blocking** Output in-progress blocking chains, identifying the top blockers. Default is ON.
+- **@spstats** Output stored procedures execution statistics since last instance startup. Default is OFF.
+- **@qrystats** Output query execution statistics since last instance startup. Default is OFF.
+- **@trstats** Output triggers execution statistics since last instance startup. Default is OFF.
+- **@fnstats** Output user-defined functions execution statistics since last instance startup. Default is OFF.
+- **@top** For spstats, qrystats, trstats, and fnstats, output only the top X. Default X is 100.
+
+## Detail on output sections:
 In the output, you will find the following information in 6 sections:
 -  Uptime Information
 -  Running Sessions/Requests Report including resource usage, running statement, execution plan, blocking resource, waits and other relevant information.
@@ -14,7 +26,7 @@ In the output, you will find the following information in 6 sections:
 -  Trigger execution statistics.
 -  Function execution statistics.
 
-**Change log:**
+## Change log:
 -  2012-09-10 Added extra information
 -  2013-02-02 Added extra information
 -  2013-04-12 Added page type information (PFS; GAM or SGAM) when wait type is PAGELATCH_ or PAGEIOLATCH_ .
@@ -42,3 +54,7 @@ In the output, you will find the following information in 6 sections:
    -  Added more information to Query stats section.
 -  04/15/2019 Added support for input buffer DMF.
 -  04/17/2019 Fixed function stats query failing in SQL Server 2012 and 2014.
+-  06/05/2019 Added TOP option to return limited number of rows for execution statistics.
+-  06/06/2019 Fixed issue with CHAR(0) and XML conversion;
+   -  Fixed issue with @fnstats execution error.
+-  06/11/2019 Fixed issue with running requests in SQL Server 2019.

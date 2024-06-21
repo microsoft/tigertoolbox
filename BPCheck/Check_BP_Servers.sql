@@ -145,7 +145,7 @@ BEGIN
 	-- Perms 2
 	INSERT INTO @permstbl
 	SELECT a.name
-	FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[OBJECT_ID] = b.major_id
+	FROM master.sys.all_objects a (NOLOCK) INNER JOIN master.sys.database_permissions b (NOLOCK) ON a.[object_id] = b.major_id
 	WHERE a.type IN ('P', 'X') AND b.grantee_principal_id <>0 
 	AND b.grantee_principal_id <>2
 	AND b.grantee_principal_id = @masterpid;
@@ -206,7 +206,8 @@ DECLARE @agt smallint, @ole smallint, @sao smallint, @xcmd smallint
 DECLARE @ErrorSeverity int, @ErrorState int, @ErrorMessage NVARCHAR(4000)
 DECLARE @CMD NVARCHAR(4000)
 DECLARE @path NVARCHAR(2048)
-DECLARE @sqlminorver int, @sqlbuild int, @clustered bit, @osver VARCHAR(5), @ostype VARCHAR(10), @osdistro VARCHAR(20), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @ossp VARCHAR(25), @SystemManufacturer VARCHAR(128)
+DECLARE @sqlminorver int, @sqlbuild int, @clustered bit
+DECLARE @osver VARCHAR(5), @ostype VARCHAR(10), @osdistro VARCHAR(20), @server VARCHAR(128), @instancename NVARCHAR(128), @arch smallint, @ossp VARCHAR(25), @SystemManufacturer VARCHAR(128), @BIOSVendor AS VARCHAR(128), @Processor_Name AS VARCHAR(128)
 DECLARE @existout int, @FSO int, @FS int, @OLEResult int, @FileID int
 DECLARE @FileName VARCHAR(200), @Text1 VARCHAR(2000), @CMD2 VARCHAR(100)
 DECLARE @src VARCHAR(255), @desc VARCHAR(255), @psavail VARCHAR(20), @psver tinyint
@@ -421,6 +422,8 @@ BEGIN
 END;
 
 SELECT @SystemManufacturer = [Data] FROM @machineinfo WHERE [Value] = 'SystemManufacturer';
+SELECT @BIOSVendor = [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor';
+SELECT @Processor_Name = [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString';
 
 SELECT 'Information' AS [Category], 'Machine' AS [Information], 
 	CASE @osver WHEN '5.2' THEN 'XP/WS2003'
@@ -438,15 +441,15 @@ SELECT 'Information' AS [Category], 'Machine' AS [Information],
 	@SystemManufacturer AS [System_Manufacturer],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'SystemFamily') AS [System_Family],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'SystemProductName') AS [System_ProductName],
-	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor') AS [BIOS_Vendor],
+	@BIOSVendor AS [BIOS_Vendor],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'BIOSVersion') AS [BIOS_Version],
 	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'BIOSReleaseDate') AS [BIOS_Release_Date],
-	(SELECT [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString') AS [Processor_Name];
+	@Processor_Name AS [Processor_Name];
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Disk space subsection
 --------------------------------------------------------------------------------------------------------------------------------
-IF @sqlmajorver > 9
+IF @sqlmajorver > 10 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
 	RAISERROR (N'|-Starting Disk space', 10, 1) WITH NOWAIT
 	SELECT DISTINCT 'Information' AS [Category], 'Disk_Space' AS [Information], vs.logical_volume_name,
@@ -556,7 +559,7 @@ END;
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'|-Starting Instance info', 10, 1) WITH NOWAIT
 DECLARE @port VARCHAR(15), @replication int, @RegKey NVARCHAR(255), @cpuaffin VARCHAR(300), @cpucount int, @numa int
-DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(64), @cpuover32 int
+DECLARE @i int, @cpuaffin_fixed VARCHAR(300), @affinitymask NVARCHAR(64), @affinity64mask NVARCHAR(1024)--, @cpuover32 int
 
 IF @sqlmajorver < 11 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild < 2500)
 BEGIN
@@ -667,21 +670,33 @@ BEGIN
 	WHERE name = 'affinity64 mask';
 END;
 
+/*
 IF @cpucount > 32
 SELECT @cpuover32 = ABS(LEN(@affinity64mask) - (@cpucount-32))
 
 SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN REVERSE(LEFT(REVERSE(@affinity64mask),@cpuover32)) + RIGHT(@affinitymask,32) ELSE RIGHT(@affinitymask,@cpucount) END
+*/
+
+SELECT @cpuaffin = CASE WHEN @cpucount > 32 THEN @affinity64mask ELSE @affinitymask END
 
 SET @cpuaffin_fixed = @cpuaffin
 
 IF @numa > 1
 BEGIN
 	-- format binary mask by node for better reading
-	SET @i = @cpucount/@numa + 1
+	SET @i = CEILING(@cpucount*1.00/@numa) + 1
 	WHILE @i < @cpucount + @numa
 	BEGIN
-		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
-		SET @i = @i + @cpucount/@numa + 1
+		IF (@cpucount + @numa) - @i >= CEILING(@cpucount*1.00/@numa)
+		BEGIN
+			SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
+		END
+		ELSE
+		BEGIN
+			SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa), SUBSTRING(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa)))
+		END
+
+		SET @i = @i + CEILING(@cpucount*1.00/@numa) + 1
 	END
 END
 
@@ -1458,10 +1473,10 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 		'sbgatewaydatabase','sbmanagementdb', --Service Bus
 		'wfinstancemanagementdb','wfmanagementdb','wfresourcemanagementdb' --Workflow Manager
 	)
-	AND [dbname] NOT LIKE 'repANDtingservice[_]%' --SSRS
+	AND [dbname] NOT LIKE 'reportingservice[_]%' --SSRS
 	AND [dbname] NOT LIKE 'tfs[_]%' --TFS
 	AND [dbname] NOT LIKE 'defaultpowerpivotserviceapplicationdb%' --PowerPivot
-	AND [dbname] NOT LIKE 'perfANDmancepoint service[_]%' --PerfANDmancePoint Services
+	AND [dbname] NOT LIKE 'performancepoint service[_]%' --PerformancePoint Services
 	AND [dbname] NOT LIKE '%database nav%' --Dynamics NAV
 	AND [dbname] NOT LIKE '%[_]mscrm' --Dynamics CRM
 	AND [dbname] NOT LIKE 'dpmdb[_]%' --DPM
@@ -1474,13 +1489,13 @@ WHERE is_read_only = 0 AND [state] = 0 AND [dbid] > 4 AND is_distributor = 0
 	--Sharepoint
 	AND [dbname] NOT LIKE 'sharepoint[_]admincontent%' AND [dbname] NOT LIKE 'sharepoint[_]config%' AND [dbname] NOT LIKE 'wss[_]content%' AND [dbname] NOT LIKE 'wss[_]search%'
 	AND [dbname] NOT LIKE 'sharedservices[_]db%' AND [dbname] NOT LIKE 'sharedservices[_]search[_]db%' AND [dbname] NOT LIKE 'sharedservices[_][_]db%' AND [dbname] NOT LIKE 'sharedservices[_][_]search[_]db%'
-	AND [dbname] NOT LIKE 'sharedservicescontent%' AND [dbname] NOT LIKE 'application[_]registry[_]service[_]db%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]propertystANDedb[_]%'
-	AND [dbname] NOT LIKE 'subscriptionsettings[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]stagingdb[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]repANDtingdb[_]%'
-	AND [dbname] NOT LIKE 'bdc[_]service[_]db[_]%' AND [dbname] NOT LIKE 'managed metadata service[_]%' AND [dbname] NOT LIKE 'perfANDmancepoint service application[_]%' 
-	AND [dbname] NOT LIKE 'search[_]service[_]application[_]crawlstANDedb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]db[_]%' AND [dbname] NOT LIKE 'secure[_]stANDe[_]service[_]db[_]%' AND [dbname] NOT LIKE 'stateservice%' 
+	AND [dbname] NOT LIKE 'sharedservicescontent%' AND [dbname] NOT LIKE 'application[_]registry[_]service[_]db%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]propertystoredb[_]%'
+	AND [dbname] NOT LIKE 'subscriptionsettings[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]stagingdb[_]%' AND [dbname] NOT LIKE 'webanalyticsserviceapplication[_]reportingdb[_]%'
+	AND [dbname] NOT LIKE 'bdc[_]service[_]db[_]%' AND [dbname] NOT LIKE 'managed metadata service[_]%' AND [dbname] NOT LIKE 'performancepoint service application[_]%' 
+	AND [dbname] NOT LIKE 'search[_]service[_]application[_]crawlstoredb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]db[_]%' AND [dbname] NOT LIKE 'secure[_]store[_]service[_]db[_]%' AND [dbname] NOT LIKE 'stateservice%' 
 	AND [dbname] NOT LIKE 'user profile service application[_]profiledb[_]%' AND [dbname] NOT LIKE 'user profile service application[_]syncdb[_]%' AND [dbname] NOT LIKE 'user profile service application[_]socialdb[_]%' 
-	AND [dbname] NOT LIKE 'wANDdautomationservices[_]%' AND [dbname] NOT LIKE 'wss[_]logging%' AND [dbname] NOT LIKE 'wss[_]usageapplication%' AND [dbname] NOT LIKE 'appmng[_]service[_]db%' 
-	AND [dbname] NOT LIKE 'search[_]service[_]application[_]analyticsrepANDtingstANDedb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]linksstANDedb[_]%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' 
+	AND [dbname] NOT LIKE 'wordautomationservices[_]%' AND [dbname] NOT LIKE 'wss[_]logging%' AND [dbname] NOT LIKE 'wss[_]usageapplication%' AND [dbname] NOT LIKE 'appmng[_]service[_]db%' 
+	AND [dbname] NOT LIKE 'search[_]service[_]application[_]analyticsreportingstoredb[_]%' AND [dbname] NOT LIKE 'search[_]service[_]application[_]linksstoredb[_]%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' 
 	AND [dbname] NOT LIKE 'settingsservicedb%' AND [dbname] NOT LIKE 'sharepoint[_]logging[_]%' AND [dbname] NOT LIKE 'translationservice[_]%' AND [dbname] NOT LIKE 'sharepoint translation services[_]%' AND [dbname] NOT LIKE 'sessionstateservice%' 
 
 IF EXISTS (SELECT name FROM msdb.sys.objects (NOLOCK) WHERE name='MSdistributiondbs' AND is_ms_shipped = 1) 
@@ -1493,7 +1508,7 @@ RAISERROR (N'|-Excluding MS shipped by notable object names', 10, 1) WITH NOWAIT
 WHILE (SELECT COUNT(id) FROM #tmpdbs1 WHERE isdone = 0) > 0
 BEGIN
 	SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs1 WHERE isdone = 0
-	SET @sqlcmd = 'USE ' + QUOTENAME(@dbname) + ';
+	SET @sqlcmd = N'USE ' + QUOTENAME(@dbname) + N';
 IF (OBJECT_ID(''dbo.AR_Class'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.AR_Entity'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.AR_System'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ar_CreateEntity'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ar_CreateMethod'',''P'') IS NOT NULL)
 OR (OBJECT_ID(''dbo.Versions'',''U'') IS NOT NULL 
 	AND (OBJECT_ID(''dbo.ECMApplicationLog'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.ECMTerm'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ECM_GetPackage'',''P'') IS NOT NULL AND OBJECT_ID(''dbo.proc_ECM_GetGroups'',''P'') IS NOT NULL)
@@ -1587,7 +1602,7 @@ OR (OBJECT_ID(''dbo.Activities'',''U'') IS NOT NULL AND OBJECT_ID(''dbo.Scopes''
 OR (OBJECT_ID(''Core.Runbooks'',''U'') IS NOT NULL AND OBJECT_ID(''Core.Activities'',''U'') IS NOT NULL AND OBJECT_ID(''Core.Connections'',''U'') IS NOT NULL AND SCHEMA_ID(''Common'') IS NOT NULL)
 -- End SCSMA
 BEGIN
-	SELECT @MSdbOUT = ' + CONVERT(VARCHAR(10), @dbid) + '
+	SELECT @MSdbOUT = ' + CONVERT(VARCHAR(10), @dbid) + N'
 END'
 	SET @params = N'@MSdbOUT int OUTPUT';
 	EXECUTE sp_executesql @sqlcmd, @params, @MSdbOUT=@MSdb OUTPUT
@@ -1655,39 +1670,54 @@ RAISERROR (N'  |-Starting Number of available Processors for this instance vs. M
 DECLARE /*@cpucount int, @numa int, */@affined_cpus int
 
 /*
-DECLARE @i int, @cpuaffin_fixed VARCHAR(300)
+DECLARE @i int, @cpuaffin_fixed VARCHAR(1024)
 SET @cpuaffin_fixed = @cpuaffin
 SET @i = @cpucount/@numa + 1
 WHILE @i < @cpucount + @numa
 BEGIN
-	SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
-	SET @i = @i + @cpucount/@numa + 1
-END
+	IF (@cpucount + @numa) - @i >= CEILING(@cpucount*1.00/@numa)
+	BEGIN
+		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, 1, '_' + SUBSTRING(@cpuaffin_fixed, @i, 1))
+	END
+	ELSE
+	BEGIN
+		SELECT @cpuaffin_fixed = STUFF(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa), SUBSTRING(@cpuaffin_fixed, @i, CEILING(@cpucount*1.00/@numa)))
+	END
+
+	SET @i = @i + CEILING(@cpucount*1.00/@numa) + 1
+END;
 */
 
--- MaxDOP should be between 8 and 16. This is handled specifically on NUMA scenarios below.
+-- MaxDOP should be between 8 and 15. This is handled specifically on NUMA scenarios below.
 SELECT @affined_cpus = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE is_online = 1 AND scheduler_id < 255 AND parent_node_id < 64;
 --SELECT @cpucount = COUNT(cpu_id) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND parent_node_id < 64
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Check],
-	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)]'
-		WHEN @numa = 1 AND @affined_cpus <= 16 AND ([value] = 0 OR [value] <> @affined_cpus) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
-		WHEN @numa = 1 AND @affined_cpus > 16 AND ([value] = 0 OR [value] <> 16) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
-		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 AND ([value] = 0 OR [value] <> CEILING(@cpucount/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
-		WHEN @numa > 1 AND (@cpucount/@numa) > 16 AND ([value] = 0 OR [value] <> CEILING(@cpucount/@numa)/2) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+	CASE WHEN [value] > @affined_cpus THEN '[WARNING: MaxDOP setting exceeds available processor count (affinity)'
+		WHEN @numa = 1 AND @affined_cpus <= 8 AND [value] > 0 AND [value] <> @affined_cpus THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
+		WHEN @numa = 1 AND @affined_cpus > 8 AND ([value] = 0 OR [value] > 8) THEN '[WARNING: MaxDOP setting is not recommended for current processor count (affinity)]'
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) <= 15 AND ([value] = 0 OR [value] > CEILING(@cpucount*1.00/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) > 15 AND ([value] = 0 OR [value] > CEILING(@cpucount*1.00/@numa/2)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) < 8 AND ([value] = 0 OR [value] > CEILING(@cpucount*1.00/@numa)) THEN '[WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) >= 8 AND ([value] = 0 OR [value] > 8 OR [value] > CEILING(@cpucount*1.00/@numa)) THEN 'WARNING: MaxDOP setting is not recommended for current NUMA node to processor count (affinity) ratio]'
 		ELSE '[OK]'
 	END AS [Deviation]
-FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';
+FROM sys.configurations (NOLOCK) WHERE name = 'max degree of parallelism';	
 
 SELECT 'Processor_checks' AS [Category], 'Parallelism_MaxDOP' AS [Information], 
 	CASE 
-		-- If not NUMA, and up to 16 @affined_cpus then MaxDOP up to 16
-		WHEN @numa = 1 AND @affined_cpus <= 16 THEN @affined_cpus
-		-- If not NUMA, and more than 16 @affined_cpus then MaxDOP 16
-		WHEN @numa = 1 AND @affined_cpus > 16 THEN 16
-		-- If NUMA and # logical CPUs per NUMA up to 16, then MaxDOP is set as # logical CPUs per NUMA, up to 16 
-		WHEN @numa > 1 AND (@cpucount/@numa) <= 16 THEN CEILING(@cpucount/@numa)
-		-- If NUMA and # logical CPUs per NUMA > 16, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
-		WHEN @numa > 1 AND (@cpucount/@numa) > 16 THEN CEILING((@cpucount/@numa)/2)
+		-- If not NUMA, and up to 8 @affined_cpus then MaxDOP up to 8
+		WHEN @numa = 1 AND @affined_cpus <= 8 THEN @affined_cpus
+		-- If not NUMA, and more than 8 @affined_cpus then MaxDOP 8 
+		WHEN @numa = 1 AND @affined_cpus > 8 THEN 8
+		-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA up to 15, then MaxDOP is set as # logical CPUs per NUMA, up to 15 
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) <= 15 THEN CEILING((@cpucount*1.00)/@numa)
+		-- If SQL 2016 or higher and has NUMA and # logical CPUs per NUMA > 15, then MaxDOP is set as 1/2 of # logical CPUs per NUMA
+		WHEN @sqlmajorver >= 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) > 15 THEN 
+			CASE WHEN CEILING(@cpucount*1.00/@numa/2) > 16 THEN 16 ELSE CEILING(@cpucount*1.00/@numa/2) END
+		-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA up to 8, then MaxDOP is set as # logical CPUs per NUMA 
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) < 8 THEN CEILING(@cpucount*1.00/@numa)
+		-- If up to SQL 2016 and has NUMA and # logical CPUs per NUMA > 8, then MaxDOP 8
+		WHEN @sqlmajorver < 13 AND @numa > 1 AND CEILING(@cpucount*1.00/@numa) >= 8 THEN 8
 		ELSE 0
 	END AS [Recommended_MaxDOP],
 	[value] AS [Current_MaxDOP], @cpucount AS [Available_Processors], @affined_cpus AS [Affined_Processors], 
@@ -1725,6 +1755,27 @@ BEGIN
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
+-- Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594) subsection
+--------------------------------------------------------------------------------------------------------------------------------
+RAISERROR (N'  |-Starting Check for HP Logical Processor issue', 10, 1) WITH NOWAIT
+
+IF LOWER(@SystemManufacturer) <> 'microsoft' AND LOWER(@SystemManufacturer) <> 'vmware' AND LOWER(@ostype) = 'windows'
+BEGIN
+	IF LOWER(@BIOSVendor) = 'hp' AND LOWER(@Processor_Name) like '%xeon%e5%' --and
+	BEGIN
+		SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Information], '[WARNING: You may be affected by HP Logical Processor issue outlined in https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594]' AS [Deviation]
+	END    
+	ELSE
+    BEGIN
+        SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Check], '[INFORMATION: Not an affected HP Machine]' AS [Deviation];
+    END;
+END
+ELSE
+BEGIN
+	SELECT 'Processor_checks' AS [Category], 'HP_Logical_Processor_Issue' AS [Check], '[Not a Physical Machine]' AS [Deviation];
+END;
+
+--------------------------------------------------------------------------------------------------------------------------------
 -- Additional Processor information subsection
 --------------------------------------------------------------------------------------------------------------------------------
 RAISERROR (N'  |-Starting Additional Processor information', 10, 1) WITH NOWAIT
@@ -1738,19 +1789,6 @@ SELECT 'Processor_checks' AS [Category], 'Processor_Summary' AS [Information], c
 	@cpuaffin_fixed AS Affinity_Mask_Bitmask
 FROM sys.dm_os_sys_info (NOLOCK)
 OPTION (RECOMPILE);
-
--- Check for HP Logical Processor issue (https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594)
-IF LOWER(@SystemManufacturer) <> 'microsoft' and LOWER(@SystemManufacturer) <> 'vmware' and LOWER(@ostype) = 'windows'
-BEGIN
-	DECLARE @BIOSVendor AS varchar(128), @Processor_Name as varchar(128)
-
-	SELECT @BIOSVendor = [Data] FROM @machineinfo WHERE [Value] = 'BIOSVendor'
-	SELECT @Processor_Name = [Data] FROM @machineinfo WHERE [Value] = 'ProcessorNameString'
-	IF LOWER(@BIOSVendor) = 'hp' AND LOWER(@Processor_Name) like '%xeon%e5%' --and
-	BEGIN
-		SELECT 'Processor_checks' AS [Category], 'HP Logical Processor Issue' AS [Information], 'Warning: You may be affected by HP Logical Processor issue outlined in https://support.hpe.com/hpsc/doc/public/display?docId=emr_na-c04650594' AS [Deviation]
-	END
-END
 
 IF @ptochecks = 1
 BEGIN
@@ -2419,7 +2457,8 @@ SELECT 'Pagefile_checks' AS [Category], 'Process_paged_out' AS [Check],
 IF @ptochecks = 1
 RAISERROR (N'|-Starting I/O Checks', 10, 1) WITH NOWAIT
 
---------------------------------------------------------------------------------------------------------------------------OUT VARCHAR(20), all in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
+--------------------------------------------------------------------------------------------------------------------------------
+-- I/O stall in database files over 50% of cumulative sampled time or I/O latencies over 20ms in the last 5s subsection
 -- io_stall refers to user processes waited for I/O. This number can be much greater than the sample_ms.
 -- Might indicate that your I/O has insufficient service capabilities (HBA queue depths, reduced throughput, etc). 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -4503,6 +4542,7 @@ RAISERROR (N'|-Starting Instance Checks', 10, 1) WITH NOWAIT
 --------------------------------------------------------------------------------------------------------------------------------
 -- Recommended build check subsection
 --------------------------------------------------------------------------------------------------------------------------------
+/*
 RAISERROR (N'  |-Starting Recommended build check', 10, 1) WITH NOWAIT
 SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN (@sqlmajorver = 9 AND @sqlbuild < 5000)
@@ -4527,6 +4567,7 @@ SELECT 'Instance_checks' AS [Category], 'Recommended_Build' AS [Check],
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductBuildType')) ELSE 'NA' END AS Product_Build_Type,
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateLevel')) ELSE 'NA' END AS Product_Update_Level,
 	CASE WHEN @sqlmajorver >= 13 OR (@sqlmajorver = 12 AND @sqlbuild >= 2556 AND @sqlbuild < 4100) OR (@sqlmajorver = 12 AND @sqlbuild >= 4427) THEN CONVERT(VARCHAR(128), SERVERPROPERTY('ProductUpdateReference')) ELSE 'NA' END AS Product_Update_Ref_KB;
+*/
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Backup checks subsection
@@ -4785,10 +4826,23 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 174)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-			'[INFORMATION: TF174  disables the background columnstore compression task]' 
+			'[INFORMATION: TF174 increases the SQL Server Database Engine plan cache bucket count from 40,009 to 160,001 on 64-bit systems]' 
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
-		WHERE [Global] = 1 AND TraceFlag = 634
+		WHERE [Global] = 1 AND TraceFlag = 174
+	END;
+
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 174)
+		AND ((@sqlmajorver = 11 AND @sqlbuild >= 3368)
+				OR (@sqlmajorver = 12 AND @sqlbuild >= 2480)
+				OR (@sqlmajorver >= 13)		
+		)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF174 to increase the SQL Server plan cache bucket count from 40,009 to 160,001 on 64-bit systems]'
+			AS [Deviation], NULL AS 'TraceFlag' 
+		FROM @tracestatus 
+		WHERE [Global] = 1 AND TraceFlag = 174
 	END;
 
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 634)
@@ -4823,7 +4877,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver >= 11
 				AND @has_colstrix > 0
-				THEN '[WARNING: TF834 (Large Page Support for BP) is discouraged when Columnstore Indexes are used]'
+				THEN '[WARNING: TF834 (Large Page Support for BP) is discouraged when Columnstore Indexes are used. In SQL Server 2019, use TF876 instead (preview) to set large-page allocations for columnstore only]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus
@@ -4836,7 +4890,7 @@ BEGIN
 			CASE WHEN SERVERPROPERTY('EngineEdition') = 2 --Standard SKU
 					AND ((@sqlmajorver = 10 AND ((@sqlminorver = 0 AND @sqlbuild >= 2714) OR @sqlminorver = 50)) 
 						OR (@sqlmajorver = 9 AND @sqlbuild >= 4226))
-					THEN '[INFORMATION: TF845 supports locking pages in memory in SQL Server Standard Editions]'
+					THEN '[INFORMATION: TF845 supports locking pages in memory in SQL Server Standard Edition]'
 				WHEN SERVERPROPERTY('EngineEdition') = 2 --Standard SKU
 					AND @sqlmajorver >= 11 
 					THEN '[WARNING: TF845 is not needed in SQL 2012 and above]'
@@ -4854,27 +4908,45 @@ BEGIN
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 902
 	END;
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1117)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 		CASE WHEN @sqlmajorver >= 13 --SQL 2016
-			THEN '[WARNING: TF1117 is not needed in SQL 2016 and above]'
+			THEN '[WARNING: TF1117 is not needed in SQL 2016 and higher versions]'
 			ELSE '[INFORMATION: TF1117 autogrows all files at the same time and affects all databases]' 
 		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1117
 	END;
 	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1117)
+		AND (@sqlmajorver < 13)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF1117 to autogrow all files at the same time and affects all databases]'
+			AS [Deviation], NULL AS 'TraceFlag';
+	END;
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 		CASE WHEN @sqlmajorver >= 13 --SQL 2016
-			THEN '[WARNING: TF1118 is not needed in SQL 2016 and above]'
+			THEN '[WARNING: TF1118 is not needed in SQL 2016 and higher versions]'
 			ELSE '[INFORMATION: TF1118 forces uniform extent allocations instead of mixed page allocations]'
 		END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1118
 	END;
+	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1118)
+		AND (@sqlmajorver < 13)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF1118 to force uniform extent allocations instead of mixed page allocations]'
+			AS [Deviation], NULL AS 'TraceFlag';
+	END;
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1204)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -4914,7 +4986,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1229)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[WARNING: TF1229 disables lock partitioning, which is a locking mechanism optimization on 16+ CPU servers]' --https://techcommunity.microsoft.com/t5/SQL-Server-Support/Strange-Sch-S-Sch-M-Deadlock-on-Machines-with-16-or-More/ba-p/317208
+			'[WARNING: TF1229 disables lock partitioning, which is a locking mechanism optimization on 16+ CPU servers]' --https://docs.microsoft.com/sql/relational-databases/sql-server-transaction-locking-and-row-versioning-guide#lock_partitioning
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1229
@@ -4924,12 +4996,20 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			CASE WHEN @sqlmajorver = 9 OR @sqlmajorver = 10 OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 4100)
-					THEN '[INFORMATION: TF1236 enables database lock partitioning]'
+					THEN '[INFORMATION: TF1236 enables database-level lock partitioning]'
 				WHEN (@sqlmajorver = 11 AND @sqlbuild >= 6020) OR (@sqlmajorver = 12 AND @sqlbuild >= 4100) OR @sqlmajorver >= 13
 					THEN '[WARNING: TF1236 is not needed in SQL 2012 SP3, SQL Server 2014 SP1 and above]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 1236
+	END;
+
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1236)
+		AND (@sqlmajorver = 9 OR @sqlmajorver = 10 OR (@sqlmajorver = 11 AND @sqlbuild < 6020) OR (@sqlmajorver = 12 AND @sqlbuild < 4100))
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[WARNING: Consider enabling TF1236 to allow database lock partitioning]'
+			AS [Deviation]
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 1462)
@@ -4945,25 +5025,27 @@ BEGIN
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 12
-				THEN '[INFORMATION: TF2312 enables New CE model, SQL Server 2014 version]' 
+				THEN '[INFORMATION: TF2312 enables the default CE model for SQL Server 2014 and higher versions, dependent of the compatibility level of the database]' 
 			WHEN @sqlmajorver >= 13
-				THEN '[INFORMATION: TF2312 enables New CE model to SQL Server 2014 or above versions, dependent of the compatibility level of the database]' 
+				THEN '[INFORMATION: TF2312 enables the default CE model for SQL Server 2014 and higher versions, dependent of the compatibility level of the database]' 
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2312
 	END;
-	
+
+/*	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2330)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN @sqlmajorver = 9
-				THEN '[INFORMATION: TF2330 supresses data collection into sys.dm_db_index_usage_stats, which can lead to a non-yielding condition in SQL 2005]' --http://support.microsoft.com/default.aspx?scid=kb;en-US;2003031
+				THEN '[INFORMATION: TF2330 supresses recording of index usage stats, which can lead to a non-yielding condition in SQL Server 2005]' --http://support.microsoft.com/kb/2003031
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2330
 	END;
+*/
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2335)
 	BEGIN
@@ -5016,7 +5098,7 @@ BEGIN
 	END;
 	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2371)
-		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver BETWEEN 11 AND 12)
+		AND ((@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500) OR @sqlmajorver < 13)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF2371 to change the 20pct fixed rate threshold for update statistics into a dynamic percentage rate]' --http://blogs.msdn.com/b/saponsqlserver/archive/2011/09/07/changes-to-automatic-update-statistics-in-sql-server-traceflag-2371.aspx
@@ -5052,7 +5134,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2549)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[INFORMATION: TF2549 runs the DBCC CHECKDB command assuming each database file is on a unique disk drive]'
+			'[INFORMATION: TF2549 forces the DBCC CHECKDB command to assume each database file is on a unique disk drive, but treating different physical files as one logical file]'
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2549
@@ -5061,7 +5143,7 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 2562)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			'[INFORMATION: TF2562 runs the DBCC CHECKDB command in a single batch regardless of the number of indexes in the database]'
+			'[INFORMATION: TF2562 forces the DBCC CHECKDB command to execute in a single batch regardless of the number of indexes in the database]'
 			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 2562
@@ -5103,6 +5185,7 @@ BEGIN
 		WHERE [Global] = 1 AND TraceFlag = 3226
 	END;
 	
+	/*
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4135)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -5114,7 +5197,8 @@ BEGIN
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4135
 	END;
-
+	*/
+	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4136)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
@@ -5138,7 +5222,7 @@ BEGIN
 					OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2806)
 					OR (@sqlmajorver = 11 AND @sqlbuild >= 2316)
 					OR @sqlmajorver >= 12
-				THEN '[INFORMATION: TF4137 causes SQL Server to generate a plan using minimum selectivity when estimating AND predicates for filters to account for correlation, under the Legacy CE]'
+				THEN '[INFORMATION: TF4137 causes SQL Server to generate a plan using minimum selectivity when estimating AND predicates for filters to account for partial correlation under CE 70]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
@@ -5177,7 +5261,7 @@ BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
 			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 4416 AND @sqlbuild < 5000)
 					OR (@sqlmajorver = 12 AND @sqlbuild BETWEEN 2474 AND 2480)
-				THEN '[INFORMATION: TF6498 enables more than one large query compilation to gain access to the big gateway when there is sufficient memory available]'
+				THEN '[INFORMATION: TF6498 enables more than one large query compilation to gain access to the big gateway when there is sufficient memory available, avoiding compilation waits for concurrent large queries]'
 			WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000) OR @sqlmajorver >= 13
 				THEN '[WARNING: TF6498 is not needed in SQL 2014 SP2, SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
@@ -5189,15 +5273,33 @@ BEGIN
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (6532,6533))
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			CASE WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
-					OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)
-				THEN '[INFORMATION: TF6532 and TF 6533 enable performance improvement of query operations with spatial data types]'
+			CASE WHEN (@sqlmajorver = 11 AND @sqlbuild = 6020)
+				THEN '[INFORMATION: TF6532 enable performance improvements of query operations with spatial data types]'
+			WHEN (@sqlmajorver = 12 AND @sqlbuild >= 5000)
+					OR (@sqlmajorver = 11 AND @sqlbuild >= 6518)
+				THEN '[INFORMATION: TF6532 and TF 6533 enable performance improvements of query operations with spatial data types]'
 			WHEN @sqlmajorver >= 13
 				THEN '[WARNING: TF6532 and TF 6533 are not needed in SQL Server 2016 and above]'
 			ELSE '[WARNING: Verify need to set a Non-default TF with current system build and configuration]'
 			END AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag IN (6532,6533)
+	END;
+
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6532)
+		AND (@sqlmajorver = 11 AND @sqlbuild = 6020)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF6532 to enable performance improvements of query operations with spatial data types]' 
+			AS [Deviation]
+	END;
+	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (6532,6533))
+		AND ((@sqlmajorver = 11 AND @sqlbuild >= 6518) OR (@sqlmajorver = 12 AND @sqlbuild >= 5000))
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF6532 and TF6533 to enable performance improvements of query operations with spatial data types]' 
+			AS [Deviation]
 	END;
 	
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6534)
@@ -5213,8 +5315,16 @@ BEGIN
 		WHERE [Global] = 1 AND TraceFlag = 6534
 	END;
 	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 6534)
+		AND ((@sqlmajorver = 12 AND @sqlbuild >= 5000) OR (@sqlmajorver = 11 AND @sqlbuild >= 6020)	OR @sqlmajorver >= 13)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			'[INFORMATION: Consider enabling TF6534 to enable performance improvements of query operations with spatial data types]' 
+			AS [Deviation]
+	END;
+	
 	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 7412)
-		AND @sqlmajorver >= 13
+		AND ((@sqlmajorver = 13 AND @sqlbuild >= 4001) OR (@sqlmajorver = 14))
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
 			'[INFORMATION: Consider enabling TF7412 to enable the lightweight profiling infrastructure]' -- https://docs.microsoft.com/sql/relational-databases/performance/query-profiling-infrastructure
@@ -5393,12 +5503,8 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 	IF EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4199)
 	BEGIN
 		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
-			CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
-					OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
-					OR (@sqlmajorver >= 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
-				THEN '[WARNING: TF4135 should be used instead of TF4199 in this SQL build]'
-			ELSE '[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-			END AS [Deviation], TraceFlag
+			'[INFORMATION: TF4199 enables query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
+			AS [Deviation], TraceFlag
 		FROM @tracestatus 
 		WHERE [Global] = 1 AND TraceFlag = 4199;
 		
@@ -5409,31 +5515,22 @@ ORDER BY SUM(pages_in_bytes) DESC;'
 		FROM sys.databases sd
 		INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
 	END;
-END;
-		
-IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag IN (4135,4199))
-BEGIN
-	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-		CASE WHEN (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1787 AND 1812)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 2531 AND 2757)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild >= 2766)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild BETWEEN 1600 AND 1617)
-			THEN '[INFORMATION: Consider enabling TF4135 to support fixes and enhancements on the query optimizer]'
-			WHEN (@sqlmajorver = 9 AND @sqlbuild >= 4266) 
-				OR (@sqlmajorver = 10 AND @sqlminorver = 0 AND @sqlbuild BETWEEN 1818 AND 1835)
-				OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 1702) OR @sqlmajorver = 11 OR @sqlmajorver = 12
-				OR (@sqlmajorver = 13 AND @sqlbuild >= 2149) OR @sqlmajorver > 13
-			THEN '[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
-		END AS [Deviation];
-		
-	SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
-		[name] AS [DBName], sd.compatibility_level, 'Off' AS [TF_4199],
-		CASE WHEN sd.compatibility_level < 130 THEN 'Disabled' ELSE 'Enabled' END AS 'QO_changes_from_previous_DB_compat_levels',
-		'Disabled' AS 'QO_changes_for_current_version_post_RTM'
-	FROM sys.databases sd
-	INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
-END;
 	
+	IF NOT EXISTS (SELECT TraceFlag FROM @tracestatus WHERE [Global] = 1 AND TraceFlag = 4199)
+	BEGIN
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check],
+			'[INFORMATION: Consider enabling TF4199 to enable query optimizer changes released in SQL Server Cumulative Updates and Service Packs]'
+			AS [Deviation], NULL AS 'TraceFlag';
+		
+		SELECT 'Instance_checks' AS [Category], 'Global_Trace_Flags' AS [Check], 
+			[name] AS [DBName], sd.compatibility_level, 'Off' AS [TF_4199],
+			CASE WHEN sd.compatibility_level >= 130 THEN 'Enabled' ELSE 'Disabled' END AS 'QO_changes_from_previous_DB_compat_levels',
+			'Disabled' AS 'QO_changes_for_current_version_post_RTM'
+		FROM sys.databases sd
+		INNER JOIN #tmpdbs0 tdbs ON sd.database_id = tdbs.[dbid];
+	END;
+END;
+
 --------------------------------------------------------------------------------------------------------------------------------
 -- System configurations subsection
 --------------------------------------------------------------------------------------------------------------------------------
@@ -5545,10 +5642,10 @@ SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'Sta
 UNION ALL
 SELECT 'Instance_checks' AS [Category], 'System_Configurations' AS [Check], 'xp_cmdshell' AS [Setting], @cmdshell AS [Current Value], CASE WHEN @cmdshell = 1 THEN '[WARNING: xp_cmdshell setting is enabled]' ELSE '[OK]' END AS [Deviation], '' AS [Comment];
 
-IF (SELECT COUNT([Name]) FROM master.sys.configurations WHERE [value] <> [value_in_use] AND [is_dynamic] = 0) > 0
+IF (SELECT COUNT([name]) FROM master.sys.configurations WHERE [value] <> [value_in_use] AND [is_dynamic] = 0) > 0
 BEGIN
-	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Check], '[WARNING: There are system configurations with differences between running and configured values]' AS [Deviation]
-	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending'AS [Information], [Name] AS [Setting],
+	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending' AS [Check], '[WARNING: There are system configurations with differences between running and configured values]' AS [Deviation]
+	SELECT 'Instance_checks' AS [Category], 'System_Configurations_Pending' AS [Information], [name] AS [Setting],
 		[value] AS 'Config_Value',
 		[value_in_use] AS 'Run_Value'
 	FROM master.sys.configurations (NOLOCK)
@@ -5985,12 +6082,11 @@ BEGIN
 	SELECT 'sys.trace_categories', 12, NULL UNION ALL
 	SELECT 'sys.trace_columns', 12, NULL UNION ALL
 	SELECT 'sys.trace_subclass_values', 12, NULL UNION ALL
-	-- discontinued on sql 2017
-	SELECT 'sp_addremotelogin', 10, 14 UNION ALL
-	SELECT 'sp_dropremotelogin', 10, 14 UNION ALL
-	SELECT 'sp_helpremotelogin', 10, 14 UNION ALL
-	SELECT 'sp_remoteoption', 10, 14
-
+	-- discontinued on sql 2019
+	SELECT 'disable_interleaved_execution_tvf', 10, 15 UNION ALL -- as DB Scoped config
+	SELECT 'disable_batch_mode_memory_grant_feedback', 10, 15 UNION ALL -- as DB Scoped config
+	SELECT 'disable_batch_mode_adaptive_joins', 10, 15 -- as DB Scoped config
+	
 	UPDATE #tmpdbs0
 	SET isdone = 0;
 
@@ -6103,7 +6199,7 @@ END;
 
 IF EXISTS (SELECT TOP 1 id FROM sys.traces WHERE [path] LIKE '%blackbox%.trc' AND status = 1)
 BEGIN
-	SELECT 'Instance_checks' AS [Category], 'Blackbox_Trace' AS [Check], '[WARNING: Blackbox trace is configured and running]' AS [Deviation], '[This trace is designed to behave similarly to an airplane black box, to help you diagnose intermittent server crashes. It is quite a bit heavier than the default trace]' AS [Comment]
+	SELECT 'Instance_checks' AS [Category], 'Blackbox_Trace' AS [Check], '[WARNING: Blackbox trace is configured and running]' AS [Deviation], '[This trace is designed to behave similarly to an airplane black box, to help you diagnose intermittent server crashes. It consumes more resources than the default trace and should not be running for extended periods of time]' AS [Comment]
 END
 ELSE
 BEGIN
@@ -6333,6 +6429,11 @@ IF @sqlmajorver > 12
 BEGIN
 	RAISERROR (N'  |-Starting Query Store info', 10, 1) WITH NOWAIT
 	
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
+	DROP TABLE #tblQStoreInfo;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
+	CREATE TABLE #tblQStoreInfo ([DBName] sysname, Actual_State NVARCHAR(60), Flush_Interval_Sec bigint, Interval_Length_Min bigint, Query_CaptureMode NVARCHAR(60), Max_Storage_Size_MB bigint, Current_Storage_Size_MB bigint);
+
 	UPDATE #tmpdbs0
 	SET isdone = 0;
 
@@ -6350,11 +6451,6 @@ BEGIN
 	
 	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 	BEGIN	
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
-		DROP TABLE #tblQStoreInfo;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblQStoreInfo'))
-		CREATE TABLE #tblQStoreInfo ([DBName] sysname, Actual_State NVARCHAR(60), Flush_Interval_Sec bigint, Interval_Length_Min bigint, Query_CaptureMode NVARCHAR(60), Max_Storage_Size_MB bigint, Current_Storage_Size_MB bigint);
-
 		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
@@ -6399,6 +6495,10 @@ RAISERROR (N'  |-Starting Automatic Tuning info', 10, 1) WITH NOWAIT
 
 IF @sqlmajorver > 13
 BEGIN
+	IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
+	DROP TABLE #tblAutoTuningInfo;
+	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
+	CREATE TABLE #tblAutoTuningInfo ([DBName] sysname, AutoTuning_Option NVARCHAR(128), Desired_State NVARCHAR(60), Actual_State NVARCHAR(60), Desired_diff_Actual_reason NVARCHAR(60));
 	
 	UPDATE #tmpdbs0
 	SET isdone = 0;
@@ -6413,11 +6513,6 @@ BEGIN
 	
 	IF (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 	BEGIN	
-		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
-		DROP TABLE #tblAutoTuningInfo;
-		IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblAutoTuningInfo'))
-		CREATE TABLE #tblAutoTuningInfo ([DBName] sysname, AutoTuning_Option NVARCHAR(128), Desired_State NVARCHAR(60), Actual_State NVARCHAR(60), Desired_diff_Actual_reason NVARCHAR(60));
-
 		WHILE (SELECT COUNT(id) FROM #tmpdbs0 WHERE isdone = 0) > 0
 		BEGIN
 			SELECT TOP 1 @dbname = [dbname], @dbid = [dbid] FROM #tmpdbs0 WHERE isdone = 0
@@ -7835,7 +7930,8 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 	-- Wait Resource e_waitPipeNewRow in CXPACKET waits Producer waiting on consumer for a packet to fill;
 	-- Wait Resource e_waitPipeGetRow in CXPACKET waits Consumer waiting on producer to fill a packet;
 	-- CXPACKET = if OLTP, check for parallelism issues if above 20 pct. If combined with a high number of PAGEIOLATCH_XX waits, it could be large parallel table scans going on because of incorrect non-clustered indexes, or out-of-date statistics causing a bad query plan;
-	-- WRITELOG = log management system waiting for a log flush to disk. Examine the IO latency for the log file
+	-- HT* = batch mode syncpoint waits, probably large parallel table scans;   
+	-- WRITELOG = log management system waiting for a log flush to disk. Examine the I/O latency for the log file
 	-- CMEMTHREAD =  indicates that the rate of insertion of entries into the plan cache is very high and there is contention -> https://techcommunity.microsoft.com/t5/SQL-Server-Support/How-It-Works-CMemThread-and-Debugging-Them/ba-p/317488
 	-- SOS_RESERVEDMEMBLOCKLIST = look for procedures with a large number of parameters, or queries with a long list of expression values specified in an IN clause, which would require multi-page allocations
 	-- RESOURCE_SEMAPHORE_SMALL_QUERY or RESOURCE_SEMAPHORE = queries are waiting for execution memory. Look for plans with excessive hashing or sorts.
@@ -7868,7 +7964,7 @@ WHERE (cntr_type = 272696576 OR cntr_type = 1073874176 OR cntr_type = 1073939712
 			WHEN W1.wait_type LIKE N'BROKER_%' AND W1.wait_type <> N'BROKER_RECEIVE_WAITFOR' THEN N'Service Broker' 
 			WHEN W1.wait_type IN (N'LOGMGR', N'LOGBUFFER', N'LOGMGR_RESERVE_APPEND', N'LOGMGR_FLUSH', N'LOGMGR_PMM_LOG', N'CHKPT', N'WRITELOG') THEN N'Tran Log IO' 
 			WHEN W1.wait_type IN (N'ASYNC_NETWORK_IO', N'NET_WAITFOR_PACKET', N'PROXY_NETWORK_IO', N'EXTERNAL_SCRIPT_NETWORK_IO') THEN N'Network IO' 
-			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER') THEN N'CPU - Parallelism'
+			WHEN W1.wait_type IN (N'CXPACKET', N'EXCHANGE', N'CXCONSUMER', N'HTBUILD', N'HTDELETE', N'HTMEMO', N'HTREINIT', N'HTREPARTITION') THEN N'CPU - Parallelism'
 			WHEN W1.wait_type IN (N'WAITFOR', N'WAIT_FOR_RESULTS', N'BROKER_RECEIVE_WAITFOR') THEN N'User Wait' 
 			WHEN W1.wait_type IN (N'TRACEWRITE', N'SQLTRACE_LOCK', N'SQLTRACE_FILE_BUFFER', N'SQLTRACE_FILE_WRITE_IO_COMPLETION', N'SQLTRACE_FILE_READ_IO_COMPLETION', N'SQLTRACE_PENDING_BUFFER_WRITERS', N'SQLTRACE_SHUTDOWN', N'QUERY_TRACEOUT', N'TRACE_EVTNOTIF') THEN N'Tracing' 
 			WHEN W1.wait_type LIKE N'FT_%' OR W1.wait_type IN (N'FULLTEXT GATHERER', N'MSSEARCH', N'PWAIT_RESOURCE_SEMAPHORE_FT_PARALLEL_QUERY_SYNC') THEN N'Full Text Search' 
@@ -8168,17 +8264,17 @@ BEGIN
 			WHEN owt.pageid = 3 OR (owt.pageid - 1) % 511232 = 0 THEN 'Is_SGAM_Page'
 			WHEN owt.pageid IS NULL THEN NULL
 			ELSE 'Is_not_PFS_GAM_SGAM_page' END AS blocked_spid_res_type,
-		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			qt.[text],
-			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+			NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er.sql_handle, ec.most_recent_sql_handle)) AS qt 
 			FOR XML PATH(''), TYPE) AS [blocked_batch],
-		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			SUBSTRING(qt2.text, 
 			1+(CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END),
 			1+(CASE WHEN er.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er.statement_end_offset/2 END - (CASE WHEN er.statement_start_offset = 0 THEN 0 ELSE er.statement_start_offset/2 END))),
-			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+			NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er.sql_handle, ec.most_recent_sql_handle)) AS qt2
 			FOR XML PATH(''), TYPE) AS [blocked_statement],
@@ -8201,17 +8297,17 @@ BEGIN
 			-- session is either not blocking someone, or is blocking someone but is blocked by another party
 			ELSE 0
 		END AS is_head_blocker,
-		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			qt2.[text],
-			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+			NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er2.sql_handle, ec2.most_recent_sql_handle)) AS qt2 
 			FOR XML PATH(''), TYPE) AS [blocker_batch],
-		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 			SUBSTRING(qt2.text, 
 			1+(CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END),
 			1+(CASE WHEN er2.statement_end_offset = -1 THEN DATALENGTH(qt2.text) ELSE er2.statement_end_offset/2 END - (CASE WHEN er2.statement_start_offset = 0 THEN 0 ELSE er2.statement_start_offset/2 END))),
-			NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+			NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 			AS [text()]
 			FROM sys.dm_exec_sql_text(COALESCE(er2.sql_handle, ec2.most_recent_sql_handle)) AS qt2 
 			FOR XML PATH(''), TYPE) AS [blocker_statement],
@@ -8293,6 +8389,7 @@ END;
 
 --------------------------------------------------------------------------------------------------------------------------------
 -- Plan use ratio subsection
+-- Refer to BOL for more information (https://docs.microsoft.com/sql/database-engine/configure-windows/optimize-for-ad-hoc-workloads-server-configuration-option)
 --------------------------------------------------------------------------------------------------------------------------------
 IF @ptochecks = 1
 BEGIN
@@ -8876,18 +8973,18 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 	INSERT INTO #qpwarnings
 	SELECT 'Scalar_UDFs'AS [Deviation],
 		('[WARNING: Scalar UDF found in a top resource-intensive query, which that may inhibit parallelism]') AS [Comment],
-		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 	FROM #dm_exec_query_stats qs
 	WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%UserDefinedFunction%'
 	UNION ALL
 	SELECT 'Implicit_Conversion_with_IX_Scan'AS [Deviation],
 		('[WARNING: Implicit type conversions found where an Index Scan is present]') AS Details ,
-		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 	FROM #dm_exec_query_stats qs
 	WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%CONVERT_IMPLICIT%'
@@ -8895,36 +8992,36 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 	UNION ALL
 	SELECT 'Missing_Index'AS [Deviation],
 		('[WARNING: One of the top resource-intensive queries may be improved by adding an index]') AS [Comment],
-		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 	FROM #dm_exec_query_stats qs
 	WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%MissingIndexGroup%'
 	UNION ALL
 	SELECT 'Cursor'AS [Deviation],
 		('[WARNING: Cursor usage found in a top resource-intensive query. Check if it can be rewritten as a WHILE cycle]') AS [Comment],
-		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 	FROM #dm_exec_query_stats qs
 	WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<CursorType%'
 	UNION ALL
 	SELECT 'Missing_Join_Predicate'AS [Deviation],
 		('[WARNING: NO JOIN predicate event fired for a top resource-intensive query]') AS [Comment],
-		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 	FROM #dm_exec_query_stats qs
 	WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<Warnings NoJoinPredicate="true"%'
 	UNION ALL
 	SELECT 'Columns_with_no_Statistics'AS [Deviation],
 		('[WARNING: Missing Column Statistics event fired for a top resource-intensive query]') AS [Comment],
-		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+		qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 	FROM #dm_exec_query_stats qs
 	WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<Warnings ColumnsWithNoStatistics%';
@@ -8935,45 +9032,45 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		-- Note that currently SpillToTempDb warnings are only found in actual execution plans
 		SELECT 'Spill_to_TempDb'AS [Deviation],
 			('[WARNING: Spill to TempDB found during a HASH or SORT operation]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<SpillToTempDb SpillLevel%'
 		UNION ALL
 		SELECT 'Implicit_Convert_affecting_Seek_Plan'AS [Deviation],
 			('[WARNING: Implicit type conversions found, which can be affecting the choice of seek plans]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<PlanAffectingConvert ConvertIssue="Seek Plan" Expression="CONVERT_IMPLICIT%'
 		UNION ALL
 		SELECT 'Explicit_Conversion_affecting_Cardinality'AS [Deviation],
 			('[WARNING: Explicit type conversions found, which can be affecting cardinality estimates]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<PlanAffectingConvert ConvertIssue="Cardinality Estimate" Expression="CONVERT%'
 		UNION ALL
 		SELECT 'Implicit_Conversion_affecting_Cardinality'AS [Deviation],
 			('[WARNING: Implicit type conversions found, which can be affecting cardinality estimates]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<PlanAffectingConvert ConvertIssue="Cardinality Estimate" Expression="CONVERT_IMPLICIT%'
 		UNION ALL
 		SELECT 'Unmatched_Indexes'AS [Deviation],
 			('[WARNING: An unmatched indexes warning fired, where an index could not be used due to parameterization]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<Warnings UnmatchedIndexes="true"%';
@@ -8985,27 +9082,27 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		-- Note that currently MemoryGrant warnings are only found in actual execution plans
 		SELECT 'Excessive_Memory_Grant'AS [Deviation],
 			('[WARNING: Granted memory was much larger than maximum used memory]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<MemoryGrantWarning GrantWarningKind="Excessive Grant"%'
 		UNION ALL
 		SELECT 'Excessive_Memory_Grant'AS [Deviation],
 			('[WARNING: Maximum used memory exceeds granted memory]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<MemoryGrantWarning GrantWarningKind="Used More Than Granted"%'
 		UNION ALL
 		SELECT 'Excessive_Memory_Grant'AS [Deviation],
 			('[WARNING: Dynamic grant increased too much when compared to initial grant request]') AS [Comment],
-			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			qs.query_plan, (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 		qs.text_filtered, 
-		NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+		NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 		FOR XML PATH(''), TYPE) AS [statement]
 		FROM #dm_exec_query_stats qs
 		WHERE CAST(qs.query_plan AS NVARCHAR(MAX)) LIKE '%<MemoryGrantWarning GrantWarningKind="Grant Increase"%'
@@ -9029,9 +9126,9 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 	IF (SELECT COUNT(*) FROM #dm_exec_query_stats) > 0
 	BEGIN
 		SELECT 'Performance_checks' AS [Category], 'Inefficient_Plans_Reads' AS [Check], query_plan, 
-			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 				text_filtered, 
-				NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+				NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 				FOR XML PATH(''), TYPE) AS [statement],
 			[execution_count], [total_worker_time]/[execution_count] AS [Avg_Worker_Time],
 			[total_physical_reads]/[execution_count] AS [Avg_Physical_Reads],
@@ -9047,9 +9144,9 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		ORDER BY [Avg_Logical_Reads] DESC;
 		
 		SELECT 'Performance_checks' AS [Category], 'Inefficient_Plans_CPU' AS [Check], query_plan, 
-			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 				text_filtered, 
-				NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+				NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 				FOR XML PATH(''), TYPE) AS [statement],
 			[execution_count], [total_worker_time]/[execution_count] AS [Avg_Worker_Time], 
 			[total_physical_reads]/[execution_count] AS [Avg_Physical_Reads],
@@ -9065,9 +9162,9 @@ ORDER BY tfs.Grant2Used_Ratio ASC');
 		ORDER BY [Avg_Worker_Time] DESC;
 		
 		SELECT 'Performance_checks' AS [Category], 'Inefficient_Memory_Use' AS [Check], query_plan, 
-			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 				text_filtered, 
-				NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+				NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 				FOR XML PATH(''), TYPE) AS [statement],
 			[execution_count], [total_worker_time]/[execution_count] AS [Avg_Worker_Time],
 			[total_physical_reads]/[execution_count] AS [Avg_Physical_Reads],
@@ -9194,9 +9291,9 @@ INNER JOIN sys.query_store_query_text AS qsqt ON qsqt.query_text_id = qsq.query_
 		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], '[INFORMATION: Found tuning recommendations. If Automatic Tuning is not configured to deploy these recommednations, review manually and decide which ones to deploy]' AS Comment
 		SELECT 'Performance_checks' AS [Category], 'Automatic_Tuning_Recommendations' AS [Check], DBName AS [Database_Name], 
 			[query_id], [reason], [score], [CurrentState], [CurrentStateReason],
-			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+			(SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
 				tr2.query_sql_text,
-				NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
+				NCHAR(0),N'?'),NCHAR(1),N'?'),NCHAR(2),N'?'),NCHAR(3),N'?'),NCHAR(4),N'?'),NCHAR(5),N'?'),NCHAR(6),N'?'),NCHAR(7),N'?'),NCHAR(8),N'?'),NCHAR(11),N'?'),NCHAR(12),N'?'),NCHAR(14),N'?'),NCHAR(15),N'?'),NCHAR(16),N'?'),NCHAR(17),N'?'),NCHAR(18),N'?'),NCHAR(19),N'?'),NCHAR(20),N'?'),NCHAR(21),N'?'),NCHAR(22),N'?'),NCHAR(23),N'?'),NCHAR(24),N'?'),NCHAR(25),N'?'),NCHAR(26),N'?'),NCHAR(27),N'?'),NCHAR(28),N'?'),NCHAR(29),N'?'),NCHAR(30),N'?'),NCHAR(31),N'?') 
 				AS [text()]
 				FROM #tblTuningRecommendations (NOLOCK) AS tr2
 				WHERE tr2.DBName = tr.DBName AND tr2.query_id = tr.query_id
@@ -9580,7 +9677,7 @@ AND s.name NOT IN (SELECT name FROM ' + QUOTENAME(@dbname) + '.sys.indexes)'
 
 	IF (SELECT COUNT([Object]) FROM #tblHypObj) > 0
 	BEGIN
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Check], '[WARNING: Some databases have indexes or statistics that are marked as hypothetical. It is recommended to drop these objects as soon as possible]' AS [Deviation]
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Check], '[WARNING: Some databases have indexes or statistics that are marked as hypothetical. Hypothetical indexes are created by the Database Tuning Assistant (DTA) during its tests. If a DTA session was interrupted, these indexes may not be deleted. It is recommended to drop these objects as soon as possible]' AS [Deviation]
 		SELECT 'Index_and_Stats_checks' AS [Category], 'Hypothetical_objects' AS [Information], DBName AS [Database_Name], [Table] AS [Table_Name], [Object] AS [Object_Name], [Type] AS [Object_Type]
 		FROM #tblHypObj
 		ORDER BY 2, 3, 5
@@ -10487,18 +10584,23 @@ WHERE OBJECTPROPERTY(so.object_id,''IsUserTable'') = 1
 END;
 
 --------------------------------------------------------------------------------------------------------------------------------
--- Indexes with large keys (> 900 bytes) subsection
+-- Indexes with large keys (> 900 bytes for clustered index; 1700 bytes for nonclustered index) subsection
 --------------------------------------------------------------------------------------------------------------------------------
 IF @ptochecks = 1
 BEGIN
-	RAISERROR (N'  |-Starting Indexes with large keys (> 900 bytes)', 10, 1) WITH NOWAIT
-	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE [KeyCols_data_length_bytes] > 900) > 0
+	RAISERROR (N'  |-Starting Indexes with large keys', 10, 1) WITH NOWAIT
+	IF (SELECT COUNT(*) FROM #tblIxs1 WHERE ([KeyCols_data_length_bytes] > 900 AND @sqlmajorver < 13)
+			OR ([KeyCols_data_length_bytes] > 900 AND indexType IN (1,5) AND @sqlmajorver >= 13)
+			OR ([KeyCols_data_length_bytes] > 1700 AND indexType IN (2,6) AND @sqlmajorver >= 13)) > 0
 	BEGIN
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], '[WARNING: Some indexes have keys larger than 900 bytes. It is recommended to revise these]' AS [Deviation]
-		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], 
-			I.KeyCols, [KeyCols_data_length_bytes]
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Check], 
+			CASE WHEN @sqlmajorver < 13 THEN '[WARNING: Some indexes have keys larger than 900 bytes. It is recommended to revise these]' 
+				ELSE '[WARNING: Some indexes have keys larger than allowed (900 bytes for clustered index; 1700 bytes for nonclustered index). It is recommended to revise these]' END AS [Deviation]
+		SELECT 'Index_and_Stats_checks' AS [Category], 'Large_Index_Key' AS [Information], I.[DatabaseName] AS [Database_Name], I.schemaName AS [Schema_Name], I.[objectName] AS [Table_Name], I.[indexID], I.[indexName] AS [Index_Name], I.indexType, I.KeyCols, [KeyCols_data_length_bytes]
 		FROM #tblIxs1 I
-		WHERE [KeyCols_data_length_bytes] > 900
+		WHERE ([KeyCols_data_length_bytes] > 900 AND @sqlmajorver < 13)
+			OR ([KeyCols_data_length_bytes] > 900 AND indexType IN (1,5) AND @sqlmajorver >= 13)
+			OR ([KeyCols_data_length_bytes] > 1700 AND indexType IN (2,6) AND @sqlmajorver >= 13)
 		ORDER BY I.[DatabaseName], I.schemaName, I.[objectName], I.[indexID]
 	END
 	ELSE
@@ -10669,7 +10771,7 @@ BEGIN
 	IF NOT EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblFK'))
 	CREATE TABLE #tblFK ([databaseID] int, [DatabaseName] sysname, [constraint_name] NVARCHAR(200), [parent_schema_name] NVARCHAR(100), 
 	[parent_table_name] NVARCHAR(200), parent_columns NVARCHAR(4000), [referenced_schema] NVARCHAR(100), [referenced_table_name] NVARCHAR(200), referenced_columns NVARCHAR(4000),
-	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name]))
+	CONSTRAINT PK_FK PRIMARY KEY CLUSTERED(databaseID, [constraint_name], [parent_schema_name]))
 	
 	UPDATE #tmpdbs1
 	SET isdone = 0
@@ -11034,10 +11136,10 @@ END'')
 		DBName NVARCHAR(1000),
 		[Table] NVARCHAR(255),
 		[ix_handle] int,
-		[User_Hits_on_Missing_Index] int,
+		[User_Hits_on_Missing_Index] bigint,
 		[Estimated_Improvement_Percent] DECIMAL(5,2),
-		[Avg_Total_User_Cost] int,
-		[Unique_Compiles] int,
+		[Avg_Total_User_Cost] float,
+		[Unique_Compiles] bigint,
 		[Score] NUMERIC(19,3),
 		[KeyCols] NVARCHAR(1000),
 		[IncludedCols] NVARCHAR(4000),

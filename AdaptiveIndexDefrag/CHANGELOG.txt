@@ -138,3 +138,9 @@ v1.6.6.5 - 9/23/2018 - Fixed issue where table that is compressed would become u
 v1.6.6.6 - 10/28/2018 - Extended 2nd row mode counter info data type in debug mode (by CodyFitzpatrick);
 			Fixed compression data missing in working table (by ravseer).
 v1.6.6.7 - 04/17/2019 - Fixed resumable index DMV syntax error issue.
+v1.6.6.8 - 06/19/2019 - Addressed DCR #102 by d-moloney;
+			Capped the max columnstore frag calculation to 100 (issue #115 by timlandrum).
+v1.6.6.9 - 06/26/2019 - Fixed issues running in Azure SQL Database.
+v1.6.7 - 09/19/2019 - Added additional debug info;
+			Fixed additional issues running in Azure SQL Database;
+			Fixed issue with resumable index discovery on SQL Server 2017+.
