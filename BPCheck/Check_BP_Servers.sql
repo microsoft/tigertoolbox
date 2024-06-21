@@ -16,7 +16,7 @@ CREATE PROCEDURE usp_bpcheck
 	@ptochecks bit = 1, --(1 = ON; 0 = OFF)
 	@duration tinyint = 90, 
 	@logdetail bit = 0, --(1 = ON; 0 = OFF) 
-	@diskfrag bit = 1, --(1 = ON; 0 = OFF)
+	@diskfrag bit = 0, --(1 = ON; 0 = OFF)
 	@ixfrag bit = 1, --(1 = ON; 0 = OFF)
 	@ixfragscanmode VARCHAR(8) = 'LIMITED', --(Valid inputs are DEFAULT, NULL, LIMITED, SAMPLED, or DETAILED. The default (NULL) is LIMITED)
 	@bpool_consumer bit = 1, --(1 = ON; 0 = OFF)
@@ -11789,10 +11789,14 @@ SELECT DISTINCT 'Weak_Password' AS Deviation, RTRIM(s.name) AS [Name], createdat
 FROM @word d
 	INNER JOIN master.sys.syslogins s ON PWDCOMPARE(RTRIM(RTRIM(d.word)), s.[password]) = 1
 UNION ALL
-SELECT 'NULL_Passwords' AS Deviation, RTRIM(name) AS [Name], createdate AS [CreateDate] 
-FROM master.sys.syslogins
-WHERE [password] IS NULL
-	AND isntname = 0 
+SELECT 'NULL_Passwords' AS Deviation, RTRIM(name) AS [Name], create_date AS [CreateDate] 
+FROM master.sys.sql_logins s
+WHERE PWDCOMPARE('',s.password_hash)=1
+--commenting out as all passwords are NULL in sys.syslogins
+--SELECT 'NULL_Passwords' AS Deviation, RTRIM(name) AS [Name], createdate AS [CreateDate] 
+--FROM master.sys.syslogins
+--WHERE [password] IS NULL 
+--	AND isntname = 0 
 	AND name NOT IN ('MSCRMSqlClrLogin','##MS_SmoExtendedSigningCertificate##','##MS_PolicySigningCertificate##','##MS_SQLResourceSigningCertificate##','##MS_SQLReplicationSigningCertificate##','##MS_SQLAuthenticatorCertificate##','##MS_AgentSigningCertificate##','##MS_SQLEnableSystemAssemblyLoadingUser##')
 UNION ALL
 SELECT DISTINCT 'Name=Password' AS Deviation, RTRIM(s.name) AS [Name], createdate AS [CreateDate] 
