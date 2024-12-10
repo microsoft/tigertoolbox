@@ -9,7 +9,7 @@ The purpose for this procedure to perform an Intelligent defrag on one or more i
 Yes, but it is used as a part of a full maintenance solution that also handles database integrity checks, errorlog cycling and other relevant SQL Server maintenance routines that every database administrator needs to handle. See more information in http://github.com/Microsoft/tigertoolbox/tree/master/MaintenanceSolution.
 
 ## On what version of SQL can I use it?
-This procedure can be used from SQL Server 2005 SP2 onwards, because of the DMVs and DMFs involved.
+This procedure can be used from SQL Server 2016 onwards, because of the DMVs and DMFs involved.
 
 **NOTE:** no longer garanteed to work with SQL Server 2005. Use at your own volition.
 
