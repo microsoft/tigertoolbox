@@ -304,7 +304,7 @@ CREATE TABLE [dbo].[tbl_OS_WAIT_STATS_byDuration](
 	[UTCtimestamp] [datetime] NULL,
 	[timestamp] [datetime] NULL,
 	[wait_type] [varchar](47) NULL,
-	[waiting_tasks_count] [bigint] NULL,
+	[waiting_tasks_duration] [bigint] NULL,
 	[avg_wait_time_ms] [bigint] NULL,
 	[max_wait_time_ms] [bigint] NULL
 ) ON [PRIMARY]
@@ -313,6 +313,206 @@ Create clustered index [tbl_OS_WAIT_STATS_byDuration_Clus] on [tbl_OS_WAIT_STATS
 
 
 INSERT INTO [dbo].[tbl_OS_WAIT_STATS_byDuration]
+           ([UTCtimestamp]
+		    ,[timestamp]
+           ,[wait_type]
+           ,[waiting_tasks_duration]
+           ,[avg_wait_time_ms]
+           ,[max_wait_time_ms])
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[1]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[1]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[1]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[1]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[2]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[2]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[2]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[2]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[3]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[3]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[3]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[3]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[4]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[4]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[4]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[4]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[5]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[5]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[5]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[5]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL 
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[6]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[6]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[6]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[6]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[7]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[7]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[7]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[7]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[8]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[8]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[8]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[8]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[9]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[9]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[9]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[9]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[10]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[10]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[10]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/nonPreemptive/byDuration/wait[10]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[1]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[1]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[1]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[1]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[2]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[2]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[2]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[2]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[3]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[3]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[3]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[3]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[4]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[4]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[4]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[4]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[5]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[5]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[5]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[5]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL 
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[6]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[6]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[6]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[6]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[7]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[7]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[7]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[7]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[8]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[8]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[8]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[8]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[9]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[9]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[9]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[9]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+UNION ALL
+select 
+     c1.value('(event/@timestamp)[1]','datetime') as [UTCtimestamp],
+	 DATEADD(mi,@UTDDateDiff,c1.value('(./event/@timestamp)[1]', 'datetime')) as [timestamp],
+     c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[10]/@waitType)[1]','varchar(47)') as [waitType],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[10]/@waits)[1]','bigint') as [waits],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[10]/@averageWaitTime)[1]','bigint') as [averageWaitTime],
+	 c1.value('(event/data[@name="data"]/value/queryProcessing/topWaits/preemptive/byDuration/wait[10]/@maxWaitTime)[1]','bigint') as [maxWaitTime]
+FROM tblQryProcessingXmlOutput
+
+CREATE TABLE [dbo].[tbl_OS_WAIT_STATS_byCount](
+	[UTCtimestamp] [datetime] NULL,
+	[timestamp] [datetime] NULL,
+	[wait_type] [varchar](47) NULL,
+	[waiting_tasks_count] [bigint] NULL,
+	[avg_wait_time_ms] [bigint] NULL,
+	[max_wait_time_ms] [bigint] NULL
+) ON [PRIMARY]
+ALTER TABLE [dbo].[tbl_OS_WAIT_STATS_byCount] ADD [wait_category]  AS (case when [wait_type] like 'LCK%' then 'Locks' when [wait_type] like 'PAGEIO%' then 'Page I/O Latch' when [wait_type] like 'PAGELATCH%' then 'Page Latch (non-I/O)' when [wait_type] like 'LATCH%' then 'Latch (non-buffer)' when [wait_type] like 'IO_COMPLETION' then 'I/O Completion' when [wait_type] like 'ASYNC_NETWORK_IO' then 'Network I/O (client fetch)' when [wait_type]='CMEMTHREAD' OR [wait_type]='SOS_RESERVEDMEMBLOCKLIST' OR [wait_type]='RESOURCE_SEMAPHORE' then 'Memory' when [wait_type] like 'RESOURCE_SEMAPHORE_%' then 'Compilation' when [wait_type] like 'MSQL_XP' then 'XProc' when [wait_type] like 'WRITELOG' then 'Writelog' when [wait_type]='FT_IFTS_SCHEDULER_IDLE_WAIT' OR [wait_type]='WAITFOR' OR [wait_type]='EXECSYNC' OR [wait_type]='XE_TIMER_EVENT' OR [wait_type]='XE_DISPATCHER_WAIT' OR [wait_type]='WAITFOR_TASKSHUTDOWN' OR [wait_type]='WAIT_FOR_RESULTS' OR [wait_type]='SNI_HTTP_ACCEPT' OR [wait_type]='SLEEP_TEMPDBSTARTUP' OR [wait_type]='SLEEP_TASK' OR [wait_type]='SLEEP_SYSTEMTASK' OR [wait_type]='SLEEP_MSDBSTARTUP' OR [wait_type]='SLEEP_DCOMSTARTUP' OR [wait_type]='SLEEP_DBSTARTUP' OR [wait_type]='SLEEP_BPOOL_FLUSH' OR [wait_type]='SERVER_IDLE_CHECK' OR [wait_type]='RESOURCE_QUEUE' OR [wait_type]='REQUEST_FOR_DEADLOCK_SEARCH' OR [wait_type]='ONDEMAND_TASK_QUEUE' OR [wait_type]='LOGMGR_QUEUE' OR [wait_type]='LAZYWRITER_SLEEP' OR [wait_type]='KSOURCE_WAKEUP' OR [wait_type]='FSAGENT' OR [wait_type]='CLR_MANUAL_EVENT' OR [wait_type]='CLR_AUTO_EVENT' OR [wait_type]='CHKPT' OR [wait_type]='CHECKPOINT_QUEUE' OR [wait_type]='BROKER_TO_FLUSH' OR [wait_type]='BROKER_TASK_STOP' OR [wait_type]='BROKER_TRANSMITTER' OR [wait_type]='BROKER_RECEIVE_WAITFOR' OR [wait_type]='BROKER_EVENTHANDLER' OR [wait_type]='DBMIRROR_EVENTS_QUEUE' OR [wait_type]='DBMIRROR_DBM_EVENT' OR [wait_type]='DBMIRRORING_CMD' OR [wait_type]='DBMIRROR_WORKER_QUEUE' then 'IGNORABLE' else [wait_type] end)
+Create clustered index [tbl_OS_WAIT_STATS_byCount_Clus] on [tbl_OS_WAIT_STATS_byCount](timestamp)
+
+
+INSERT INTO [dbo].[tbl_OS_WAIT_STATS_byCount]
            ([UTCtimestamp]
 		    ,[timestamp]
            ,[wait_type]
