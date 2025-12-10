@@ -3173,6 +3173,9 @@ FROM sys.sql_modules m
 WHERE m.object_id = object_id('usp_AdaptiveIndexDefrag')
 GO
 
+PRINT 'Reporting views created';
+GO
+
 ------------------------------------------------------------------------------------------------------------------------------		
 
 CREATE PROCEDURE usp_AdaptiveIndexDefrag_PurgeLogs @daystokeep smallint = 90
