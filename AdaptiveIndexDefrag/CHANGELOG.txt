@@ -147,15 +147,7 @@ v1.6.7 - 09/19/2019 - Added additional debug info;
 v1.6.8 - 2024-08-30 - Bugfix update statistics because of quotenames, as programmed in https://github.com/AndrewG2/tigertoolbox/commit/00fef9a645e7f6880557cf59692b59f6da1a58c1
 v1.6.9 - 2024-08-30 - Adding schema-names in the debug output & logging output
 v1.7.0 - 2024-09-02 - Fix update-stats for tables with more than 10B changes since last update-stats
-                      Fix duration calculation
-                      Fix logging update-stats of table id, schema name and table name
+                        Fix duration calculation
+                        Fix logging update-stats of table id, schema name and table name
 v1.7.1 - 2024-09-10 - Fix for bug in official release : proactive fix for rebuilding indexes which have spaces in index names
-                      Fix for bug introduced in v1.7.0: for those indexes rebuilt, the stats_log table had a null-value for objectId & objectName
-v1.7.2 - 2024-12-31 - Fix to skip inexistent objects mentioned in the %Working tables
-v1.7.3 - 2025-01-03 - Bugfix: 1.7.2 solution to skip inexistent objects caused infinite loop
-                      When executing usp_AdaptiveIndexDefrag in debug mode, the objects in the output now includes schema names
-                      Adding schema-names for table names for records inserted into dbo.tbl_AdaptiveIndexDefrag_Analysis_log
-                      Add schema names to the resultsets of views dbo.vw_AvgFragLst30Days, dbo.vw_AvgLargestLst30Days, dbo.vw_AvgMostUsedLst30Days
-v1.7.4 - 2025-01-17 - Fix entries in stats_log tables which receive null-values for objectId & objectName when reorganizing
-                      Fix unintential unsorted output of vw_LastRun_Log
-v1.7.5 - 2025-03-14 - Fix scanning exceptions by excluding inexistent or replaced objects still mentioned in dbo.tbl_AdaptiveIndexDefrag_Exceptions
+                        Fix for bug introduced in v1.7.0: for those indexes rebuilt, the stats_log table had a null-value for objectId & objectName
