@@ -467,7 +467,7 @@ CREATE PROCEDURE dbo.usp_AdaptiveIndexDefrag
 	, @rebuildThreshold_cs float = 10.0		
 		/* in percent, greater than @rebuildThreshold_cs will result in rebuild the columnstore index */
 	, @minPageCount int = 8		
-		/* Recommended is defrag when index is at least > 1 extent (8 pages) */		
+		/* Recommended is defrag when index is at least > 1 extent (8 pages) */	
 	, @maxPageCount int = NULL
 		/* NULL = no limit */	
 	, @fillfactor bit = 1
@@ -957,7 +957,6 @@ WHERE [dbID] IN (SELECT DISTINCT database_id FROM sys.databases sd
 		AND [state] = 0 -- must be ONLINE
 		AND is_read_only = 0 -- cannot be READ_ONLY
 		AND is_distributor = 0)
-UNION SELECT 4
 ) Working'
 			SET @params_CntSrc = N'@CountSrc_OUT int OUTPUT'
 
