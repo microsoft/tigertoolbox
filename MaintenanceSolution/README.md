@@ -24,7 +24,7 @@ Here's the detail on what these steps do:
 
 - **3_job_AdaptiveIndexDefrag**
   - Creates a daily job for the AdaptiveIndexDefrag procedure, named “Daily Index Defrag”. It will also notify the previously created operator on the job outcome.
-  - Find some of the most common (default) names for Microsoft shipped databases (step “DB Exceptions”), to add the to the permanent exclusion list, if not already there. For example, SharePoint grooms its own databases, so we shou.ld exclude them from any other automated maintenance task. If the AdaptiveIndexDefrag procedure was NOT created in MSDB, simply replace all references to MSDB for whatever database name you chose.
+  - Find some of the most common (default) names for Microsoft shipped databases (step “DB Exceptions”), to add the to the permanent exclusion list, if not already there. For example, SharePoint grooms its own databases, so we should exclude them from any other automated maintenance task. If the AdaptiveIndexDefrag procedure was NOT created in MSDB, simply replace all references to MSDB for whatever database name you chose.
   - Execute the AdaptiveIndexDefrag procedure (step “Daily Index Defrag”).
   - Purge all historic log data for the index defrag executions using default 90 days (step “Purge Log”).
 
