@@ -3096,7 +3096,8 @@ GO
 
 CREATE VIEW vw_LastRun_Log
 AS
-SELECT [dbName]
+SELECT TOP 100 PERCENT 
+       [dbName]
       ,[objectName]
       ,[indexName]
       ,[statsName]
@@ -3154,7 +3155,7 @@ ORDER BY dateTimeEnd ASC
 GO
 
 CREATE VIEW vw_AdaptiveIndexDefrag_Version 
-as
+AS
 /*
     Description: returns the version of AdaptiveIndexDefrag as recorded within the stored procedure, plus the date
                  when the stored procedure was created & last updated.
