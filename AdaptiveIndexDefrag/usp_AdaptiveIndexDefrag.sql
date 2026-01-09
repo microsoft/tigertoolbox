@@ -42,6 +42,9 @@ DROP VIEW vw_AvgLargestLst30Days
 IF EXISTS(SELECT [object_id] FROM sys.views WHERE [name] = 'vw_AvgMostUsedLst30Days')
 DROP VIEW vw_AvgMostUsedLst30Days
 
+IF EXISTS(SELECT [object_id] FROM sys.views WHERE [name] = 'vw_AdaptiveIndexDefrag_Version')
+DROP VIEW vw_AdaptiveIndexDefrag_Version
+
 IF @deploymode = 0
 BEGIN
 	RAISERROR('Preserving historic data', 0, 42) WITH NOWAIT;
@@ -545,7 +548,7 @@ Read all the implementation and usage notes thoroughly.
 CHANGE LOG:
 See https://github.com/microsoft/tigertoolbox/blob/master/AdaptiveIndexDefrag/CHANGELOG.txt
 
-PROCEDURE @VER: 1.7.1
+PROCEDURE @VER: 1.7.5
 
 IMPORTANT:
 Execute in the database context of where you created the log and working tables.			
@@ -1024,6 +1027,15 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 			END
 		END
 
+		/* Check if there were schema changes, for example objects which were dropped or recreated;
+			if so force rescan of database(s) */
+		IF @forceRescan = 0
+			AND (SELECT COUNT(*) FROM dbo.tbl_AdaptiveIndexDefrag_Working WHERE objectID <> COALESCE(OBJECT_ID(QUOTENAME(dbName) + '.' + QUOTENAME(schemaName) + '.' + QUOTENAME(objectName)),0)) > 0
+		BEGIN
+			SET @forceRescan = 1
+			RAISERROR('Objects were dropped or recreated, thus invalidating the content of the tbl_AdaptiveIndexDefrag_Working. Forcing rescan...', 0, 42) WITH NOWAIT;
+		END;
+
 		IF @debugMode = 1
 		RAISERROR('Starting up...', 0, 42) WITH NOWAIT;
 
@@ -1097,9 +1109,11 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @tblNameFQN NVARCHAR(1000)
 				, @TableScanSQL NVARCHAR(2000)
 				, @ixCntSource int
+				, @ixCntSourcesqlcmd NVARCHAR(1000)
+				, @ixCntSourcesqlcmdParams NVARCHAR(100)
 				, @ixCntTarget int
-				, @ixCntsqlcmd NVARCHAR(1000)
-				, @ixCntsqlcmdParams NVARCHAR(100)
+				, @ixCntTargetsqlcmd NVARCHAR(1000)
+				, @ixCntTargetsqlcmdParams NVARCHAR(100)
 				, @ColumnStoreGetIXSQL NVARCHAR(2000)
 				, @ColumnStoreGetIXSQL_Param NVARCHAR(1000)
 				, @rows bigint
@@ -1108,7 +1122,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 				, @currCompression NVARCHAR(60)
 
 		/* Initialize variables */	
-		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.7.1';
+		SELECT @AID_dbID = DB_ID(), @startDateTime = GETDATE(), @endDateTime = DATEADD(minute, @timeLimit, GETDATE()), @operationFlag = NULL, @ver = '1.7.5';
 	
 		/* Create temporary tables */	
 		IF EXISTS (SELECT [object_id] FROM tempdb.sys.objects (NOLOCK) WHERE [object_id] = OBJECT_ID('tempdb.dbo.#tblIndexDefragDatabaseList'))
@@ -1260,14 +1274,20 @@ WHERE rs.role = 2 -- Is Secondary
 			BEGIN
 				SELECT TOP 1 @dbID = dbID FROM #tblIndexDefragDatabaseList WHERE scanStatus = 0;
 
-				SELECT @ixCntSource = COUNT([indexName]) FROM dbo.tbl_AdaptiveIndexDefrag_Exceptions WHERE [dbID] = @dbID AND exclusionMask & POWER(2, DATEPART(weekday, GETDATE())-1) = 0
+				SET @ixCntSourcesqlcmd = 'SELECT @ixCntSourceOUT = COUNT([indexName]) 
+FROM dbo.tbl_AdaptiveIndexDefrag_Exceptions e
+WHERE [dbID] = ' + CAST(@dbID AS NVARCHAR(4)) + '
+	AND EXISTS (SELECT 1/0 FROM [' + DB_NAME(@dbID) + '].sys.objects o WHERE o.object_id = e.objectID)
+	AND exclusionMask & POWER(2, DATEPART(weekday, GETDATE())-1) = 0'
+				SET @ixCntSourcesqlcmdParams = '@ixCntSourceOUT int OUTPUT'
+				EXECUTE sp_executesql @ixCntSourcesqlcmd, @ixCntSourcesqlcmdParams, @ixCntSourceOUT = @ixCntSource OUTPUT
 
-				SET @ixCntsqlcmd = 'SELECT @ixCntTargetOUT = COUNT(si.index_id) FROM [' + DB_NAME(@dbID) + '].sys.indexes si
+				SET @ixCntTargetsqlcmd = 'SELECT @ixCntTargetOUT = COUNT(si.index_id) FROM [' + DB_NAME(@dbID) + '].sys.indexes si
 INNER JOIN [' + DB_NAME(@dbID) + '].sys.objects so ON si.object_id = so.object_id
 WHERE so.is_ms_shipped = 0 AND si.index_id > 0 AND si.is_hypothetical = 0
 	AND si.[object_id] NOT IN (SELECT sit.[object_id] FROM [' + DB_NAME(@dbID) + '].sys.internal_tables AS sit)' -- Exclude Heaps, Internal and Hypothetical objects
-				SET @ixCntsqlcmdParams = '@ixCntTargetOUT int OUTPUT'
-				EXECUTE sp_executesql @ixCntsqlcmd, @ixCntsqlcmdParams, @ixCntTargetOUT = @ixCntTarget OUTPUT
+				SET @ixCntTargetsqlcmdParams = '@ixCntTargetOUT int OUTPUT'
+				EXECUTE sp_executesql @ixCntTargetsqlcmd, @ixCntTargetsqlcmdParams, @ixCntTargetOUT = @ixCntTarget OUTPUT
 
 				IF @ixCntSource = @ixCntTarget AND @ixCntSource > 0 -- All database objects are excluded, so skip database scanning
 				BEGIN
@@ -1451,13 +1471,13 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 
 					IF @debugMode = 1
 					BEGIN
-						SELECT @debugMessage = '      Analyzing index ID ' + CONVERT(VARCHAR(20), @indexID) + ' on table ' + QUOTENAME(OBJECT_NAME(@objectID, @dbID)) + '...'
+						SELECT @debugMessage = '      Analyzing index ID ' + CONVERT(VARCHAR(20), @indexID) + ' on table ' + QUOTENAME(OBJECT_SCHEMA_NAME(@objectID, @dbID)) + '.' + QUOTENAME(OBJECT_NAME(@objectID, @dbID)) + '...'
 						RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
 					END
 
 					/* Start log actions */
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], [dbID], dbName, objectID, objectName, index_or_stat_ID, partitionNumber, dateTimeStart)		
-					SELECT 'Index', @dbID, DB_NAME(@dbID), @objectID, OBJECT_NAME(@objectID, @dbID), @indexID, @partitionNumber, @dateTimeStart;
+					SELECT 'Index', @dbID, DB_NAME(@dbID), @objectID, OBJECT_SCHEMA_NAME(@objectID, @dbID) + '.' + OBJECT_NAME(@objectID, @dbID), @indexID, @partitionNumber, @dateTimeStart;
 
 					SET @analysis_id = SCOPE_IDENTITY();
 					
@@ -1532,7 +1552,7 @@ CHAR(10) + 'WHERE mst.is_ms_shipped = 0 ' + CASE WHEN @dbScope IS NULL AND @tblN
 
 						/* Start log actions */
 						INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Analysis_log ([Operation], [dbID], dbName, objectID, objectName, index_or_stat_ID, partitionNumber, dateTimeStart)		
-						SELECT 'Index', @dbID, DB_NAME(@dbID), @objectID, OBJECT_NAME(@objectID, @dbID), @indexID, @partitionNumber, @dateTimeStart;					
+						SELECT 'Index', @dbID, DB_NAME(@dbID), @objectID, OBJECT_SCHEMA_NAME(@objectID, @dbID) + '.' + OBJECT_NAME(@objectID, @dbID), @indexID, @partitionNumber, @dateTimeStart;					
 
 						SET @analysis_id = SCOPE_IDENTITY();
 					
@@ -1723,7 +1743,19 @@ CASE WHEN @dbScope IS NOT NULL AND @tblName IS NOT NULL THEN CHAR(10) + 'AND s.n
 		END;
 		
 		/* Begin defragmentation loop */	
-		WHILE (SELECT COUNT(*) FROM dbo.tbl_AdaptiveIndexDefrag_Working WHERE ((@Exec_Print = 1 AND defragDate IS NULL) OR (@Exec_Print = 0 AND defragDate IS NULL AND printStatus = 0)) AND exclusionMask & POWER(2, DATEPART(weekday, GETDATE())-1) = 0 AND page_count BETWEEN @minPageCount AND ISNULL(@maxPageCount, page_count)) > 0
+		WHILE (
+			SELECT COUNT(*) 
+			FROM dbo.tbl_AdaptiveIndexDefrag_Working 
+			WHERE 
+				(
+					(@Exec_Print = 1 AND defragDate IS NULL) 
+					OR 
+					(@Exec_Print = 0 AND defragDate IS NULL AND printStatus = 0)
+				) 
+				AND exclusionMask & POWER(2, DATEPART(weekday, GETDATE())-1) = 0 
+				AND page_count BETWEEN @minPageCount 
+				AND ISNULL(@maxPageCount, page_count)
+		) > 0
 		BEGIN						
 			/* Check to see if we need to exit loop because of our time limit */
 			IF ISNULL(@endDateTime, GETDATE()) < GETDATE()
@@ -2333,7 +2365,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 				IF @debugMode = 1
 				BEGIN
-					SET @debugMessage = '   Determining modification row counter for statistic ' + QUOTENAME(@statsName) + ' on table or view ' + QUOTENAME(@objectName) + ' of DB ' + QUOTENAME(@dbName) + '...';
+					SET @debugMessage = '   Determining modification row counter for statistic ' + QUOTENAME(@statsName) + ' on table or view ' + QUOTENAME(@statsschemaName) + '.' + QUOTENAME(@objectName) + ' of DB ' + QUOTENAME(@dbName) + '...';
 					
 					IF @debugMessage IS NOT NULL
 					RAISERROR(@debugMessage, 0, 42) WITH NOWAIT;
@@ -2478,7 +2510,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 
 					/* Log actions */		
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, sqlStatement)		
-					SELECT @dbID, @dbName, @statsobjectID, @statsschemaName + '.' + @statsobjectName, @statsID, @statsName, @partitionNumber, @record_count, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
+					SELECT @dbID, @dbName, @objectID, OBJECT_SCHEMA_NAME(@objectID, @dbID) + '.' + OBJECT_NAME(@objectID, @dbID), @statsID, @statsName, @partitionNumber, @record_count, @rows_sampled, @rowmodctr, @stats_norecompute, @dateTimeStart, @sqlcommand2;
 
 					SET @statsUpdate_id = SCOPE_IDENTITY();
 
@@ -2542,7 +2574,7 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 					
 					/* Log actions */		
 					INSERT INTO dbo.tbl_AdaptiveIndexDefrag_Stats_log (dbID, dbName, objectID, objectName, statsID, statsName, [partitionNumber], [rows], rows_sampled, modification_counter, [no_recompute], dateTimeStart, dateTimeEnd, durationSeconds, sqlStatement)		
-					SELECT @dbID, @dbName, @statsobjectID, @statsschemaName + '.' + @statsobjectName, @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
+					SELECT @dbID, @dbName, @objectID, OBJECT_SCHEMA_NAME(@objectID, @dbID) + '.' + OBJECT_NAME(@objectID, @dbID), @statsID, @statsName, @partitionNumber, @record_count, ISNULL(@rows_sampled,-1), @rowmodctr, @stats_norecompute, @dateTimeStart, @dateTimeStart, -1, @sqlcommand2;
 				END
 				ELSE IF @Exec_Print = 0
 				BEGIN
@@ -2582,7 +2614,16 @@ WHERE system_type_id IN (34, 35, 99) ' + CASE WHEN @sqlmajorver < 11 THEN 'OR ma
 		/* Handling all the other statistics not covered before*/	
 		IF @updateStats = 1 -- When reorganizing, update stats afterwards
 			AND @updateStatsWhere = 0 -- @updateStatsWhere = 0 then table-wide statistics;
-			AND (SELECT COUNT(*) FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working idss WHERE ((@Exec_Print = 1 AND idss.updateDate IS NULL) OR (@Exec_Print = 0 AND idss.updateDate IS NULL AND idss.printStatus = 0))) > 0 --AND NOT EXISTS (SELECT TOP 1 objectID FROM dbo.tbl_AdaptiveIndexDefrag_Working ids WHERE ids.[dbID] = idss.[dbID] AND ids.objectID = idss.objectID AND idss.statsName = ids.indexName AND idss.updateDate IS NULL AND ids.exclusionMask & POWER(2, DATEPART(weekday, GETDATE())-1) = 0)) > 0 -- If any unhandled statistics remain
+			AND (
+				SELECT COUNT(*) 
+				FROM dbo.tbl_AdaptiveIndexDefrag_Stats_Working idss 
+				WHERE 
+					(
+						(@Exec_Print = 1 AND idss.updateDate IS NULL) 
+						OR 
+						(@Exec_Print = 0 AND idss.updateDate IS NULL AND idss.printStatus = 0)
+					)
+			) > 0 --AND NOT EXISTS (SELECT TOP 1 objectID FROM dbo.tbl_AdaptiveIndexDefrag_Working ids WHERE ids.[dbID] = idss.[dbID] AND ids.objectID = idss.objectID AND idss.statsName = ids.indexName AND idss.updateDate IS NULL AND ids.exclusionMask & POWER(2, DATEPART(weekday, GETDATE())-1) = 0)) > 0 -- If any unhandled statistics remain
 		BEGIN
 			IF @debugMode = 1
 			RAISERROR(' Updating all other unhandled statistics using finer thresholds (if any)...', 0, 42) WITH NOWAIT;
@@ -3020,11 +3061,11 @@ GO
 
 CREATE VIEW vw_AvgFragLst30Days
 AS
-SELECT TOP 100 PERCENT 'Most fragmented' AS Comment, dbName, objectName, indexName, partitionNumber, CONVERT(decimal(9,2),AVG(fragmentation)) AS Avg_fragmentation
+SELECT TOP 100 PERCENT 'Most fragmented' AS Comment, dbName, schemaName + '.' + objectName AS objectName, indexName, partitionNumber, CONVERT(decimal(9,2),AVG(fragmentation)) AS Avg_fragmentation
 FROM dbo.tbl_AdaptiveIndexDefrag_Working
 WHERE defragDate >= DATEADD(dd, DATEDIFF(dd, 0, GETDATE()), -30)
-GROUP BY dbName, objectName, indexName, partitionNumber
-ORDER BY AVG(fragmentation) DESC, dbName, objectName, indexName, partitionNumber;
+GROUP BY dbName, schemaName + '.' + objectName, indexName, partitionNumber
+ORDER BY AVG(fragmentation) DESC, dbName, schemaName + '.' + objectName, indexName, partitionNumber;
 GO
 
 CREATE VIEW vw_AvgSamplingLst30Days
@@ -3037,64 +3078,100 @@ GO
 
 CREATE VIEW vw_AvgLargestLst30Days
 AS
-SELECT TOP 100 PERCENT 'Largest' AS Comment, dbName, objectName, indexName, partitionNumber, AVG(page_count)*8 AS Avg_size_KB, fill_factor		
+SELECT TOP 100 PERCENT 'Largest' AS Comment, dbName, schemaName + '.' + objectName AS objectName, indexName, partitionNumber, AVG(page_count)*8 AS Avg_size_KB, fill_factor		
 FROM dbo.tbl_AdaptiveIndexDefrag_Working
 WHERE defragDate >= DATEADD(dd, DATEDIFF(dd, 0, GETDATE()), -30)
-GROUP BY dbName, objectName, indexName, partitionNumber, fill_factor
-ORDER BY AVG(page_count) DESC, dbName, objectName, indexName, partitionNumber
+GROUP BY dbName, schemaName + '.' + objectName, indexName, partitionNumber, fill_factor
+ORDER BY AVG(page_count) DESC, dbName, schemaName + '.' + objectName, indexName, partitionNumber
 GO
 
 CREATE VIEW vw_AvgMostUsedLst30Days
 AS
-SELECT TOP 100 PERCENT 'Most used' AS Comment, dbName, objectName, indexName, partitionNumber, AVG(range_scan_count) AS Avg_range_scan_count	
+SELECT TOP 100 PERCENT 'Most used' AS Comment, dbName, schemaName + '.' + objectName AS objectName, indexName, partitionNumber, AVG(range_scan_count) AS Avg_range_scan_count	
 FROM dbo.tbl_AdaptiveIndexDefrag_Working
 WHERE defragDate >= DATEADD(dd, DATEDIFF(dd, 0, GETDATE()), -30)
-GROUP BY dbName, objectName, indexName, partitionNumber
+GROUP BY dbName, schemaName + '.' + objectName, indexName, partitionNumber
 ORDER BY AVG(range_scan_count) DESC;
 GO
 
 CREATE VIEW vw_LastRun_Log
 AS
-SELECT TOP 100 percent [dbName]
+SELECT TOP 100 PERCENT 
+       [dbName]
       ,[objectName]
       ,[indexName]
-      , NULL AS [statsName]
+      ,[statsName]
       ,[partitionNumber]
       ,[fragmentation]
-	  ,[page_count]
-	  ,[range_scan_count]
+      ,[page_count]
+      ,[range_scan_count]
       ,[dateTimeStart]
       ,[dateTimeEnd]
       ,[durationSeconds]
-      ,CASE WHEN [sqlStatement] LIKE '%REORGANIZE%' THEN 'Reorg' ELSE 'Rebuild' END AS [Operation]
+      ,[Operation]
       ,[errorMessage]
-FROM dbo.tbl_AdaptiveIndexDefrag_log ixlog
-CROSS APPLY (SELECT TOP 1 minIxDate = CASE WHEN defragDate IS NULL THEN CONVERT(DATETIME, CONVERT(NVARCHAR, scanDate, 112))
-	ELSE CONVERT(DATETIME, CONVERT(NVARCHAR, defragDate, 112)) END
-	FROM [dbo].[tbl_AdaptiveIndexDefrag_Working]
-	ORDER BY defragDate ASC, scanDate ASC) AS minDateIxCte
-WHERE dateTimeStart >= minIxDate
-UNION ALL
-SELECT TOP 100 percent [dbName]
-      ,[objectName]
-      ,NULL AS [indexName]
-      ,[statsName]
-      ,NULL AS [partitionNumber]
-      ,NULL AS [fragmentation]
-	  ,NULL AS [page_count]
-	  ,NULL AS [range_scan_count]
-      ,[dateTimeStart]
-      ,[dateTimeEnd]
-      ,[durationSeconds]
-      ,'UpdateStats' AS [Operation]
-      ,[errorMessage]
-FROM dbo.tbl_AdaptiveIndexDefrag_Stats_log statlog
-CROSS APPLY (SELECT TOP 1 minStatDate = CASE WHEN updateDate IS NULL THEN CONVERT(DATETIME, CONVERT(NVARCHAR, scanDate, 112))
-		ELSE CONVERT(DATETIME, CONVERT(NVARCHAR, updateDate, 112)) END
-		FROM [dbo].[tbl_AdaptiveIndexDefrag_Stats_Working]
-	ORDER BY updateDate ASC, scanDate ASC) AS minDateStatCte
-WHERE dateTimeStart >= minStatDate
+FROM (
+    SELECT [dbName]
+          ,[objectName]
+          ,[indexName]
+          , NULL AS [statsName]
+          ,[partitionNumber]
+          ,[fragmentation]
+          ,[page_count]
+          ,[range_scan_count]
+          ,[dateTimeStart]
+          ,[dateTimeEnd]
+          ,[durationSeconds]
+          ,CASE WHEN [sqlStatement] LIKE '%REORGANIZE%' THEN 'Reorg' ELSE 'Rebuild' END AS [Operation]
+          ,[errorMessage]
+    FROM dbo.tbl_AdaptiveIndexDefrag_log ixlog
+    CROSS APPLY (SELECT TOP 1 minIxDate = CASE WHEN defragDate IS NULL THEN CONVERT(DATETIME, CONVERT(NVARCHAR, scanDate, 112))
+        ELSE CONVERT(DATETIME, CONVERT(NVARCHAR, defragDate, 112)) END
+        FROM [dbo].[tbl_AdaptiveIndexDefrag_Working]
+        ORDER BY defragDate ASC, scanDate ASC) AS minDateIxCte
+    WHERE dateTimeStart >= minIxDate
+    UNION
+    SELECT [dbName]
+          ,[objectName]
+          ,NULL AS [indexName]
+          ,[statsName]
+          ,NULL AS [partitionNumber]
+          ,NULL AS [fragmentation]
+          ,NULL AS [page_count]
+          ,NULL AS [range_scan_count]
+          ,[dateTimeStart]
+          ,[dateTimeEnd]
+          ,[durationSeconds]
+          ,'UpdateStats' AS [Operation]
+          ,[errorMessage]
+    FROM dbo.tbl_AdaptiveIndexDefrag_Stats_log statlog
+    CROSS APPLY (SELECT TOP 1 minStatDate = CASE WHEN updateDate IS NULL THEN CONVERT(DATETIME, CONVERT(NVARCHAR, scanDate, 112))
+            ELSE CONVERT(DATETIME, CONVERT(NVARCHAR, updateDate, 112)) END
+            FROM [dbo].[tbl_AdaptiveIndexDefrag_Stats_Working]
+        ORDER BY updateDate ASC, scanDate ASC) AS minDateStatCte
+    WHERE dateTimeStart >= minStatDate
+    ) x
 ORDER BY dateTimeEnd ASC
+GO
+
+CREATE VIEW vw_AdaptiveIndexDefrag_Version 
+AS
+/*
+    Description: returns the version of AdaptiveIndexDefrag as recorded within the stored procedure, plus the date
+                 when the stored procedure was created & last updated.
+    
+    Note:        when updating AdaptiveIndexDefrag, the stored procedure is dropped & recreated. So the Created & Modified date are usually equal
+
+    Usage:       after deploying view, run "select * from vw_AdaptiveIndexDefrag_Version"
+*/
+SELECT
+    'AdaptiveIndexDefrag ' + substring(m.definition, charindex('PROCEDURE @VER: ', m.definition)+16, 5) as [Version]
+    ,o.create_date as sprocCreated
+    ,o.modify_date as sprocLastModified
+FROM sys.sql_modules m
+    INNER JOIN sys.objects o 
+        ON o.object_id = m.object_id
+WHERE m.object_id = object_id('usp_AdaptiveIndexDefrag')
 GO
 
 PRINT 'Reporting views created';
