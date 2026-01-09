@@ -943,7 +943,7 @@ END'
 		BEGIN
 			DECLARE @sqlcmd_CntSrc NVARCHAR(3000), @params_CntSrc NVARCHAR(50), @CountSrc int
 			DECLARE @sqlcmd_CntTgt NVARCHAR(3000), @params_CntTgt NVARCHAR(50), @CountTgt int
-			DECLARE @dbIDIX int, @hasIXs bit, @hasIXsCntsqlcmd NVARCHAR(3000), @hasIXsCntsqlcmdParams NVARCHAR(50)
+			DECLARE @dbIDIX int, @dbNameIX sysname, @hasIXs bit, @hasIXsCntsqlcmd NVARCHAR(3000), @hasIXsCntsqlcmdParams NVARCHAR(50)
 			
 			-- What is in working tables plus exceptions that still exist in server
 			SET @sqlcmd_CntSrc = 'SELECT @CountSrc_OUT = COUNT(DISTINCT Working.[dbID]) FROM
@@ -967,12 +967,13 @@ WHERE [dbID] IN (SELECT DISTINCT database_id FROM sys.databases sd
 			CREATE TABLE #tblIndexFindInDatabaseList	
 			(	
 				[dbID] int
+				, dbName sysname
 				, hasIXs bit NOT NULL
 				, scanStatus bit NULL
 			);
 			
 			/* Retrieve the list of databases to loop, excluding Always On secondary replicas */	
-			SET @sqlcmd_CntTgt = 'SELECT [database_id], 0, 0 -- not yet scanned
+			SET @sqlcmd_CntTgt = 'SELECT [database_id], name, 0, 0 -- not yet scanned
 FROM sys.databases
 WHERE LOWER([name]) = ISNULL(LOWER(@dbScopeIN), LOWER([name]))	
 	AND LOWER([name]) NOT IN (''master'', ''tempdb'', ''model'', ''reportservertempdb'',''semanticsdb'') -- exclude system databases
@@ -997,7 +998,9 @@ WHERE rs.role = 2 -- Is Secondary
 
 			WHILE (SELECT COUNT(*) FROM #tblIndexFindInDatabaseList WHERE scanStatus = 0) > 0
 			BEGIN
-				SELECT TOP 1 @dbIDIX = [dbID] FROM #tblIndexFindInDatabaseList WHERE scanStatus = 0;
+				SELECT TOP 1 @dbNameIX = [dbName] FROM #tblIndexFindInDatabaseList WHERE scanStatus = 0;
+				
+				SET @dbIDIX = DB_ID(@dbNameIX)
 
 				SET @hasIXsCntsqlcmd = 'IF EXISTS (SELECT TOP 1 [index_id] from [' + DB_NAME(@dbIDIX) + '].sys.indexes AS si
 INNER JOIN [' + DB_NAME(@dbIDIX) + '].sys.objects so ON si.object_id = so.object_id
@@ -1014,7 +1017,7 @@ BEGIN SET @hasIXsOUT = 1 END ELSE BEGIN SET @hasIXsOUT = 0 END'
 
 				UPDATE #tblIndexFindInDatabaseList
 				SET hasIXs = @hasIXs, scanStatus = 1
-				WHERE [dbID] = @dbIDIX
+				WHERE [dbName] = @dbNameIX
 			END
 
 			EXECUTE sp_executesql @sqlcmd_CntSrc, @params_CntSrc, @CountSrc_OUT = @CountSrc OUTPUT
