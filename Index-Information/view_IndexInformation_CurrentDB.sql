@@ -996,7 +996,7 @@ PRINT CHAR(10) + '/* Generated on ' + CONVERT (VARCHAR, GETDATE()) + ' in ' + @@
 IF (SELECT COUNT(*) FROM #tmpAgg WHERE [Hits] = 0 AND last_user_update > 0) > 0
 BEGIN
 	PRINT CHAR(10) + '--############# Existing unused indexes with updates drop statements #############' + CHAR(10)
-	DECLARE Un_Stats CURSOR FAST_FORWARD FOR SELECT 'USE ' + [database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ [index_name] + ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME([index_name]) + ' ON ' + QUOTENAME([schema_name]) + '.' + QUOTENAME([table_name]) + ';' + CHAR(10) + 'GO' + CHAR(10) 
+	DECLARE Un_Stats CURSOR FAST_FORWARD FOR SELECT 'USE ' + [database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ [index_name] COLLATE SQL_Latin1_General_CP1_CI_AS + ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME([index_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ' ON ' + QUOTENAME([schema_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + '.' + QUOTENAME([table_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ';' + CHAR(10) + 'GO' + CHAR(10) 
 	FROM #tmpAgg
 	WHERE [Hits] = 0 AND last_user_update > 0
 	ORDER BY [database_name], [table_name], [Reads_Ratio] DESC;
@@ -1016,7 +1016,7 @@ END;
 IF (SELECT COUNT(*) FROM #tmpAgg WHERE [Hits] = 0 AND (last_user_update = 0 OR last_user_update IS NULL)) > 0
 BEGIN
 	PRINT CHAR(10) + '--############# Existing unused indexes with no updates drop statements #############' + CHAR(10)
-	DECLARE Un_Stats CURSOR FAST_FORWARD FOR SELECT 'USE ' + [database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ [index_name] + ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME([index_name]) + ' ON ' + QUOTENAME([schema_name]) + '.' + QUOTENAME([table_name]) + ';' + CHAR(10) + 'GO' + CHAR(10) 
+	DECLARE Un_Stats CURSOR FAST_FORWARD FOR SELECT 'USE ' + [database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ [index_name] COLLATE SQL_Latin1_General_CP1_CI_AS + ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME([index_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ' ON ' + QUOTENAME([schema_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + '.' + QUOTENAME([table_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ';' + CHAR(10) + 'GO' + CHAR(10) 
 	FROM #tmpAgg
 	WHERE [Hits] = 0 AND (last_user_update = 0 OR last_user_update IS NULL)
 	ORDER BY [database_name], [table_name], [Reads_Ratio] DESC;
@@ -1037,7 +1037,7 @@ IF (SELECT COUNT(*) FROM #tmpAgg WHERE [Hits] > 0 AND [Reads_Ratio] < 5) > 0
 BEGIN
 	PRINT CHAR(10) + '/* Generated on ' + CONVERT (VARCHAR, GETDATE()) + ' in ' + @@SERVERNAME + ' */'
 	PRINT CHAR(10) + '--############# Existing rarely used indexes drop statements #############' + CHAR(10)
-	DECLARE curRarUsed CURSOR FAST_FORWARD FOR SELECT 'USE ' + [database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ [index_name] + ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME([index_name]) + ' ON ' + QUOTENAME([schema_name]) + '.' + QUOTENAME([table_name]) + ';' + CHAR(10) + 'GO' + CHAR(10) 
+	DECLARE curRarUsed CURSOR FAST_FORWARD FOR SELECT 'USE ' + [database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ [index_name] COLLATE SQL_Latin1_General_CP1_CI_AS + ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME([index_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ' ON ' + QUOTENAME([schema_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + '.' + QUOTENAME([table_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ';' + CHAR(10) + 'GO' + CHAR(10) 
 	FROM #tmpAgg
 	WHERE [Hits] > 0 AND [Reads_Ratio] < 5
 	ORDER BY [database_name], [table_name], [Reads_Ratio] DESC
@@ -1060,7 +1060,7 @@ NOTE: It is possible that a clustered index (unique or not) is among the duplica
 In this case, make the appropriate changes in the clustered index (making it unique and/or primary key in this case), and drop the non-clustered instead.
 */'
 PRINT CHAR(10) + '--############# Existing Duplicate indexes drop statements #############' + CHAR(10)
-DECLARE Dup_Stats CURSOR FAST_FORWARD FOR SELECT 'USE ' + I.[database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ I.[index_name] + ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME(I.[index_name]) + ' ON ' + QUOTENAME(I.[schema_name]) + '.' + QUOTENAME(I.[table_name]) + ';' + CHAR(10) + 'GO' + CHAR(10) 
+DECLARE Dup_Stats CURSOR FAST_FORWARD FOR SELECT 'USE ' + I.[database_name] + CHAR(10) + 'GO' + CHAR(10) + 'IF EXISTS (SELECT name FROM sys.indexes WHERE name = N'''+ I.[index_name] COLLATE SQL_Latin1_General_CP1_CI_AS+ ''')' + CHAR(10) + 'DROP INDEX ' + QUOTENAME(I.[index_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ' ON ' + QUOTENAME(I.[schema_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + '.' + QUOTENAME(I.[table_name] COLLATE SQL_Latin1_General_CP1_CI_AS) + ';' + CHAR(10) + 'GO' + CHAR(10) 
 	FROM #tmpAgg I INNER JOIN #tmpAgg I2
 		ON I.database_id = I2.database_id AND I.[object_id] = I2.[object_id] AND I.[index_id] <> I2.[index_id] 
 		AND I.[KeyCols] = I2.[KeyCols] AND (I.IncludedCols = I2.IncludedCols OR (I.IncludedCols IS NULL AND I2.IncludedCols IS NULL))
