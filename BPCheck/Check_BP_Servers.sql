@@ -451,9 +451,14 @@ SELECT 'Information' AS [Category], 'Machine' AS [Information],
 --------------------------------------------------------------------------------------------------------------------------------
 IF @sqlmajorver > 10 OR (@sqlmajorver = 10 AND @sqlminorver = 50 AND @sqlbuild >= 2500)
 BEGIN
-	RAISERROR (N'|-Starting Disk space', 10, 1) WITH NOWAIT
 	SELECT DISTINCT 'Information' AS [Category], 'Disk_Space' AS [Information], vs.logical_volume_name,
-		vs.volume_mount_point, vs.file_system_type, CONVERT(int,vs.total_bytes/1048576.0) AS TotalSpace_MB,
+		vs.volume_mount_point,
+		vs.file_system_type,
+		CASE 
+		WHEN vs.file_system_type = 'ReFS' AND @sqlmajorver < 12 THEN '[WARNING: ReFS is not supported in a product version preceding SQL Server 2014, in this case use NTFS]'
+		ELSE '[OK]'
+		END AS [Deviation]
+		, CONVERT(int,vs.total_bytes/1048576.0) AS TotalSpace_MB,
 		CONVERT(int,vs.available_bytes/1048576.0) AS FreeSpace_MB, vs.is_compressed
 	FROM sys.master_files mf
 	CROSS APPLY sys.dm_os_volume_stats(mf.database_id, mf.[file_id]) vs
