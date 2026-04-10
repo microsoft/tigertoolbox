@@ -972,7 +972,7 @@ WHERE [dbID] IN (SELECT DISTINCT database_id FROM sys.databases sd
 			);
 			
 			/* Retrieve the list of databases to loop, excluding Always On secondary replicas */	
-			SET @sqlcmd_CntTgt = 'SELECT [database_id], 0, 0 -- not yet scanned
+			SET @sqlcmd_CntTgt = 'SELECT DB_ID([name]), 0, 0 -- not yet scanned 
 FROM sys.databases
 WHERE LOWER([name]) = ISNULL(LOWER(@dbScopeIN), LOWER([name]))	
 	AND LOWER([name]) NOT IN (''master'', ''tempdb'', ''model'', ''reportservertempdb'',''semanticsdb'') -- exclude system databases
@@ -1243,7 +1243,7 @@ Execute in' + CASE WHEN @debugMode = 1 THEN ' DEBUG' ELSE ' SILENT' END + ' mode
 			IF @debugMode = 1 AND @sqlmajorver < 11
 			RAISERROR('Retrieving list of databases to loop...', 0, 42) WITH NOWAIT;
 
-			SET @sqlcmdAO2 = 'SELECT [database_id], name, 0 -- not yet scanned for fragmentation
+			SET @sqlcmdAO2 = 'SELECT DB_ID([name]), name, 0 -- not yet scanned for fragmentation
 FROM sys.databases
 WHERE LOWER([name]) = ISNULL(LOWER(@dbScopeIN), LOWER([name]))	
 	AND LOWER([name]) NOT IN (''master'', ''tempdb'', ''model'', ''reportservertempdb'',''semanticsdb'') -- exclude system databases
@@ -1273,6 +1273,8 @@ WHERE rs.role = 2 -- Is Secondary
 			WHILE (SELECT COUNT(*) FROM #tblIndexDefragDatabaseList WHERE scanStatus = 0) > 0
 			BEGIN
 				SELECT TOP 1 @dbID = dbID FROM #tblIndexDefragDatabaseList WHERE scanStatus = 0;
+				SET @ixCntSource = 0;
+				SET @ixCntTarget = 0;
 
 				SET @ixCntSourcesqlcmd = 'SELECT @ixCntSourceOUT = COUNT([indexName]) 
 FROM dbo.tbl_AdaptiveIndexDefrag_Exceptions e
