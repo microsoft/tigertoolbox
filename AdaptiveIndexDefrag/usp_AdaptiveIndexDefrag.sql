@@ -239,7 +239,7 @@ CREATE TABLE dbo.tbl_AdaptiveIndexDefrag_Stats_log
 	, dbName NVARCHAR(128) NULL
 	, objectID int NULL
 	, objectName NVARCHAR(256) NULL
-	, statsID int NOT NULL
+	, statsID int NULL
 	, statsName NVARCHAR(256) NULL
 	, partitionNumber smallint
 	, [rows] bigint
